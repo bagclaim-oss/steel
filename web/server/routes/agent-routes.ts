@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { Hono } from "hono";
 import * as agentStore from "../agent-store.js";
 import type { AgentExecutor } from "../agent-executor.js";
@@ -222,7 +223,10 @@ export function registerAgentRoutes(
     if (!agent.triggers?.webhook?.enabled) {
       return c.json({ error: "Webhook not enabled for this agent" }, 403);
     }
-    if (agent.triggers.webhook.secret !== secret) {
+    // Use constant-time comparison to prevent timing attacks
+    const expected = Buffer.from(agent.triggers.webhook.secret);
+    const received = Buffer.from(secret);
+    if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) {
       return c.json({ error: "Invalid webhook secret" }, 401);
     }
 

@@ -150,6 +150,22 @@ describe("stripe", () => {
 
       expect(mockCheckoutSessionsCreate).not.toHaveBeenCalled();
     });
+
+    it("throws when price env var is an empty string", async () => {
+      // Even when the plan key exists, an empty/whitespace price ID should
+      // be rejected to avoid sending invalid IDs to Stripe.
+      delete process.env.STRIPE_PRICE_STARTER;
+      const mod = await freshImport();
+
+      await expect(
+        mod.createCheckoutSession({
+          customerId: "cus_123",
+          plan: "starter",
+          successUrl: "https://app.example.com/success",
+          cancelUrl: "https://app.example.com/cancel",
+        }),
+      ).rejects.toThrow("Unknown plan: starter");
+    });
   });
 
   // ── createPortalSession ─────────────────────────────────────────────────

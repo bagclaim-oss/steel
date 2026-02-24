@@ -138,14 +138,24 @@ describe("instances routes", () => {
 
   // --- GET /:id/embed --- Redirect to instance hostname
   describe("GET /:id/embed", () => {
-    it("returns a 302 redirect to the instance's companion.run hostname", async () => {
-      const res = await instances.request("/my-instance/embed", {
+    it("returns a 302 redirect for a valid UUID instance id", async () => {
+      const uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+      const res = await instances.request(`/${uuid}/embed`, {
         redirect: "manual",
       });
       expect(res.status).toBe(302);
       expect(res.headers.get("Location")).toBe(
-        "https://my-instance.companion.run",
+        `https://${uuid}.companion.run`,
       );
+    });
+
+    it("returns 400 for a non-UUID instance id to prevent open redirect", async () => {
+      const res = await instances.request("/evil.com%23/embed", {
+        redirect: "manual",
+      });
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toBe("Invalid instance ID");
     });
   });
 });

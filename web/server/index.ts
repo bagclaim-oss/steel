@@ -133,7 +133,7 @@ app.get("/health", (c) => {
 });
 
 // ── Managed auth middleware — only active when COMPANION_AUTH_ENABLED=1 ────
-if (process.env.COMPANION_AUTH_ENABLED) {
+if (process.env.COMPANION_AUTH_ENABLED === "1") {
   const { managedAuth } = await import("./middleware/managed-auth.js");
   app.use("/*", managedAuth);
 }

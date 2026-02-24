@@ -13,7 +13,7 @@ import type { Context } from "hono";
  */
 export const managedAuth = createMiddleware(async (c: Context, next) => {
   // Bypass entirely when managed auth is not enabled (self-hosted mode)
-  if (!process.env.COMPANION_AUTH_ENABLED) return next();
+  if (process.env.COMPANION_AUTH_ENABLED !== "1") return next();
 
   const path = c.req.path;
 

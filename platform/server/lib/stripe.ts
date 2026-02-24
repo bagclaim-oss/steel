@@ -59,7 +59,7 @@ export async function createCheckoutSession(opts: {
   customerEmail?: string;
 }): Promise<string> {
   const priceId = PRICE_IDS[opts.plan];
-  if (!priceId) throw new Error(`Unknown plan: ${opts.plan}`);
+  if (!priceId?.trim()) throw new Error(`Unknown plan: ${opts.plan}`);
 
   const session = await getStripe().checkout.sessions.create({
     mode: "subscription",

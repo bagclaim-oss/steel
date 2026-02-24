@@ -103,7 +103,14 @@ instances.post("/:id/token", async (c) => {
 
 instances.get("/:id/embed", async (c) => {
   const id = c.req.param("id");
-  // TODO: Verify ownership, issue token, redirect with token cookie
+  // Validate id is a UUID to prevent open redirect attacks.
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidPattern.test(id)) {
+    return c.json({ error: "Invalid instance ID" }, 400);
+  }
+  // TODO: Verify ownership, issue token, redirect with token cookie.
+  // In production, look up hostname from DB instead of constructing from id.
   return c.redirect(`https://${id}.companion.run`);
 });
 

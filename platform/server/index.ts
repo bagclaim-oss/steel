@@ -8,7 +8,7 @@ import { dashboard } from "./routes/dashboard.js";
 import { tailscale } from "./routes/tailscale.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const port = Number(process.env.PORT) || 3457;
+const port = Number(process.env.PORT) || 3458;
 
 const app = new Hono();
 

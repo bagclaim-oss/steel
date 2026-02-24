@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeAll } from "vitest";
 // "[companion-cloud] Control plane running on ..." message is silenced.
 vi.spyOn(console, "log").mockImplementation(() => {});
 
-// Clear PORT env var so the server falls back to the default (3457).
+// Clear PORT env var so the server falls back to the default (3458).
 // In some environments (e.g. when the Companion dev server is running)
 // PORT is set to 3456 which would override the default.
 const savedPort = process.env.PORT;
@@ -28,9 +28,9 @@ describe("server default export", () => {
     expect(typeof server.fetch).toBe("function");
   });
 
-  it("defaults port to 3457 when PORT env var is not set", () => {
-    // We cleared PORT before the import, so the fallback should be 3457.
-    expect(server.port).toBe(3457);
+  it("defaults port to 3458 when PORT env var is not set", () => {
+    // We cleared PORT before the import, so the fallback should be 3458.
+    expect(server.port).toBe(3458);
   });
 });
 

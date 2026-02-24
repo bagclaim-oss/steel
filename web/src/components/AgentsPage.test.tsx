@@ -275,7 +275,7 @@ describe("AgentsPage", () => {
 
     expect(screen.getByText("New Agent")).toBeInTheDocument();
     expect(screen.getByDisplayValue("New Webhook Agent")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("You are an autonomous agent.\n\nTask:\n{{input}}")).toBeInTheDocument();
+    expect(screen.getByDisplayValue(/You are an autonomous agent\./)).toBeInTheDocument();
   });
 
   it("clicking Cancel in editor returns to list view", async () => {

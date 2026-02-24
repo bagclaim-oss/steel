@@ -51,13 +51,16 @@ app.get("/api/status", (c) => {
   });
 });
 
-// ── Static files (production only, Bun runtime) ─────────────────────────────
-// Dynamic import avoids "Bun is not defined" when running under Node/vitest.
+// ── Static files (production) / Dev redirect ────────────────────────────────
 if (process.env.NODE_ENV === "production") {
+  // Dynamic import avoids "Bun is not defined" when running under Node/vitest.
   const { serveStatic } = await import("hono/bun");
   const distDir = resolve(__dirname, "../dist");
   app.use("/*", serveStatic({ root: distDir }));
   app.get("/*", serveStatic({ path: resolve(distDir, "index.html") }));
+} else if (typeof globalThis.Bun !== "undefined") {
+  // In dev mode, redirect to Vite dev server for the frontend.
+  app.get("/", (c) => c.redirect("http://localhost:5175"));
 }
 
 // ── Start ────────────────────────────────────────────────────────────────────

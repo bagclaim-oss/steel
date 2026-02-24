@@ -1,0 +1,39 @@
+{
+  "name": "companion-cloud",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --hot server/index.ts",
+    "dev:frontend": "vite",
+    "build": "vite build && bun build server/index.ts --outdir dist/server --target bun",
+    "start": "NODE_ENV=production bun run dist/server/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "hono": "^4.7.0",
+    "better-auth": "^1.4.0",
+    "drizzle-orm": "^0.39.0",
+    "@neondatabase/serverless": "^0.10.0",
+    "stripe": "^17.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.4.0",
+    "drizzle-kit": "^0.30.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.1.0",
+    "vitest": "^3.0.0"
+  }
+}

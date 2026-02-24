@@ -18,7 +18,7 @@ import { SessionStore } from "./session-store.js";
 import { WorktreeTracker } from "./worktree-tracker.js";
 import { containerManager } from "./container-manager.js";
 import { join } from "node:path";
-import { homedir } from "node:os";
+import { COMPANION_HOME } from "./paths.js";
 import { TerminalManager } from "./terminal-manager.js";
 import { generateSessionTitle } from "./auto-namer.js";
 import * as sessionNames from "./session-names.js";
@@ -47,7 +47,7 @@ const sessionStore = new SessionStore(process.env.COMPANION_SESSION_DIR);
 const wsBridge = new WsBridge();
 const launcher = new CliLauncher(port);
 const worktreeTracker = new WorktreeTracker();
-const CONTAINER_STATE_PATH = join(homedir(), ".companion", "containers.json");
+const CONTAINER_STATE_PATH = join(COMPANION_HOME, "containers.json");
 const terminalManager = new TerminalManager();
 const prPoller = new PRPoller(wsBridge);
 const recorder = new RecorderManager();
@@ -121,6 +121,22 @@ if (recorder.isGloballyEnabled()) {
 }
 
 const app = new Hono();
+
+// ── Health endpoint — always unauthenticated (used by Fly.io + control plane) ─
+const startTime = Date.now();
+app.get("/health", (c) => {
+  return c.json({
+    ok: true,
+    uptime: Math.floor((Date.now() - startTime) / 1000),
+    sessions: launcher.listSessions().length,
+  });
+});
+
+// ── Managed auth middleware — only active when COMPANION_AUTH_ENABLED=1 ────
+if (process.env.COMPANION_AUTH_ENABLED) {
+  const { managedAuth } = await import("./middleware/managed-auth.js");
+  app.use("/*", managedAuth);
+}
 
 app.use("/api/*", cors());
 app.route("/api", createRoutes(launcher, wsBridge, sessionStore, worktreeTracker, terminalManager, prPoller, recorder, cronScheduler, agentExecutor));

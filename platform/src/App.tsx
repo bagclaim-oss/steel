@@ -9,11 +9,6 @@ import { Landing } from "./pages/Landing";
  * Auth-aware routing using Better Auth's useSession hook:
  * - Unauthenticated → Landing page (login/signup + pricing)
  * - Authenticated   → Dashboard (instance management)
- *
- * Hash-based routing for sub-pages:
- * - #/dashboard  → Dashboard (default for authenticated users)
- * - #/onboarding → Onboarding flow
- * - default      → Landing page
  */
 export default function App() {
   const [hash, setHash] = useState(window.location.hash);
@@ -25,9 +20,18 @@ export default function App() {
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
-  // Show loading state while checking session
+  // Styled loading state while checking session
   if (session.isPending) {
-    return <div>Loading...</div>;
+    return (
+      <div className="h-screen bg-cc-bg flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-2 h-2 rounded-full bg-cc-primary animate-pulse-dot" />
+          <span className="font-[family-name:var(--font-display)] text-xs text-cc-muted-fg">
+            companion<span className="text-cc-primary">.</span>cloud
+          </span>
+        </div>
+      </div>
+    );
   }
 
   // Unauthenticated → landing page
@@ -36,9 +40,5 @@ export default function App() {
   }
 
   // Authenticated → dashboard
-  if (hash.startsWith("#/dashboard") || !hash) {
-    return <Dashboard />;
-  }
-
-  return <Landing />;
+  return <Dashboard />;
 }

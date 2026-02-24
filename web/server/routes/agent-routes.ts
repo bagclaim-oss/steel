@@ -55,17 +55,41 @@ interface ParsedBody {
   raw: string;
   json: Record<string, unknown>;
   contentType: string;
+  invalidJson: boolean;
 }
 
 async function parseBody(c: { req: { header: (name: string) => string | undefined; text: () => Promise<string> } }): Promise<ParsedBody> {
   const contentType = c.req.header("content-type") || "";
   const raw = await c.req.text().catch(() => "");
   let json: Record<string, unknown> = {};
+  let invalidJson = false;
   if (contentType.includes("application/json") && raw.trim()) {
-    json = JSON.parse(raw) as Record<string, unknown>;
+    try {
+      json = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      invalidJson = true;
+    }
   }
-  return { raw, json, contentType };
+  return { raw, json, contentType, invalidJson };
 }
+
+type ExtendedLinearTrigger = TriggerSecurityConfig & {
+  enabled: boolean;
+  requireMention?: boolean;
+  mention?: string;
+};
+type ExtendedGithubTrigger = TriggerSecurityConfig & {
+  enabled: boolean;
+  requireMention?: boolean;
+  mention?: string;
+  events?: Array<"pull_request" | "issue_comment" | "pull_request_review_comment">;
+};
+type ExtendedWebhookTrigger = TriggerSecurityConfig & { enabled: boolean };
+type ExtendedTriggers = {
+  webhook?: ExtendedWebhookTrigger;
+  linear?: ExtendedLinearTrigger;
+  github?: ExtendedGithubTrigger;
+};
 
 function verifyHmacSignature(secret: string, rawBody: string, timestampHeader: string, signatureHeader: string): boolean {
   const timestamp = Number(timestampHeader);
@@ -216,7 +240,13 @@ function triggerAgent(
   input: string | undefined,
   triggerType: "manual" | "webhook" | "schedule" | "linear" | "github",
 ): void {
-  agentExecutor?.executeAgent(agentId, input, { force: true, triggerType }).catch((err) => {
+  (agentExecutor as unknown as {
+    executeAgent?: (
+      id: string,
+      triggerInput?: string,
+      opts?: { force?: boolean; triggerType?: "manual" | "webhook" | "schedule" },
+    ) => Promise<unknown>;
+  })?.executeAgent?.(agentId, input, { force: true, triggerType } as never).catch((err) => {
     console.error(`[agent-routes] Failed to trigger agent "${agentId}" via ${triggerType}:`, err);
   });
 }
@@ -429,7 +459,10 @@ export function registerAgentRoutes(
       return c.json({ error: "Webhook not enabled for this agent" }, 403);
     }
     const parsed = await parseBody(c);
-    const security = checkTriggerSecurity(c, agent.triggers.webhook, secret, parsed.raw);
+    if (parsed.invalidJson) return c.json({ error: "Invalid JSON body" }, 400);
+    const webhook = agent.triggers?.webhook as unknown as ExtendedWebhookTrigger | undefined;
+    if (!webhook) return c.json({ error: "Webhook not configured for this agent" }, 403);
+    const security = checkTriggerSecurity(c, webhook, secret, parsed.raw);
     if (!security.ok) return c.json({ error: security.error }, security.status);
 
     // Extract input from body — accept JSON { input: "..." } or plain text
@@ -452,9 +485,10 @@ export function registerAgentRoutes(
     const agent = agentStore.getAgent(id);
     if (!agent) return c.json({ error: "Agent not found" }, 404);
 
-    const linear = agent.triggers?.linear;
+    const linear = (agent.triggers as unknown as ExtendedTriggers | undefined)?.linear;
     if (!linear?.enabled) return c.json({ error: "Linear trigger not enabled for this agent" }, 403);
     const parsed = await parseBody(c);
+    if (parsed.invalidJson) return c.json({ error: "Invalid JSON body" }, 400);
     const security = checkTriggerSecurity(c, linear, secret, parsed.raw);
     if (!security.ok) return c.json({ error: security.error }, security.status);
 
@@ -477,9 +511,10 @@ export function registerAgentRoutes(
     const agent = agentStore.getAgent(id);
     if (!agent) return c.json({ error: "Agent not found" }, 404);
 
-    const github = agent.triggers?.github;
+    const github = (agent.triggers as unknown as ExtendedTriggers | undefined)?.github;
     if (!github?.enabled) return c.json({ error: "GitHub trigger not enabled for this agent" }, 403);
     const parsed = await parseBody(c);
+    if (parsed.invalidJson) return c.json({ error: "Invalid JSON body" }, 400);
     const security = checkTriggerSecurity(c, github, secret, parsed.raw);
     if (!security.ok) return c.json({ error: security.error }, security.status);
 

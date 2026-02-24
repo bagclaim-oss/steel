@@ -219,10 +219,14 @@ describe("createAgent", () => {
         },
       }),
     );
-    expect(agent.triggers?.linear?.secret).toBeDefined();
-    expect(agent.triggers?.linear?.secret).toHaveLength(48);
-    expect(agent.triggers?.github?.secret).toBeDefined();
-    expect(agent.triggers?.github?.secret).toHaveLength(48);
+    const triggers = agent.triggers as unknown as {
+      linear?: { secret: string };
+      github?: { secret: string };
+    };
+    expect(triggers.linear?.secret).toBeDefined();
+    expect(triggers.linear?.secret).toHaveLength(48);
+    expect(triggers.github?.secret).toBeDefined();
+    expect(triggers.github?.secret).toHaveLength(48);
   });
 });
 

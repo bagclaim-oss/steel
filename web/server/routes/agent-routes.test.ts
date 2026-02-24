@@ -21,7 +21,7 @@ import { registerAgentRoutes } from "./agent-routes.js";
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /** Minimal agent fixture with sensible defaults. Override fields as needed. */
-function makeAgent(overrides: Partial<AgentConfig> = {}): AgentConfig {
+function makeAgent(overrides: Record<string, unknown> = {}): AgentConfig {
   return {
     id: "test-agent",
     version: 1,
@@ -37,8 +37,8 @@ function makeAgent(overrides: Partial<AgentConfig> = {}): AgentConfig {
     updatedAt: 2000,
     totalRuns: 0,
     consecutiveFailures: 0,
-    ...overrides,
-  };
+    ...(overrides as Partial<AgentConfig>),
+  } as AgentConfig;
 }
 
 /** Build a mock AgentExecutor with vi.fn() stubs for every method the routes use. */
@@ -666,6 +666,26 @@ describe("POST /api/agents/:id/webhook/:secret", () => {
     expect(res.status).toBe(401);
     const json = await res.json();
     expect(json.error).toBe("Invalid HMAC signature");
+  });
+
+  it("returns 400 for malformed JSON body", async () => {
+    const agent = makeAgent({
+      id: "webhook-agent",
+      triggers: {
+        webhook: { enabled: true, secret: "valid-secret" },
+      },
+    });
+    vi.mocked(agentStore.getAgent).mockReturnValue(agent);
+
+    const res = await app.request("/api/agents/webhook-agent/webhook/valid-secret", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{invalid-json",
+    });
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toBe("Invalid JSON body");
   });
 });
 

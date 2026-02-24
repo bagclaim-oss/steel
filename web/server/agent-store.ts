@@ -11,6 +11,40 @@ import { homedir } from "node:os";
 import { randomBytes } from "node:crypto";
 import type { AgentConfig, AgentConfigCreateInput } from "./agent-types.js";
 
+type TriggerAuthMode = "url_secret" | "header_token" | "either";
+type ExtendedWebhookTrigger = {
+  enabled: boolean;
+  secret: string;
+  authMode?: TriggerAuthMode;
+  token?: string;
+  requireHmac?: boolean;
+};
+type ExtendedLinearTrigger = {
+  enabled: boolean;
+  secret: string;
+  authMode?: TriggerAuthMode;
+  token?: string;
+  requireHmac?: boolean;
+  requireMention?: boolean;
+  mention?: string;
+};
+type ExtendedGithubTrigger = {
+  enabled: boolean;
+  secret: string;
+  authMode?: TriggerAuthMode;
+  token?: string;
+  requireHmac?: boolean;
+  requireMention?: boolean;
+  mention?: string;
+  events?: Array<"pull_request" | "issue_comment" | "pull_request_review_comment">;
+};
+type ExtendedTriggers = {
+  webhook?: ExtendedWebhookTrigger;
+  linear?: ExtendedLinearTrigger;
+  github?: ExtendedGithubTrigger;
+  schedule?: { enabled: boolean; expression: string; recurring: boolean };
+};
+
 // ─── Paths ──────────────────────────────────────────────────────────────────
 
 const COMPANION_DIR = join(homedir(), ".companion");
@@ -47,7 +81,7 @@ function ensureTriggerSecrets(
   triggers: AgentConfig["triggers"] | undefined,
 ): AgentConfig["triggers"] | undefined {
   if (!triggers) return triggers;
-  const next = { ...triggers };
+  const next: ExtendedTriggers = { ...(triggers as unknown as ExtendedTriggers) };
   if (next.webhook) {
     const authMode = next.webhook.authMode ?? "url_secret";
     const needsToken = authMode === "header_token" || authMode === "either";
@@ -81,7 +115,7 @@ function ensureTriggerSecrets(
       token: needsToken ? (next.github.token || generateTriggerToken()) : next.github.token,
     };
   }
-  return next;
+  return next as unknown as AgentConfig["triggers"];
 }
 
 // ─── CRUD ───────────────────────────────────────────────────────────────────
@@ -218,7 +252,7 @@ export function regenerateTriggerSecret(
   const agent = getAgent(id);
   if (!agent) return null;
 
-  const triggers = agent.triggers || {};
+  const triggers: ExtendedTriggers = (agent.triggers || {}) as unknown as ExtendedTriggers;
   if (provider === "webhook") {
     triggers.webhook = {
       enabled: triggers.webhook?.enabled ?? false,
@@ -261,7 +295,7 @@ export function regenerateTriggerToken(
   const agent = getAgent(id);
   if (!agent) return null;
 
-  const triggers = agent.triggers || {};
+  const triggers: ExtendedTriggers = (agent.triggers || {}) as unknown as ExtendedTriggers;
   if (provider === "webhook") {
     triggers.webhook = {
       enabled: triggers.webhook?.enabled ?? false,

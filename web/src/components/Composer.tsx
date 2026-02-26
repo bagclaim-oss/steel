@@ -123,6 +123,11 @@ export function Composer({ sessionId }: { sessionId: string }) {
     mention.setMentionMenuOpen(false);
     setCaretPos(result.nextCursor);
     textareaRef.current?.focus();
+    // Auto-resize textarea after prompt insertion
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + "px";
+    }
   }, [mention]);
 
   function handleSend() {

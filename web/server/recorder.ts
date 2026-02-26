@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import type { BackendType } from "./session-types.js";
 
-const DEFAULT_MAX_LINES = 100_000;
+const DEFAULT_MAX_LINES = 1_000_000;
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 // ─── Types ───────────────────────────────────────────────────────────────────

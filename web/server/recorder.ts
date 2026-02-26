@@ -101,7 +101,7 @@ export class SessionRecorder {
  * Always enabled by default. Disable explicitly with COMPANION_RECORD=0.
  *
  * Automatic rotation: when total lines across all recording files exceed
- * maxLines (default 100 000, override with COMPANION_RECORDINGS_MAX_LINES),
+ * maxLines (default 1 000 000, override with COMPANION_RECORDINGS_MAX_LINES),
  * the oldest files are deleted until we're back under the limit.
  */
 export class RecorderManager {

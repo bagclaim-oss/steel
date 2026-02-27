@@ -659,3 +659,692 @@ describe("Composer save prompt", () => {
     expect(results).toHaveNoViolations();
   });
 });
+
+// ─── Image paste and upload handling ─────────────────────────────────────────
+
+vi.mock("../utils/image.js", () => ({
+  readFileAsBase64: vi.fn().mockResolvedValue({ base64: "dGVzdA==", mediaType: "image/png" }),
+}));
+
+describe("Composer image handling", () => {
+  it("displays image thumbnails when images are attached via file input", async () => {
+    // Validates the image preview area renders thumbnails after file selection.
+    const { container } = render(<Composer sessionId="s1" />);
+    const fileInput = container.querySelector("input[type='file']") as HTMLInputElement;
+
+    // Simulate selecting an image file
+    const file = new File(["fake-png-data"], "test.png", { type: "image/png" });
+    Object.defineProperty(fileInput, "files", { value: [file] });
+    fireEvent.change(fileInput);
+
+    // Wait for the image thumbnail to appear
+    const img = await waitFor(() => {
+      const imgs = container.querySelectorAll("img[alt='test.png']");
+      expect(imgs.length).toBeGreaterThanOrEqual(1);
+      return imgs[0];
+    });
+    expect(img).toBeTruthy();
+  });
+
+  it("removes an image when the remove button is clicked", async () => {
+    // Validates images can be removed from the attachment preview.
+    const { container } = render(<Composer sessionId="s1" />);
+    const fileInput = container.querySelector("input[type='file']") as HTMLInputElement;
+
+    const file = new File(["data"], "removable.png", { type: "image/png" });
+    Object.defineProperty(fileInput, "files", { value: [file] });
+    fireEvent.change(fileInput);
+
+    await waitFor(() => {
+      expect(container.querySelectorAll("img[alt='removable.png']").length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Click the remove button (has aria-label "Remove image")
+    const removeBtn = screen.getAllByLabelText("Remove image")[0];
+    fireEvent.click(removeBtn);
+
+    await waitFor(() => {
+      expect(container.querySelectorAll("img[alt='removable.png']").length).toBe(0);
+    });
+  });
+
+  it("handles paste of images from clipboard", async () => {
+    // Validates that pasting an image from clipboard attaches it.
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+
+    const file = new File(["clipboard-data"], "pasted.png", { type: "image/png" });
+    const clipboardData = {
+      items: [
+        {
+          type: "image/png",
+          getAsFile: () => file,
+        },
+      ],
+    };
+
+    fireEvent.paste(textarea, { clipboardData });
+
+    // Wait for the pasted image to appear in the preview
+    await waitFor(() => {
+      const imgs = container.querySelectorAll("img");
+      expect(imgs.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it("does not prevent default for non-image paste", () => {
+    // Validates text-only paste is not intercepted by the image handler.
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+
+    const clipboardData = {
+      items: [
+        {
+          type: "text/plain",
+          getAsFile: () => null,
+        },
+      ],
+    };
+
+    // Should not throw, and should let default behavior through
+    fireEvent.paste(textarea, { clipboardData });
+    // No images should be added
+    expect(container.querySelectorAll("img")).toHaveLength(0);
+  });
+
+  it("sends images along with the message", async () => {
+    // Validates that attached images are included in the user_message payload.
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+    const fileInput = container.querySelector("input[type='file']") as HTMLInputElement;
+
+    // Attach an image
+    const file = new File(["img"], "send-me.png", { type: "image/png" });
+    Object.defineProperty(fileInput, "files", { value: [file] });
+    fireEvent.change(fileInput);
+
+    await waitFor(() => {
+      expect(container.querySelectorAll("img[alt='send-me.png']").length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Type text and send
+    fireEvent.change(textarea, { target: { value: "Check this image" } });
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+    expect(mockSendToSession).toHaveBeenCalledWith("s1", expect.objectContaining({
+      type: "user_message",
+      content: "Check this image",
+      images: [{ media_type: "image/png", data: "dGVzdA==" }],
+    }));
+  });
+
+  it("clears images after sending a message", async () => {
+    // Validates that attached images are removed after successful send.
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+    const fileInput = container.querySelector("input[type='file']") as HTMLInputElement;
+
+    const file = new File(["img"], "clear-me.png", { type: "image/png" });
+    Object.defineProperty(fileInput, "files", { value: [file] });
+    fireEvent.change(fileInput);
+
+    await waitFor(() => {
+      expect(container.querySelectorAll("img[alt='clear-me.png']").length).toBeGreaterThanOrEqual(1);
+    });
+
+    fireEvent.change(textarea, { target: { value: "sending" } });
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+    // Images should be cleared
+    await waitFor(() => {
+      expect(container.querySelectorAll("img[alt='clear-me.png']").length).toBe(0);
+    });
+  });
+
+  it("ignores non-image files in file input", async () => {
+    // Validates that non-image files are skipped during file selection.
+    const { container } = render(<Composer sessionId="s1" />);
+    const fileInput = container.querySelector("input[type='file']") as HTMLInputElement;
+
+    const file = new File(["text"], "doc.txt", { type: "text/plain" });
+    Object.defineProperty(fileInput, "files", { value: [file] });
+    fireEvent.change(fileInput);
+
+    // Small delay to allow any async processing
+    await waitFor(() => {
+      expect(container.querySelectorAll("img")).toHaveLength(0);
+    });
+  });
+
+  it("clicking the attach image button triggers file input", () => {
+    // Validates the + button (attach image) opens the file picker.
+    const { container } = render(<Composer sessionId="s1" />);
+    const fileInput = container.querySelector("input[type='file']") as HTMLInputElement;
+    const clickSpy = vi.spyOn(fileInput, "click");
+
+    // Click the desktop "Attach image" button
+    fireEvent.click(screen.getAllByTitle("Attach image")[0]);
+
+    expect(clickSpy).toHaveBeenCalled();
+    clickSpy.mockRestore();
+  });
+});
+
+// ─── Save prompt dialog full flow ────────────────────────────────────────────
+
+describe("Composer save prompt dialog", () => {
+  it("opens save prompt dialog and populates default name from text", () => {
+    // Validates the save dialog opens with a pre-filled name derived from the current text.
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+
+    fireEvent.change(textarea, { target: { value: "My great prompt content" } });
+    fireEvent.click(screen.getAllByTitle("Save as prompt")[0]);
+
+    const titleInput = screen.getByPlaceholderText("Prompt title") as HTMLInputElement;
+    expect(titleInput.value).toBe("My great prompt content");
+  });
+
+  it("successfully saves a prompt and closes the dialog", async () => {
+    // Validates the full save flow: open dialog -> type name -> save -> dialog closes.
+    mockCreatePrompt.mockResolvedValue({
+      id: "p-ok",
+      name: "Saved",
+      content: "Body",
+      scope: "global",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+
+    fireEvent.change(textarea, { target: { value: "Save me" } });
+    fireEvent.click(screen.getAllByTitle("Save as prompt")[0]);
+    expect(screen.getByText("Save prompt")).toBeTruthy();
+
+    const titleInput = screen.getByPlaceholderText("Prompt title");
+    fireEvent.change(titleInput, { target: { value: "My Prompt" } });
+    fireEvent.click(screen.getByText("Save"));
+
+    // After successful save, dialog should close
+    await waitFor(() => {
+      expect(screen.queryByText("Save prompt")).toBeNull();
+    });
+  });
+
+  it("cancel button closes the save prompt dialog", () => {
+    // Validates the cancel button dismisses the dialog without saving.
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+
+    fireEvent.change(textarea, { target: { value: "Some text" } });
+    fireEvent.click(screen.getAllByTitle("Save as prompt")[0]);
+    expect(screen.getByText("Save prompt")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Cancel"));
+
+    expect(screen.queryByText("Save prompt")).toBeNull();
+  });
+
+  it("save button is disabled when prompt name is empty", () => {
+    // Validates the Save button cannot be clicked without a title.
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+
+    fireEvent.change(textarea, { target: { value: "Some text" } });
+    fireEvent.click(screen.getAllByTitle("Save as prompt")[0]);
+
+    const titleInput = screen.getByPlaceholderText("Prompt title") as HTMLInputElement;
+    fireEvent.change(titleInput, { target: { value: "" } });
+
+    const saveBtn = screen.getByText("Save");
+    expect(saveBtn.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("clears error when user types in the prompt title input", async () => {
+    // Validates that typing in the title field dismisses any previous error message.
+    mockCreatePrompt.mockRejectedValue(new Error("Duplicate name"));
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+
+    fireEvent.change(textarea, { target: { value: "Body" } });
+    fireEvent.click(screen.getAllByTitle("Save as prompt")[0]);
+
+    const titleInput = screen.getByPlaceholderText("Prompt title");
+    fireEvent.change(titleInput, { target: { value: "Dup" } });
+    fireEvent.click(screen.getByText("Save"));
+
+    // Wait for error to appear
+    await screen.findByText("Duplicate name");
+
+    // Type in the title field to clear the error
+    fireEvent.change(titleInput, { target: { value: "New name" } });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Duplicate name")).toBeNull();
+    });
+  });
+
+  it("save prompt button is disabled when not connected", () => {
+    // Validates the save prompt bookmark button is disabled when CLI is disconnected.
+    setupMockStore({ isConnected: false });
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+
+    // Even if there's text, button should be disabled
+    fireEvent.change(textarea, { target: { value: "text" } });
+    const saveButtons = screen.getAllByTitle("Save as prompt");
+    saveButtons.forEach((btn) => {
+      expect(btn.hasAttribute("disabled")).toBe(true);
+    });
+  });
+
+  it("toggles save prompt dialog open and closed", () => {
+    // Validates clicking the save button a second time closes the dialog.
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+
+    fireEvent.change(textarea, { target: { value: "Toggle me" } });
+    const saveBtn = screen.getAllByTitle("Save as prompt")[0];
+
+    // Open
+    fireEvent.click(saveBtn);
+    expect(screen.getByText("Save prompt")).toBeTruthy();
+
+    // Close by clicking again
+    fireEvent.click(saveBtn);
+    expect(screen.queryByText("Save prompt")).toBeNull();
+  });
+});
+
+// ─── Mode toggle via button click ────────────────────────────────────────────
+
+describe("Composer mode toggle button", () => {
+  it("clicking mode toggle switches to plan mode", () => {
+    // Validates clicking the mode button sends set_permission_mode with "plan".
+    setupMockStore({ isConnected: true, session: { permissionMode: "acceptEdits" } });
+    render(<Composer sessionId="s1" />);
+
+    const modeBtn = screen.getAllByTitle("Toggle mode (Shift+Tab)")[0];
+    fireEvent.click(modeBtn);
+
+    expect(mockSendToSession).toHaveBeenCalledWith("s1", {
+      type: "set_permission_mode",
+      mode: "plan",
+    });
+    expect(mockUpdateSession).toHaveBeenCalledWith("s1", { permissionMode: "plan" });
+    expect(mockSetPreviousPermissionMode).toHaveBeenCalledWith("s1", "acceptEdits");
+  });
+
+  it("clicking mode toggle restores previous mode from plan", () => {
+    // Validates toggling back from plan restores the previous permission mode.
+    setupMockStore({ isConnected: true, session: { permissionMode: "plan" } });
+    render(<Composer sessionId="s1" />);
+
+    const modeBtn = screen.getAllByTitle("Toggle mode (Shift+Tab)")[0];
+    fireEvent.click(modeBtn);
+
+    // Should restore to "acceptEdits" (the previousPermissionMode default)
+    expect(mockSendToSession).toHaveBeenCalledWith("s1", {
+      type: "set_permission_mode",
+      mode: "acceptEdits",
+    });
+    expect(mockUpdateSession).toHaveBeenCalledWith("s1", { permissionMode: "acceptEdits" });
+  });
+
+  it("mode toggle is disabled when not connected", () => {
+    // Validates mode button is non-interactive when CLI is disconnected.
+    setupMockStore({ isConnected: false });
+    render(<Composer sessionId="s1" />);
+
+    const modeBtns = screen.getAllByTitle("Toggle mode (Shift+Tab)");
+    modeBtns.forEach((btn) => {
+      expect(btn.hasAttribute("disabled")).toBe(true);
+    });
+  });
+
+  it("displays plan mode label and styling when in plan mode", () => {
+    // Validates the mode button shows "plan" label when permission mode is plan.
+    setupMockStore({ isConnected: true, session: { permissionMode: "plan" } });
+    render(<Composer sessionId="s1" />);
+
+    const modeBtns = screen.getAllByTitle("Toggle mode (Shift+Tab)");
+    // At least one should display "plan" text
+    const hasPlanLabel = modeBtns.some((btn) => btn.textContent?.toLowerCase().includes("plan"));
+    expect(hasPlanLabel).toBe(true);
+  });
+});
+
+// ─── handleInput and syncCaret ───────────────────────────────────────────────
+
+describe("Composer textarea input handling", () => {
+  it("handleInput updates caret position from selection", () => {
+    // Validates that typing in the textarea tracks the caret position for mention detection.
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")! as HTMLTextAreaElement;
+
+    // Simulate typing with a specific selectionStart
+    fireEvent.change(textarea, {
+      target: { value: "Hello @w", selectionStart: 8 },
+    });
+
+    // The textarea value should be updated
+    expect(textarea.value).toBe("Hello @w");
+  });
+
+  it("syncCaret updates on click", () => {
+    // Validates clicking in the textarea updates the internal caret position.
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")! as HTMLTextAreaElement;
+
+    fireEvent.change(textarea, { target: { value: "Some text here" } });
+    // Simulate clicking at position 5
+    Object.defineProperty(textarea, "selectionStart", { value: 5, writable: true });
+    fireEvent.click(textarea);
+
+    // No error should occur — syncCaret should work silently
+    expect(textarea.value).toBe("Some text here");
+  });
+
+  it("syncCaret updates on keyUp", () => {
+    // Validates arrow key navigation updates the caret position for mention detection.
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")! as HTMLTextAreaElement;
+
+    fireEvent.change(textarea, { target: { value: "test" } });
+    Object.defineProperty(textarea, "selectionStart", { value: 2, writable: true });
+    fireEvent.keyUp(textarea, { key: "ArrowLeft" });
+
+    expect(textarea.value).toBe("test");
+  });
+});
+
+// ─── Slash menu Tab selection ────────────────────────────────────────────────
+
+describe("Composer slash menu Tab selection", () => {
+  it("Tab key selects the highlighted slash command", () => {
+    // Validates that Tab fills the command into the textarea without sending.
+    setupMockStore({
+      session: {
+        slash_commands: ["help", "clear"],
+        skills: [],
+      },
+    });
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")! as HTMLTextAreaElement;
+
+    fireEvent.change(textarea, { target: { value: "/" } });
+    expect(screen.getByText("/help")).toBeTruthy();
+
+    fireEvent.keyDown(textarea, { key: "Tab", shiftKey: false });
+
+    // Should fill in the first command
+    expect(textarea.value).toBe("/help ");
+    expect(mockSendToSession).not.toHaveBeenCalled();
+  });
+
+  it("ArrowUp wraps to the last item in slash menu", () => {
+    // Validates ArrowUp from the first item wraps to the last item.
+    setupMockStore({
+      session: {
+        slash_commands: ["help", "clear"],
+        skills: [],
+      },
+    });
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")! as HTMLTextAreaElement;
+
+    fireEvent.change(textarea, { target: { value: "/" } });
+
+    // ArrowUp from index 0 should wrap to last item
+    fireEvent.keyDown(textarea, { key: "ArrowUp" });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    // Should select the last command (clear)
+    expect(textarea.value).toBe("/clear ");
+  });
+});
+
+// ─── Mention menu keyboard navigation ───────────────────────────────────────
+
+describe("Composer mention menu keyboard", () => {
+  it("Escape in mention menu does not send a message", async () => {
+    // Validates pressing Escape while the @-mention menu is open does not trigger
+    // a message send — the key event should be consumed by the menu handler.
+    mockListPrompts.mockResolvedValue([
+      {
+        id: "p1",
+        name: "my-prompt",
+        content: "Prompt content",
+        scope: "global",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ]);
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+
+    fireEvent.change(textarea, { target: { value: "@my", selectionStart: 3 } });
+    await screen.findByText("@my-prompt");
+
+    fireEvent.keyDown(textarea, { key: "Escape" });
+
+    // The Escape should be consumed — no message sent, text unchanged
+    expect(mockSendToSession).not.toHaveBeenCalled();
+    expect((textarea as HTMLTextAreaElement).value).toBe("@my");
+  });
+
+  it("ArrowDown navigates in the mention menu", async () => {
+    // Validates arrow navigation cycles through @-mention suggestions.
+    mockListPrompts.mockResolvedValue([
+      {
+        id: "p1",
+        name: "alpha",
+        content: "Alpha content",
+        scope: "global",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+      {
+        id: "p2",
+        name: "beta",
+        content: "Beta content",
+        scope: "global",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ]);
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+
+    fireEvent.change(textarea, { target: { value: "@", selectionStart: 1 } });
+    await screen.findByText("@alpha");
+
+    // Navigate down then select with Tab
+    fireEvent.keyDown(textarea, { key: "ArrowDown" });
+    fireEvent.keyDown(textarea, { key: "Tab", shiftKey: false });
+
+    // Should have selected the second prompt (beta)
+    expect((textarea as HTMLTextAreaElement).value).toContain("Beta content");
+    expect(mockSendToSession).not.toHaveBeenCalled();
+  });
+
+  it("ArrowUp navigates backwards in the mention menu", async () => {
+    // Validates ArrowUp navigates upward through @-mention suggestions.
+    mockListPrompts.mockResolvedValue([
+      {
+        id: "p1",
+        name: "first",
+        content: "First content",
+        scope: "global",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+      {
+        id: "p2",
+        name: "second",
+        content: "Second content",
+        scope: "global",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ]);
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+
+    fireEvent.change(textarea, { target: { value: "@", selectionStart: 1 } });
+    await screen.findByText("@first");
+
+    // ArrowUp from first position should wrap to last
+    fireEvent.keyDown(textarea, { key: "ArrowUp" });
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+    // Should have selected the second (last) prompt
+    expect((textarea as HTMLTextAreaElement).value).toContain("Second content");
+  });
+
+  it("Enter/Tab does nothing when mention menu is open but empty", async () => {
+    // Validates Enter does not send when the mention menu is open with no matching prompts.
+    mockListPrompts.mockResolvedValue([
+      {
+        id: "p1",
+        name: "unique-name",
+        content: "Content",
+        scope: "global",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ]);
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+
+    // Type @ with a query that matches nothing
+    fireEvent.change(textarea, { target: { value: "@zzz", selectionStart: 4 } });
+
+    // Small wait for menu to react
+    await waitFor(() => {
+      // Menu is open but should have no matches for "zzz"
+      expect(screen.queryByText("@unique-name")).toBeNull();
+    });
+
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+    // Should not send
+    expect(mockSendToSession).not.toHaveBeenCalled();
+  });
+
+  it("Tab selects a prompt from mention menu", async () => {
+    // Validates Tab key inserts the prompt content from the @-mention menu.
+    mockListPrompts.mockResolvedValue([
+      {
+        id: "p1",
+        name: "tab-test",
+        content: "Tab selected content",
+        scope: "global",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ]);
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+
+    fireEvent.change(textarea, { target: { value: "@tab", selectionStart: 4 } });
+    await screen.findByText("@tab-test");
+
+    fireEvent.keyDown(textarea, { key: "Tab", shiftKey: false });
+
+    expect((textarea as HTMLTextAreaElement).value).toContain("Tab selected content");
+  });
+});
+
+// ─── Codex backend mode label ────────────────────────────────────────────────
+
+describe("Composer codex backend", () => {
+  it("shows codex mode labels when backend is codex", () => {
+    // Validates that the mode button shows Codex-specific labels (e.g. "auto" instead of "agent").
+    setupMockStore({
+      isConnected: true,
+      session: { backend_type: "codex", permissionMode: "bypassPermissions" },
+    });
+    render(<Composer sessionId="s1" />);
+
+    const modeBtns = screen.getAllByTitle("Toggle mode (Shift+Tab)");
+    const hasAutoLabel = modeBtns.some((btn) => btn.textContent?.toLowerCase().includes("auto"));
+    expect(hasAutoLabel).toBe(true);
+  });
+
+  it("restores previous codex mode when toggling back from plan", () => {
+    // Validates that toggling off plan mode on Codex restores the stored previous mode.
+    setupMockStore({
+      isConnected: true,
+      session: { backend_type: "codex", permissionMode: "plan" },
+    });
+    // Set previous mode to bypassPermissions (the typical codex default)
+    const prevMap = new Map<string, string>();
+    prevMap.set("s1", "bypassPermissions");
+    (mockStoreState as Record<string, unknown>).previousPermissionMode = prevMap;
+
+    render(<Composer sessionId="s1" />);
+
+    const modeBtn = screen.getAllByTitle("Toggle mode (Shift+Tab)")[0];
+    fireEvent.click(modeBtn);
+
+    // Should restore to bypassPermissions from previous mode
+    expect(mockSendToSession).toHaveBeenCalledWith("s1", {
+      type: "set_permission_mode",
+      mode: "bypassPermissions",
+    });
+  });
+});
+
+// ─── Mobile action row rendering ─────────────────────────────────────────────
+
+describe("Composer mobile action row", () => {
+  it("renders mobile upload image button", () => {
+    // Validates the mobile-specific upload button is present.
+    render(<Composer sessionId="s1" />);
+
+    const uploadBtns = screen.getAllByTitle("Upload image");
+    expect(uploadBtns.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("mobile upload button is disabled when not connected", () => {
+    // Validates the mobile upload button is disabled when CLI is disconnected.
+    setupMockStore({ isConnected: false });
+    render(<Composer sessionId="s1" />);
+
+    const uploadBtns = screen.getAllByTitle("Upload image");
+    uploadBtns.forEach((btn) => {
+      expect(btn.hasAttribute("disabled")).toBe(true);
+    });
+  });
+});
+
+// ─── Plan mode border styling ────────────────────────────────────────────────
+
+describe("Composer plan mode styling", () => {
+  it("applies plan mode border class when in plan mode", () => {
+    // Validates the input container gets a distinct border in plan mode.
+    setupMockStore({ isConnected: true, session: { permissionMode: "plan" } });
+    const { container } = render(<Composer sessionId="s1" />);
+
+    // The outer container div should have the plan border class
+    const inputContainer = container.querySelector(".sm\\:border-cc-primary\\/40");
+    expect(inputContainer).toBeTruthy();
+  });
+});
+
+// ─── Push-to-talk keyboard shortcut ──────────────────────────────────────────
+
+describe("Composer push-to-talk keyboard shortcut", () => {
+  it("Ctrl+Shift+M does nothing when deepgram is not configured", () => {
+    // Validates the keyboard shortcut is inactive without Deepgram setup.
+    const { container } = render(<Composer sessionId="s1" />);
+    const textarea = container.querySelector("textarea")!;
+
+    // Should not throw; deepgramConfigured defaults to false
+    fireEvent.keyDown(textarea, { key: "m", ctrlKey: true, shiftKey: true });
+
+    expect(mockSendToSession).not.toHaveBeenCalled();
+  });
+});

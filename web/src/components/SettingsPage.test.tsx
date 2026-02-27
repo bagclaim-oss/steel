@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
 // IntersectionObserver is not available in jsdom — provide a no-op mock
@@ -554,6 +554,119 @@ describe("SettingsPage", () => {
 
     const authButtons = screen.getAllByRole("button", { name: "Authentication" });
     expect(authButtons.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // ─── Verify button tests ──────────────────────────────────
+
+  // The Verify button is disabled when the API key input is empty.
+  it("disables Verify button when anthropic key input is empty", async () => {
+    render(<SettingsPage />);
+    await screen.findByText("Anthropic key configured");
+
+    const verifyBtn = screen.getByRole("button", { name: "Verify" });
+    expect(verifyBtn).toBeDisabled();
+  });
+
+  // The Verify button is enabled when the user types a new key.
+  it("enables Verify button when user types a key", async () => {
+    render(<SettingsPage />);
+    await screen.findByText("Anthropic key configured");
+
+    const keyInput = screen.getByLabelText("Anthropic API Key");
+    fireEvent.focus(keyInput);
+    fireEvent.change(keyInput, { target: { value: "sk-ant-test-key" } });
+
+    const verifyBtn = screen.getByRole("button", { name: "Verify" });
+    expect(verifyBtn).toBeEnabled();
+  });
+
+  // Clicking Verify calls verifyAnthropicKey and shows success state.
+  it("shows success message when verify succeeds", async () => {
+    mockApi.verifyAnthropicKey.mockResolvedValueOnce({ valid: true });
+
+    render(<SettingsPage />);
+    await screen.findByText("Anthropic key configured");
+
+    const keyInput = screen.getByLabelText("Anthropic API Key");
+    fireEvent.focus(keyInput);
+    fireEvent.change(keyInput, { target: { value: "sk-ant-test-key" } });
+
+    const verifyBtn = screen.getByRole("button", { name: "Verify" });
+    fireEvent.click(verifyBtn);
+
+    expect(mockApi.verifyAnthropicKey).toHaveBeenCalledWith("sk-ant-test-key");
+    await screen.findByText("API key is valid.");
+  });
+
+  // Clicking Verify shows error state when verification fails.
+  it("shows error message when verify fails", async () => {
+    mockApi.verifyAnthropicKey.mockResolvedValueOnce({ valid: false, error: "API returned 401" });
+
+    render(<SettingsPage />);
+    await screen.findByText("Anthropic key configured");
+
+    const keyInput = screen.getByLabelText("Anthropic API Key");
+    fireEvent.focus(keyInput);
+    fireEvent.change(keyInput, { target: { value: "sk-ant-bad-key" } });
+
+    const verifyBtn = screen.getByRole("button", { name: "Verify" });
+    fireEvent.click(verifyBtn);
+
+    expect(mockApi.verifyAnthropicKey).toHaveBeenCalledWith("sk-ant-bad-key");
+    await screen.findByText("Invalid API key: API returned 401");
+  });
+
+  // Verify result auto-dismisses after 5 seconds.
+  it("auto-dismisses verify result after 5 seconds", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockApi.verifyAnthropicKey.mockResolvedValueOnce({ valid: true });
+
+    render(<SettingsPage />);
+    await screen.findByText("Anthropic key configured");
+
+    const keyInput = screen.getByLabelText("Anthropic API Key");
+    fireEvent.focus(keyInput);
+    fireEvent.change(keyInput, { target: { value: "sk-ant-test-key" } });
+
+    const verifyBtn = screen.getByRole("button", { name: "Verify" });
+    fireEvent.click(verifyBtn);
+
+    await screen.findByText("API key is valid.");
+
+    // Advance past the 5s auto-dismiss
+    act(() => {
+      vi.advanceTimersByTime(5100);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("API key is valid.")).not.toBeInTheDocument();
+    });
+
+    vi.useRealTimers();
+  });
+
+  // Verify result clears when the key input changes.
+  it("clears verify result when key input changes", async () => {
+    mockApi.verifyAnthropicKey.mockResolvedValueOnce({ valid: true });
+
+    render(<SettingsPage />);
+    await screen.findByText("Anthropic key configured");
+
+    const keyInput = screen.getByLabelText("Anthropic API Key");
+    fireEvent.focus(keyInput);
+    fireEvent.change(keyInput, { target: { value: "sk-ant-test-key" } });
+
+    const verifyBtn = screen.getByRole("button", { name: "Verify" });
+    fireEvent.click(verifyBtn);
+
+    await screen.findByText("API key is valid.");
+
+    // Changing the key should clear the verify result
+    fireEvent.change(keyInput, { target: { value: "sk-ant-test-key-changed" } });
+
+    await waitFor(() => {
+      expect(screen.queryByText("API key is valid.")).not.toBeInTheDocument();
+    });
   });
 
   // ─── AI Validation section tests ──────────────────────────────────

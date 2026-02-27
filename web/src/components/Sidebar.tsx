@@ -62,6 +62,14 @@ const NAV_ITEMS: NavItem[] = [
     iconPath: "M8 1.5a2.5 2.5 0 00-2.5 2.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5S9.38 1.5 8 1.5zM4 8a4 4 0 00-4 4v1.5a.5.5 0 00.5.5h15a.5.5 0 00.5-.5V12a4 4 0 00-4-4H4z",
   },
   {
+    id: "orchestrators",
+    label: "Orchestrators",
+    shortLabel: "Orch",
+    hash: "#/orchestrators",
+    viewBox: "0 0 16 16",
+    iconPath: "M8 1v3M8 12v3M3.5 5.5L1.5 4M14.5 4l-2 1.5M3.5 10.5L1.5 12M14.5 12l-2-1.5M5 8a3 3 0 116 0 3 3 0 01-6 0zM2 4.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM14 4.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM2 14.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM14 14.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3z",
+  },
+  {
     id: "settings",
     label: "Settings",
     shortLabel: "Settings",

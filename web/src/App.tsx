@@ -26,6 +26,8 @@ const PromptsPage = lazy(() => import("./components/PromptsPage.js").then((m) =>
 const EnvManager = lazy(() => import("./components/EnvManager.js").then((m) => ({ default: m.EnvManager })));
 const CronManager = lazy(() => import("./components/CronManager.js").then((m) => ({ default: m.CronManager })));
 const AgentsPage = lazy(() => import("./components/AgentsPage.js").then((m) => ({ default: m.AgentsPage })));
+const OrchestratorPage = lazy(() => import("./components/OrchestratorPage.js").then((m) => ({ default: m.OrchestratorPage })));
+const OrchestratorRunView = lazy(() => import("./components/OrchestratorRunView.js").then((m) => ({ default: m.OrchestratorRunView })));
 const TerminalPage = lazy(() => import("./components/TerminalPage.js").then((m) => ({ default: m.TerminalPage })));
 const ProcessPanel = lazy(() => import("./components/ProcessPanel.js").then((m) => ({ default: m.ProcessPanel })));
 
@@ -69,6 +71,8 @@ export default function App() {
   const isEnvironmentsPage = route.page === "environments";
   const isScheduledPage = route.page === "scheduled";
   const isAgentsPage = route.page === "agents" || route.page === "agent-detail";
+  const isOrchestratorsPage = route.page === "orchestrators";
+  const isOrchestratorRunPage = route.page === "orchestrator-run";
   const isSessionView = route.page === "session" || route.page === "home";
 
   useEffect(() => {
@@ -231,6 +235,18 @@ export default function App() {
           {isAgentsPage && (
             <div className="absolute inset-0">
               <Suspense fallback={<LazyFallback />}><AgentsPage route={route} /></Suspense>
+            </div>
+          )}
+
+          {isOrchestratorsPage && (
+            <div className="absolute inset-0">
+              <Suspense fallback={<LazyFallback />}><OrchestratorPage route={route} /></Suspense>
+            </div>
+          )}
+
+          {isOrchestratorRunPage && route.page === "orchestrator-run" && (
+            <div className="absolute inset-0">
+              <Suspense fallback={<LazyFallback />}><OrchestratorRunView runId={route.runId} /></Suspense>
             </div>
           )}
 

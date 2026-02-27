@@ -12,10 +12,13 @@ export type Route =
   | { page: "scheduled" }
   | { page: "agents" }
   | { page: "agent-detail"; agentId: string }
+  | { page: "orchestrators" }
+  | { page: "orchestrator-run"; runId: string }
   | { page: "playground" };
 
 const SESSION_PREFIX = "#/session/";
 const AGENT_PREFIX = "#/agents/";
+const ORCHESTRATOR_RUN_PREFIX = "#/orchestrator-run/";
 let clipboardFallbackInitialized = false;
 
 function ensureClipboardFallbackInstalled(): void {
@@ -39,7 +42,13 @@ export function parseHash(hash: string): Route {
   // #/scheduled redirects to #/agents (cron absorbed into agents)
   if (hash === "#/scheduled") return { page: "agents" };
   if (hash === "#/agents") return { page: "agents" };
+  if (hash === "#/orchestrators") return { page: "orchestrators" };
   if (hash === "#/playground") return { page: "playground" };
+
+  if (hash.startsWith(ORCHESTRATOR_RUN_PREFIX)) {
+    const runId = hash.slice(ORCHESTRATOR_RUN_PREFIX.length);
+    if (runId) return { page: "orchestrator-run", runId };
+  }
 
   if (hash.startsWith(AGENT_PREFIX)) {
     const agentId = hash.slice(AGENT_PREFIX.length);

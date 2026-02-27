@@ -83,6 +83,8 @@ export class WsBridge {
   private autoNamingAttempted = new Set<string>();
   private userMsgCounter = 0;
   private onGitInfoReady: ((sessionId: string, cwd: string, branch: string) => void) | null = null;
+  /** One-shot result listeners keyed by sessionId. Fired when a `result` message arrives. */
+  private resultListeners = new Map<string, Array<(msg: CLIResultMessage) => void>>();
   private static readonly GIT_SESSION_KEYS: GitSessionKey[] = [
     "git_branch",
     "is_worktree",
@@ -110,6 +112,26 @@ export class WsBridge {
   /** Register a callback for when git info is resolved and branch is known. */
   onSessionGitInfoReadyCallback(cb: (sessionId: string, cwd: string, branch: string) => void): void {
     this.onGitInfoReady = cb;
+  }
+
+  /**
+   * Register a one-shot listener for when a `result` message arrives for a session.
+   * Used by the orchestrator executor to detect stage completion.
+   * Returns an unsubscribe function to remove the listener.
+   */
+  onResultMessage(sessionId: string, callback: (msg: CLIResultMessage) => void): () => void {
+    if (!this.resultListeners.has(sessionId)) {
+      this.resultListeners.set(sessionId, []);
+    }
+    this.resultListeners.get(sessionId)!.push(callback);
+    return () => {
+      const listeners = this.resultListeners.get(sessionId);
+      if (listeners) {
+        const idx = listeners.indexOf(callback);
+        if (idx >= 0) listeners.splice(idx, 1);
+        if (listeners.length === 0) this.resultListeners.delete(sessionId);
+      }
+    };
   }
 
   /**
@@ -776,6 +798,17 @@ export class WsBridge {
     session.messageHistory.push(browserMsg);
     this.broadcastToBrowsers(session, browserMsg);
     this.persistSession(session);
+
+    // Fire one-shot result listeners (used by orchestrator executor)
+    const resultCbs = this.resultListeners.get(session.id);
+    if (resultCbs && resultCbs.length > 0) {
+      this.resultListeners.delete(session.id);
+      for (const cb of resultCbs) {
+        try { cb(msg); } catch (e) {
+          console.error(`[ws-bridge] Result listener error for session ${session.id}:`, e);
+        }
+      }
+    }
 
     // Trigger auto-naming after the first successful result for this session.
     // Note: num_turns counts all internal tool-use turns, so it's typically > 1

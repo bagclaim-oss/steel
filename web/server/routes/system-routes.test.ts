@@ -363,6 +363,103 @@ describe("POST /api/update", () => {
     expect(json.message).toMatch(/restart/i);
     expect(setUpdateInProgress).toHaveBeenCalledWith(true);
   });
+
+  // Exercises the async setTimeout callback inside the update handler.
+  // Mocks Bun.spawn to simulate a successful install + restart.
+  it("runs the install and restart flow inside the deferred callback", async () => {
+    vi.useFakeTimers();
+
+    vi.mocked(getUpdateState).mockReturnValue({
+      currentVersion: "1.0.0",
+      latestVersion: "2.0.0",
+      lastChecked: Date.now(),
+      isServiceMode: true,
+      checking: false,
+      updateInProgress: false,
+      channel: "stable",
+    });
+    vi.mocked(isUpdateAvailable).mockReturnValue(true);
+
+    // Mock Bun.spawn for the install command
+    const mockSpawn = vi.fn()
+      .mockReturnValueOnce({
+        exited: Promise.resolve(0),
+        stdout: new ReadableStream(),
+        stderr: new ReadableStream(),
+      })
+      // Second call is the restart command
+      .mockReturnValueOnce({
+        exited: Promise.resolve(0),
+        stdout: new ReadableStream(),
+        stderr: new ReadableStream(),
+      });
+    // @ts-expect-error -- Bun global mock
+    globalThis.Bun = { spawn: mockSpawn };
+
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+
+    const res = await app.request("/api/update", { method: "POST" });
+    expect(res.status).toBe(200);
+
+    // Advance past the 100ms setTimeout that starts the install
+    await vi.advanceTimersByTimeAsync(150);
+
+    // The install spawn should have been called
+    expect(mockSpawn).toHaveBeenCalledWith(
+      ["bun", "install", "-g", "the-companion@2.0.0"],
+      expect.anything(),
+    );
+
+    // Advance past the 500ms exit timeout
+    await vi.advanceTimersByTimeAsync(600);
+
+    vi.useRealTimers();
+    exitSpy.mockRestore();
+    // @ts-expect-error -- cleanup Bun global mock
+    delete globalThis.Bun;
+  });
+
+  // When the install command fails, setUpdateInProgress should be reset.
+  it("resets updateInProgress when install fails", async () => {
+    vi.useFakeTimers();
+
+    vi.mocked(getUpdateState).mockReturnValue({
+      currentVersion: "1.0.0",
+      latestVersion: "2.0.0",
+      lastChecked: Date.now(),
+      isServiceMode: true,
+      checking: false,
+      updateInProgress: false,
+      channel: "stable",
+    });
+    vi.mocked(isUpdateAvailable).mockReturnValue(true);
+
+    const stderrStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("install error"));
+        controller.close();
+      },
+    });
+    const mockSpawn = vi.fn().mockReturnValueOnce({
+      exited: Promise.resolve(1),
+      stdout: new ReadableStream(),
+      stderr: stderrStream,
+    });
+    // @ts-expect-error -- Bun global mock
+    globalThis.Bun = { spawn: mockSpawn };
+
+    const res = await app.request("/api/update", { method: "POST" });
+    expect(res.status).toBe(200);
+
+    await vi.advanceTimersByTimeAsync(150);
+
+    // After failed install, setUpdateInProgress should be called with false
+    expect(setUpdateInProgress).toHaveBeenCalledWith(false);
+
+    vi.useRealTimers();
+    // @ts-expect-error -- cleanup Bun global mock
+    delete globalThis.Bun;
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

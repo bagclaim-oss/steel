@@ -47,6 +47,7 @@ function startHeartbeat() {
   stopHeartbeat();
   pingTimer = setInterval(() => {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (pongTimer) { clearTimeout(pongTimer); pongTimer = null; }
     ws.ping();
     pongTimer = setTimeout(() => {
       log("Pong timeout — connection appears dead");

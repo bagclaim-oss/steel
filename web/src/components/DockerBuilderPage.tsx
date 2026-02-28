@@ -103,10 +103,15 @@ export function DockerBuilderPage() {
   }, [availableImages, dockerAvailable, refreshImageStatus]);
 
   const pollCountRef = useRef(0);
+  // Token ref to cancel in-flight poll chains when the env changes.
+  // Each handleBuild() call creates a new token; stale polls from a
+  // previous build bail out when their captured token no longer matches.
+  const buildTokenRef = useRef<object | null>(null);
 
   // Reset build state when environment selection changes so stale results
   // from a previous env don't carry over to the newly selected env.
   useEffect(() => {
+    buildTokenRef.current = null; // cancel any in-flight poll chain
     setBuildState("idle");
     setBuildLog("");
     setBuildError("");
@@ -117,6 +122,8 @@ export function DockerBuilderPage() {
 
   async function handleBuild() {
     if (!selectedEnvSlug) return;
+    const token = {};
+    buildTokenRef.current = token;
     setBuildState("building");
     setBuildLog("Starting build...\n");
     setBuildError("");
@@ -124,7 +131,7 @@ export function DockerBuilderPage() {
     try {
       await api.buildEnvImage(selectedEnvSlug);
       const poll = async () => {
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || buildTokenRef.current !== token) return;
         if (pollCountRef.current++ >= MAX_BUILD_POLLS) {
           setBuildState("error");
           setBuildError("Build timed out after 5 minutes");
@@ -133,7 +140,7 @@ export function DockerBuilderPage() {
         }
         try {
           const status = await api.getEnvBuildStatus(selectedEnvSlug);
-          if (!mountedRef.current) return;
+          if (!mountedRef.current || buildTokenRef.current !== token) return;
           if (status.buildStatus === "building") {
             setTimeout(poll, 2000);
           } else {
@@ -151,7 +158,7 @@ export function DockerBuilderPage() {
             }
           }
         } catch (pollErr: unknown) {
-          if (!mountedRef.current) return;
+          if (!mountedRef.current || buildTokenRef.current !== token) return;
           const msg = pollErr instanceof Error ? pollErr.message : String(pollErr);
           setBuildState("error");
           setBuildError(msg);

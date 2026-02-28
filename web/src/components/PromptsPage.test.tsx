@@ -392,6 +392,89 @@ describe("PromptsPage", () => {
     expect(folderElements.length).toBeGreaterThanOrEqual(2);
   });
 
+  it("edits a project prompt displayed in a project group section", async () => {
+    // Validates that edit/save works for prompts rendered under the project folder group.
+    mockApi.listPrompts
+      .mockResolvedValueOnce([
+        {
+          id: "p1",
+          name: "proj-task",
+          content: "Do project task",
+          scope: "project",
+          projectPath: "/work/repo",
+          projectPaths: ["/work/repo"],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ])
+      .mockResolvedValueOnce([]); // after save reload
+    render(<PromptsPage embedded />);
+    await screen.findByText("proj-task");
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.change(screen.getByDisplayValue("proj-task"), { target: { value: "proj-task-v2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(mockApi.updatePrompt).toHaveBeenCalledWith("p1", {
+        name: "proj-task-v2",
+        content: "Do project task",
+        scope: "project",
+        projectPaths: ["/work/repo"],
+      });
+    });
+  });
+
+  it("deletes a project prompt displayed in a project group section", async () => {
+    // Validates that delete works for prompts rendered under the project folder group.
+    mockApi.listPrompts
+      .mockResolvedValueOnce([
+        {
+          id: "p1",
+          name: "to-delete",
+          content: "Delete me",
+          scope: "project",
+          projectPath: "/work/repo",
+          projectPaths: ["/work/repo"],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ])
+      .mockResolvedValueOnce([]); // after delete reload
+    render(<PromptsPage embedded />);
+    await screen.findByText("to-delete");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(mockApi.deletePrompt).toHaveBeenCalledWith("p1");
+    });
+  });
+
+  it("cancels editing a project prompt in the project group section", async () => {
+    // Validates cancel in edit mode for a project-scoped prompt clears edit state.
+    mockApi.listPrompts.mockResolvedValueOnce([
+      {
+        id: "p1",
+        name: "proj-cancel",
+        content: "Cancel me",
+        scope: "project",
+        projectPath: "/work/repo",
+        projectPaths: ["/work/repo"],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ]);
+    render(<PromptsPage embedded />);
+    await screen.findByText("proj-cancel");
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByDisplayValue("proj-cancel")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByDisplayValue("proj-cancel")).not.toBeInTheDocument();
+    expect(screen.getByText("proj-cancel")).toBeInTheDocument();
+  });
+
   it("loads all prompts even without a selected session", async () => {
     // Validates the page fully works with no session selected.
     mockState = {

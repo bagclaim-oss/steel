@@ -561,6 +561,39 @@ describe("MessageFeed - subagent grouping", () => {
     expect(screen.getByText("2 agents")).toBeTruthy();
   });
 
+  it("does not render a receiver badge when receiver list is empty", () => {
+    const sid = "test-codex-empty-receivers";
+    setStoreMessages(sid, [
+      makeMessage({
+        id: "a1",
+        role: "assistant",
+        content: "",
+        contentBlocks: [
+          {
+            type: "tool_use",
+            id: "task-cx-empty",
+            name: "Task",
+            input: {
+              description: "Validate edge case",
+              subagent_type: "spawn_agent",
+              codex_status: "running",
+              receiver_thread_ids: [],
+            },
+          },
+        ],
+      }),
+      makeMessage({
+        id: "child-1",
+        role: "assistant",
+        content: "Working",
+        parentToolUseId: "task-cx-empty",
+      }),
+    ]);
+
+    render(<MessageFeed sessionId={sid} />);
+    expect(screen.queryByText("0 agents")).toBeNull();
+  });
+
   it("normalizes Codex status labels and shows participant details when expanded", () => {
     const sid = "test-codex-subagent-details";
     setStoreMessages(sid, [

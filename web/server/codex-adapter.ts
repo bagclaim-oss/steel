@@ -1665,7 +1665,7 @@ export class CodexAdapter {
           codex_status: collab.status,
           sender_thread_id: collab.senderThreadId || null,
           receiver_thread_ids: receiverThreadIds,
-        });
+        }, parentToolUseId);
         this.setSubagentThreadMappings(item.id, collab);
         this.emitAssistantText(
           `Started ${collab.tool || "collab"} for ${receiverThreadIds.length || 1} agent${(receiverThreadIds.length || 1) === 1 ? "" : "s"}.`,
@@ -2258,7 +2258,7 @@ export class CodexAdapter {
   }
 
   /** Emit an assistant message with a tool_use content block (no tracking). */
-  private emitToolUse(toolUseId: string, toolName: string, input: Record<string, unknown>): void {
+  private emitToolUse(toolUseId: string, toolName: string, input: Record<string, unknown>, parentToolUseId: string | null = null): void {
     console.log(`[codex-adapter] Emitting tool_use: ${toolName} id=${toolUseId}`);
     this.emit({
       type: "assistant",
@@ -2278,15 +2278,15 @@ export class CodexAdapter {
         stop_reason: null,
         usage: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
       },
-      parent_tool_use_id: null,
+      parent_tool_use_id: parentToolUseId,
       timestamp: Date.now(),
     });
   }
 
   /** Emit tool_use and track the ID so we don't double-emit. */
-  private emitToolUseTracked(toolUseId: string, toolName: string, input: Record<string, unknown>): void {
+  private emitToolUseTracked(toolUseId: string, toolName: string, input: Record<string, unknown>, parentToolUseId: string | null = null): void {
     this.emittedToolUseIds.add(toolUseId);
-    this.emitToolUse(toolUseId, toolName, input);
+    this.emitToolUse(toolUseId, toolName, input, parentToolUseId);
   }
 
   /**
@@ -2294,7 +2294,12 @@ export class CodexAdapter {
    * This matches Claude Code's streaming pattern and ensures the frontend sees the tool block
    * even during active streaming.
    */
-  private emitToolUseStart(toolUseId: string, toolName: string, input: Record<string, unknown>): void {
+  private emitToolUseStart(
+    toolUseId: string,
+    toolName: string,
+    input: Record<string, unknown>,
+    parentToolUseId: string | null = null,
+  ): void {
     // Emit stream event for tool_use start (matches Claude Code pattern)
     this.emit({
       type: "stream_event",
@@ -2303,9 +2308,9 @@ export class CodexAdapter {
         index: 0,
         content_block: { type: "tool_use", id: toolUseId, name: toolName, input: {} },
       },
-      parent_tool_use_id: null,
+      parent_tool_use_id: parentToolUseId,
     });
-    this.emitToolUseTracked(toolUseId, toolName, input);
+    this.emitToolUseTracked(toolUseId, toolName, input, parentToolUseId);
   }
 
   /** Emit tool_use only if item/started was never received for this ID. */

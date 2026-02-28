@@ -185,7 +185,9 @@ function groupMessages(messages: ChatMessage[]): FeedEntry[] {
         const receiverThreadIds = Array.isArray(input?.receiver_thread_ids)
           ? input.receiver_thread_ids.filter((threadId): threadId is string => typeof threadId === "string" && threadId.length > 0)
           : undefined;
-        const receiverCount = receiverThreadIds?.length;
+        const receiverCount = receiverThreadIds && receiverThreadIds.length > 0
+          ? receiverThreadIds.length
+          : undefined;
         const senderThreadId = typeof input?.sender_thread_id === "string" && input.sender_thread_id.length > 0
           ? input.sender_thread_id
           : undefined;

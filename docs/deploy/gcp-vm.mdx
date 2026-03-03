@@ -233,12 +233,11 @@ set -euo pipefail
 # Install Tailscale
 curl -fsSL https://tailscale.com/install.sh | sh
 
-# Join your tailnet (auth key passed via env var to avoid process-table exposure)
-export TS_AUTHKEY=\"$TAILSCALE_AUTH_KEY\"
-sudo -E tailscale up \
+# Join your tailnet
+sudo tailscale up \
+  --auth-key=\"$TAILSCALE_AUTH_KEY\" \
   --hostname=\"$COMPANION_HOSTNAME\" \
   --ssh
-unset TS_AUTHKEY
 
 # Serve The Companion over HTTPS
 sudo tailscale serve --bg 3456

@@ -764,7 +764,9 @@ export class WsBridge {
     };
     session.messageHistory.push(browserMsg);
     this.broadcastToBrowsers(session, browserMsg);
-    this.assistantMessageListeners.get(session.id)?.forEach((cb) => cb(browserMsg));
+    this.assistantMessageListeners.get(session.id)?.forEach((cb) => {
+      try { cb(browserMsg); } catch (err) { console.error("[ws-bridge] Assistant listener error:", err); }
+    });
     this.persistSession(session);
   }
 
@@ -802,7 +804,11 @@ export class WsBridge {
     };
     session.messageHistory.push(browserMsg);
     this.broadcastToBrowsers(session, browserMsg);
-    this.resultListeners.get(session.id)?.forEach((cb) => cb(browserMsg));
+    this.resultListeners.get(session.id)?.forEach((cb) => {
+      try {
+        Promise.resolve(cb(browserMsg)).catch((err) => console.error("[ws-bridge] Async result listener error:", err));
+      } catch (err) { console.error("[ws-bridge] Result listener error:", err); }
+    });
     this.persistSession(session);
 
     // Trigger auto-naming after the first successful result for this session.

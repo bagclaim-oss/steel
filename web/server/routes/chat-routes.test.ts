@@ -40,7 +40,7 @@ describe("POST /api/chat/webhooks/:platform", () => {
 
     expect(res.status).toBe(404);
     const body = await res.json();
-    expect(body.error).toContain("slack");
+    expect(body.error).toContain("Unknown platform");
   });
 
   it("delegates to the platform webhook handler and returns its response", async () => {

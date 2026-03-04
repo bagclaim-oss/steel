@@ -51,12 +51,18 @@ export function attachCodexAdapterHandlers(
       session.messageHistory.push(assistantMsg);
       deps.persistSession(session);
       // Invoke per-session listeners for chat relay
-      deps.assistantMessageListeners.get(sessionId)?.forEach((cb) => cb(assistantMsg));
+      deps.assistantMessageListeners.get(sessionId)?.forEach((cb) => {
+        try { cb(assistantMsg); } catch (err) { console.error("[ws-bridge-codex] Assistant listener error:", err); }
+      });
     } else if (msg.type === "result") {
       session.messageHistory.push(msg);
       deps.persistSession(session);
       // Invoke per-session listeners for chat relay
-      deps.resultListeners.get(sessionId)?.forEach((cb) => cb(msg));
+      deps.resultListeners.get(sessionId)?.forEach((cb) => {
+        try {
+          Promise.resolve(cb(msg)).catch((err) => console.error("[ws-bridge-codex] Async result listener error:", err));
+        } catch (err) { console.error("[ws-bridge-codex] Result listener error:", err); }
+      });
     }
 
     if (msg.type === "assistant") {

@@ -16,14 +16,16 @@ export function registerChatWebhookRoutes(api: Hono, chatBot: ChatBot): void {
     const handler = chatBot.webhooks[platform];
 
     if (!handler) {
-      return c.json({ error: `Unknown platform: ${platform}` }, 404);
+      return c.json({ error: "Unknown platform" }, 404);
     }
 
     try {
       // Chat SDK handlers expect raw Request and return raw Response.
       // Bun doesn't need waitUntil — all processing is in-process.
       return await handler(c.req.raw, {
-        waitUntil: (task: Promise<unknown>) => { void task; },
+        waitUntil: (task: Promise<unknown>) => {
+          task.catch((err) => console.error("[chat-routes] Background task error:", err));
+        },
       });
     } catch (err) {
       console.error(`[chat-routes] Error handling ${platform} webhook:`, err);

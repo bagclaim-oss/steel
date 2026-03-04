@@ -145,7 +145,9 @@ export class RelayClient {
 
       // Execute the webhook handler
       const response = await webhookHandler(request, {
-        waitUntil: (task: Promise<unknown>) => void task,
+        waitUntil: (task: Promise<unknown>) => {
+          task.catch((err) => console.error("[relay-client] Background task error:", err));
+        },
       });
 
       // Extract response details

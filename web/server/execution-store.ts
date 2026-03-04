@@ -145,8 +145,11 @@ export class ExecutionStore {
         this.recentCache.push(exec);
         if (this.recentCache.length >= ExecutionStore.MAX_CACHE_SIZE) break;
       }
-    } catch {
-      // Directory might not exist yet on first run
+    } catch (err) {
+      // Log errors that aren't simply "directory not found" (ENOENT)
+      if (err && typeof err === "object" && "code" in err && (err as { code: string }).code !== "ENOENT") {
+        console.error("[execution-store] Failed to load executions from disk:", err);
+      }
     }
   }
 

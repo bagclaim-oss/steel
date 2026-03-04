@@ -176,6 +176,9 @@ export class ChatBot {
    * Assistant messages from the CLI are posted back to the thread.
    */
   private setupResponseRelay(sessionId: string, thread: Thread<CompanionThreadState>): void {
+    // Clean up any existing relay for this session to prevent listener leaks
+    this.cleanupSession(sessionId);
+
     const unsubscribers: Array<() => void> = [];
 
     // Collect assistant text chunks and post them when a result arrives

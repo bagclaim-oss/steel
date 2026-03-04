@@ -3249,6 +3249,77 @@ describe("MCP control messages", () => {
   });
 });
 
+// ─── Per-session listener error handling ────────────────────────────────────
+
+describe("per-session listener error handling", () => {
+  it("catches and logs errors thrown by assistant message listeners", () => {
+    // A throwing listener should not crash the message pipeline or prevent
+    // persistSession from running.
+    const sessionId = "listener-error-session";
+    const cli = makeCliSocket(sessionId);
+    bridge.handleCLIOpen(cli, sessionId);
+    bridge.handleCLIMessage(cli, makeInitMsg());
+
+    const browser = makeBrowserSocket(sessionId);
+    bridge.handleBrowserOpen(browser, sessionId);
+
+    // Register a throwing listener
+    const throwingCb = () => { throw new Error("listener boom"); };
+    bridge.onAssistantMessageForSession(sessionId, throwingCb);
+
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    // Send an assistant message — should not throw
+    const assistantMsg = JSON.stringify({
+      type: "assistant",
+      message: { id: "m1", type: "message", role: "assistant", content: [{ type: "text", text: "hi" }], model: "test", stop_reason: null, stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 } },
+    });
+    bridge.handleCLIMessage(cli, assistantMsg);
+
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining("Assistant listener error"),
+      expect.any(Error),
+    );
+
+    spy.mockRestore();
+  });
+
+  it("catches and logs errors from async result listeners", () => {
+    // An async result listener that rejects should have its rejection caught
+    // and logged, not become an unhandled promise rejection.
+    const sessionId = "async-listener-session";
+    const cli = makeCliSocket(sessionId);
+    bridge.handleCLIOpen(cli, sessionId);
+    bridge.handleCLIMessage(cli, makeInitMsg());
+
+    const browser = makeBrowserSocket(sessionId);
+    bridge.handleBrowserOpen(browser, sessionId);
+
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    // Register a sync-throwing listener for result
+    const throwingCb = () => { throw new Error("result listener boom"); };
+    bridge.onResultForSession(sessionId, throwingCb);
+
+    // Send a result message
+    const resultMsg = JSON.stringify({
+      type: "result",
+      data: { subtype: "success" },
+      total_cost_usd: 0.01,
+      num_turns: 1,
+      is_error: false,
+    });
+    bridge.handleCLIMessage(cli, resultMsg);
+
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining("Result listener error"),
+      expect.any(Error),
+    );
+
+    spy.mockRestore();
+  });
+});
+
 // ─── sendToCLI error handling ──────────────────────────────────────────────
 
 describe("sendToCLI error path", () => {

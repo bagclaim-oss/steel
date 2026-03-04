@@ -153,9 +153,9 @@ export class ExecutionStore {
   /** Generate a daily JSONL filename from a timestamp. */
   private dailyFilename(timestamp: number): string {
     const date = new Date(timestamp);
-    const yyyy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const dd = String(date.getDate()).padStart(2, "0");
+    const yyyy = date.getUTCFullYear();
+    const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(date.getUTCDate()).padStart(2, "0");
     return `executions-${yyyy}-${mm}-${dd}.jsonl`;
   }
 

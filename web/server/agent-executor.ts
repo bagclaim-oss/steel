@@ -153,6 +153,12 @@ export class AgentExecutor {
       // Agents always run with full permissions — no interactive prompts.
       // For Claude Code this sets --permission-mode bypassPermissions;
       // for Codex, approvalPolicy is already hardcoded to "never".
+      if (agent.permissionMode && agent.permissionMode !== "bypassPermissions") {
+        console.warn(
+          `[agent-executor] Agent "${agent.name}" has permissionMode="${agent.permissionMode}" ` +
+          `but agent sessions always run with bypassPermissions`,
+        );
+      }
       const sessionInfo = this.launcher.launch({
         model: agent.model,
         permissionMode: "bypassPermissions",

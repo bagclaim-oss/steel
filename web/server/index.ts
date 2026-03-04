@@ -97,6 +97,7 @@ launcher.onCodexAdapterCreated((sessionId, adapter) => {
 // When a CLI/Codex process exits, mark the corresponding agent execution as completed
 launcher.onSessionExited((sessionId, exitCode) => {
   agentExecutor.handleSessionExited(sessionId, exitCode);
+  chatBot.cleanupSession(sessionId);
 });
 
 // Start watching PRs when git info is resolved for a session

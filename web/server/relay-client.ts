@@ -192,6 +192,10 @@ export class RelayClient {
     // Remove trailing slash if present before appending path
     url = url.replace(/\/+$/, "");
 
+    // NOTE: The secret is passed as a query param for simplicity. This means
+    // it may appear in relay-side HTTP access logs. For higher security, migrate
+    // to an auth-frame approach (send secret as the first WebSocket message after
+    // connection opens). Rotate the secret regularly if using this approach.
     return `${url}/ws/relay?secret=${encodeURIComponent(this.relaySecret)}`;
   }
 

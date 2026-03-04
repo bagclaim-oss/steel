@@ -50,6 +50,14 @@ interface WebhookResponse {
 // ---------------------------------------------------------------------------
 // In-memory state (per worker isolate)
 // ---------------------------------------------------------------------------
+// NOTE: These globals are scoped to a single Cloudflare Worker isolate.
+// Under high load or rolling deployments, multiple isolates may run
+// concurrently, each with independent copies of these variables. For
+// production-grade reliability, migrate to a Cloudflare Durable Object
+// so WebSocket state is shared across all isolates. The current approach
+// works when all traffic routes to the same isolate (typical for low-
+// traffic single-tenant deployments).
+// ---------------------------------------------------------------------------
 
 /** The active WebSocket connection from the Companion client. */
 let companionSocket: WebSocket | null = null;

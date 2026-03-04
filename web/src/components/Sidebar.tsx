@@ -88,7 +88,6 @@ const NAV_ITEMS: NavItem[] = [
   {
     id: "runs",
     label: "Runs",
-    shortLabel: "Runs",
     hash: "#/runs",
     viewBox: "0 0 16 16",
     iconPath: "M8 1a7 7 0 100 14A7 7 0 008 1zm-.75 3.5a.75.75 0 011.5 0v3.19l2.03 2.03a.75.75 0 01-1.06 1.06l-2.25-2.25A.75.75 0 017.25 8V4.5z",

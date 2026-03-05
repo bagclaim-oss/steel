@@ -565,9 +565,9 @@ describe("sanitizeAgentForResponse", () => {
     expect(sanitized).toEqual(agent);
   });
 
-  it("masks apiKey and preserves webhookSecret and userName", () => {
-    // Linear credentials with apiKey — apiKey should be masked,
-    // webhookSecret and userName should remain untouched
+  it("masks apiKey and webhookSecret, preserves userName", () => {
+    // Linear credentials with apiKey — apiKey and webhookSecret should be
+    // masked, userName should remain untouched
     const agent = agentStore.createAgent(
       makeAgentInput({
         name: "Linear Mask Agent",
@@ -595,8 +595,8 @@ describe("sanitizeAgentForResponse", () => {
 
     // apiKey should be masked: first 4 chars + "****"
     expect(creds.apiKey).toBe("lin_****");
-    // webhookSecret is NOT in CHAT_SECRET_FIELDS, so it stays intact
-    expect(creds.webhookSecret).toBe("whsec_abc123");
+    // webhookSecret is a secret field, should be masked
+    expect(creds.webhookSecret).toBe("whse****");
     // userName is not a secret field
     expect(creds.userName).toBe("TestBot");
   });
@@ -633,8 +633,8 @@ describe("sanitizeAgentForResponse", () => {
     expect(creds.token).toBe("ghp_****");
     // privateKey → masked
     expect(creds.privateKey).toBe("----****");
-    // webhookSecret → preserved (not a secret field in CHAT_SECRET_FIELDS)
-    expect(creds.webhookSecret).toBe("whsec_github_secret");
+    // webhookSecret → masked (secret field)
+    expect(creds.webhookSecret).toBe("whse****");
     // userName → preserved
     expect(creds.userName).toBe("my-bot");
   });
@@ -768,9 +768,9 @@ describe("sanitizeAgentForResponse", () => {
     const githubCreds = sanitized.triggers!.chat!.platforms[1].credentials as Record<string, unknown>;
 
     expect(linearCreds.apiKey).toBe("lin_****");
-    expect(linearCreds.webhookSecret).toBe("wh-linear");
+    expect(linearCreds.webhookSecret).toBe("wh-l****");
     expect(githubCreds.token).toBe("ghp_****");
-    expect(githubCreds.webhookSecret).toBe("wh-github");
+    expect(githubCreds.webhookSecret).toBe("wh-g****");
   });
 });
 
@@ -995,5 +995,59 @@ describe("ensureChatWebhookSecrets", () => {
     );
 
     expect(agent.triggers!.chat!.platforms[0].credentials).toBeUndefined();
+  });
+
+  it("deep-merges credentials on update to preserve omitted fields", () => {
+    // When updating an agent, if the frontend omits credential fields (e.g.
+    // masked apiKey was not re-sent), the server should preserve existing
+    // credential values rather than dropping them.
+    const agent = agentStore.createAgent(
+      makeAgentInput({
+        name: "Deep Merge Agent",
+        triggers: {
+          chat: {
+            enabled: true,
+            platforms: [
+              {
+                adapter: "linear" as const,
+                autoSubscribe: true,
+                credentials: {
+                  apiKey: "lin_original_secret_key",
+                  webhookSecret: "whs_original_secret",
+                  userName: "OriginalBot",
+                },
+              },
+            ],
+          },
+        },
+      }),
+    );
+
+    // Update with only userName changed — apiKey is omitted (simulating
+    // the frontend filtering out masked values)
+    const updated = agentStore.updateAgent("deep-merge-agent", {
+      triggers: {
+        chat: {
+          enabled: true,
+          platforms: [
+            {
+              adapter: "linear" as const,
+              autoSubscribe: true,
+              credentials: {
+                userName: "UpdatedBot",
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    const creds = updated!.triggers!.chat!.platforms[0].credentials as Record<string, unknown>;
+    // apiKey should be preserved from the original agent
+    expect(creds.apiKey).toBe("lin_original_secret_key");
+    // webhookSecret should be preserved from the original agent
+    expect(creds.webhookSecret).toBe("whs_original_secret");
+    // userName should be updated
+    expect(creds.userName).toBe("UpdatedBot");
   });
 });

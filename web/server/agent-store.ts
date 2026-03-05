@@ -43,7 +43,7 @@ function generateWebhookSecret(): string {
 
 /** Fields in chat platform credentials that are considered secrets */
 const CHAT_SECRET_FIELDS = new Set([
-  "apiKey", "token", "clientSecret", "privateKey", "accessToken",
+  "apiKey", "token", "clientSecret", "privateKey", "accessToken", "webhookSecret",
 ]);
 
 /** Mask a secret string: show first 4 chars + "****", or just "****" if short */
@@ -218,6 +218,18 @@ export function updateAgent(
   // Auto-generate webhookSecret for new/updated chat platform bindings with credentials
   const mergedUpdates = { ...updates };
   if (mergedUpdates.triggers?.chat?.platforms) {
+    // Deep-merge incoming credentials with existing ones so that masked/omitted
+    // fields from the frontend don't overwrite stored secrets on the server.
+    if (existing.triggers?.chat?.platforms) {
+      mergedUpdates.triggers!.chat!.platforms = mergedUpdates.triggers.chat.platforms.map((platform, i) => {
+        const existingPlatform = existing.triggers?.chat?.platforms?.[i];
+        if (!existingPlatform?.credentials || !platform.credentials) return platform;
+        return {
+          ...platform,
+          credentials: { ...existingPlatform.credentials, ...platform.credentials },
+        };
+      });
+    }
     mergedUpdates.triggers = {
       ...mergedUpdates.triggers,
       chat: {

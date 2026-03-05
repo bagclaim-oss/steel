@@ -1180,6 +1180,7 @@ describe("ChatBot", () => {
             enabled: true,
             platforms: [{
               adapter: "linear",
+              autoSubscribe: true,
               mentionPattern: "(invalid[regex",
             }],
           },
@@ -1214,11 +1215,11 @@ describe("ChatBot", () => {
       let assistantCallback: ((msg: any) => void) | null = null;
       let resultCallback: (() => void) | null = null;
 
-      wsBridge.onAssistantMessageForSession.mockImplementation((_sid: string, cb: (msg: any) => void) => {
+      (wsBridge.onAssistantMessageForSession as any).mockImplementation((_sid: string, cb: (msg: any) => void) => {
         assistantCallback = cb;
         return vi.fn(); // unsubscribe
       });
-      wsBridge.onResultForSession.mockImplementation((_sid: string, cb: () => void) => {
+      (wsBridge.onResultForSession as any).mockImplementation((_sid: string, cb: () => void) => {
         resultCallback = cb;
         return vi.fn(); // unsubscribe
       });
@@ -1272,10 +1273,10 @@ describe("ChatBot", () => {
 
       let resultCallback: (() => void) | null = null;
 
-      wsBridge.onAssistantMessageForSession.mockImplementation((_sid: string, _cb: any) => {
+      (wsBridge.onAssistantMessageForSession as any).mockImplementation((_sid: string, _cb: any) => {
         return vi.fn();
       });
-      wsBridge.onResultForSession.mockImplementation((_sid: string, cb: () => void) => {
+      (wsBridge.onResultForSession as any).mockImplementation((_sid: string, cb: () => void) => {
         resultCallback = cb;
         return vi.fn();
       });

@@ -63,8 +63,14 @@ export function registerSettingsRoutes(api: Hono): void {
     if (body.aiValidationAutoDeny !== undefined && typeof body.aiValidationAutoDeny !== "boolean") {
       return c.json({ error: "aiValidationAutoDeny must be a boolean" }, 400);
     }
-    if (body.publicUrl !== undefined && typeof body.publicUrl !== "string") {
-      return c.json({ error: "publicUrl must be a string" }, 400);
+    if (body.publicUrl !== undefined) {
+      if (typeof body.publicUrl !== "string") {
+        return c.json({ error: "publicUrl must be a string" }, 400);
+      }
+      const trimmed = body.publicUrl.trim().replace(/\/+$/, "");
+      if (trimmed !== "" && !/^https?:\/\/.+/.test(trimmed)) {
+        return c.json({ error: "publicUrl must be a valid http/https URL" }, 400);
+      }
     }
     if (body.updateChannel !== undefined && body.updateChannel !== "stable" && body.updateChannel !== "prerelease") {
       return c.json({ error: "updateChannel must be 'stable' or 'prerelease'" }, 400);

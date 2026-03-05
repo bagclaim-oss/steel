@@ -572,8 +572,12 @@ export function AgentsPage({ route }: Props) {
                 onRun={() => handleRunClick(agent)}
                 onExport={() => handleExport(agent)}
                 onCopyWebhook={() => copyWebhookUrl(agent)}
+                onCopyChatWebhook={(key) => {
+                  setCopiedWebhook(key);
+                  setTimeout(() => setCopiedWebhook(null), 2000);
+                }}
                 onRegenerateSecret={() => handleRegenerateSecret(agent.id)}
-                copiedWebhook={copiedWebhook === agent.id}
+                copiedWebhook={copiedWebhook}
               />
             ))}
           </div>
@@ -631,6 +635,7 @@ function AgentCard({
   onRun,
   onExport,
   onCopyWebhook,
+  onCopyChatWebhook,
   onRegenerateSecret,
   copiedWebhook,
 }: {
@@ -642,8 +647,9 @@ function AgentCard({
   onRun: () => void;
   onExport: () => void;
   onCopyWebhook: () => void;
+  onCopyChatWebhook: (key: string) => void;
   onRegenerateSecret: () => void;
-  copiedWebhook: boolean;
+  copiedWebhook: string | null;
 }) {
   const triggers: string[] = ["Manual"];
   if (agent.triggers?.webhook?.enabled) triggers.push("Webhook");
@@ -746,7 +752,7 @@ function AgentCard({
               className="px-2 py-0.5 text-[10px] rounded-full bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors cursor-pointer"
               title="Copy webhook URL"
             >
-              {copiedWebhook ? "Copied!" : "Copy URL"}
+              {copiedWebhook === agent.id ? "Copied!" : "Copy URL"}
             </button>
           )}
           {agent.triggers?.chat?.enabled && agent.triggers.chat.platforms?.map((p) =>
@@ -755,12 +761,14 @@ function AgentCard({
                 key={p.adapter}
                 onClick={() => {
                   const url = getChatWebhookUrl(agent.id, p.adapter, publicUrl);
-                  navigator.clipboard.writeText(url);
+                  navigator.clipboard.writeText(url).then(() => {
+                    onCopyChatWebhook(`${agent.id}-${p.adapter}`);
+                  }).catch(() => {});
                 }}
                 className="px-2 py-0.5 text-[10px] rounded-full bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors cursor-pointer"
                 title={`Copy ${p.adapter} chat webhook URL`}
               >
-                {p.adapter} URL
+                {copiedWebhook === `${agent.id}-${p.adapter}` ? "Copied!" : `${p.adapter} URL`}
               </button>
             ) : null,
           )}

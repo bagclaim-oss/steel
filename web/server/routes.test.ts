@@ -981,6 +981,45 @@ describe("POST /api/sessions/create", () => {
     expect(removeSpy).toHaveBeenCalled();
     expect(launcher.launch).not.toHaveBeenCalled();
   });
+
+  it("passes resumeSessionAt and forkSession to launcher when provided", async () => {
+    const res = await app.request("/api/sessions/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cwd: "/test",
+        resumeSessionAt: "existing-session-id",
+        forkSession: true,
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(launcher.launch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resumeSessionAt: "existing-session-id",
+        forkSession: true,
+      }),
+    );
+  });
+
+  it("passes resumeSessionAt without forkSession when only resumeSessionAt is provided", async () => {
+    const res = await app.request("/api/sessions/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cwd: "/test",
+        resumeSessionAt: "existing-session-id",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(launcher.launch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resumeSessionAt: "existing-session-id",
+        forkSession: false,
+      }),
+    );
+  });
 });
 
 describe("GET /api/sessions", () => {
@@ -2394,6 +2433,19 @@ describe("PUT /api/settings", () => {
     expect(res.status).toBe(400);
     const json = await res.json();
     expect(json).toEqual({ error: "publicUrl must be a string" });
+  });
+
+  // Rejects publicUrl values that are not valid http/https URLs
+  it("returns 400 for publicUrl with invalid scheme", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ publicUrl: "ftp://bad-scheme.com" }),
+    });
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json).toEqual({ error: "publicUrl must be a valid http/https URL" });
   });
 
   it("returns 400 when no settings fields are provided", async () => {

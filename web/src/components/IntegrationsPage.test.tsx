@@ -11,12 +11,14 @@ let mockState: MockStoreState;
 const mockApi = {
   getSettings: vi.fn(),
   getLinearConnection: vi.fn(),
+  listAgents: vi.fn(),
 };
 
 vi.mock("../api.js", () => ({
   api: {
     getSettings: (...args: unknown[]) => mockApi.getSettings(...args),
     getLinearConnection: (...args: unknown[]) => mockApi.getLinearConnection(...args),
+    listAgents: (...args: unknown[]) => mockApi.listAgents(...args),
   },
 }));
 
@@ -43,6 +45,7 @@ beforeEach(() => {
     teamName: "Engineering",
     teamKey: "ENG",
   });
+  mockApi.listAgents.mockResolvedValue([]);
   window.location.hash = "#/integrations";
 });
 

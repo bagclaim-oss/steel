@@ -1498,6 +1498,7 @@ function AgentEditor({
                         </div>
                         <div className="flex gap-1.5">
                           <input
+                            type="password"
                             value={platform.webhookSecret}
                             aria-label="Linear Webhook Secret"
                             onChange={(e) => {
@@ -1505,7 +1506,7 @@ function AgentEditor({
                               updated[idx] = { ...updated[idx], webhookSecret: e.target.value };
                               updateField("chatPlatforms", updated);
                             }}
-                            placeholder="Paste signing secret from Linear"
+                            placeholder={isMaskedValue(platform.webhookSecret) ? "Configured (enter new value to update)" : "Paste signing secret from Linear"}
                             className="flex-1 px-2 py-1.5 rounded-lg bg-cc-input-bg border border-cc-border text-cc-fg text-xs font-mono-code focus:outline-none focus:ring-1 focus:ring-cc-primary"
                             title="Webhook signing secret (from Linear)"
                           />
@@ -1566,6 +1567,7 @@ function AgentEditor({
                         </div>
                         <div className="flex gap-1.5">
                           <input
+                            type="password"
                             value={platform.webhookSecret}
                             aria-label="GitHub Webhook Secret"
                             onChange={(e) => {
@@ -1573,7 +1575,7 @@ function AgentEditor({
                               updated[idx] = { ...updated[idx], webhookSecret: e.target.value };
                               updateField("chatPlatforms", updated);
                             }}
-                            placeholder="Paste webhook secret from GitHub"
+                            placeholder={isMaskedValue(platform.webhookSecret) ? "Configured (enter new value to update)" : "Paste webhook secret from GitHub"}
                             className="flex-1 px-2 py-1.5 rounded-lg bg-cc-input-bg border border-cc-border text-cc-fg text-xs font-mono-code focus:outline-none focus:ring-1 focus:ring-cc-primary"
                             title="Webhook signing secret (from GitHub)"
                           />

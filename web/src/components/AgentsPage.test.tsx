@@ -2486,6 +2486,83 @@ describe("AgentsPage", () => {
     expect(userInput.value).toBe("my-bot");
   });
 
+  it("webhook secret field is editable and updates form state for Linear", async () => {
+    // Linear generates its own signing secret, so users need to paste it
+    // into Companion. The field must be editable, not read-only.
+    const agent = makeAgent({
+      id: "ws-edit",
+      name: "WS Edit Agent",
+      triggers: {
+        webhook: { enabled: false, secret: "" },
+        schedule: { enabled: false, expression: "0 8 * * *", recurring: true },
+        chat: {
+          enabled: true,
+          platforms: [
+            {
+              adapter: "linear",
+              autoSubscribe: true,
+              credentials: {
+                apiKey: "lin_****",
+                webhookSecret: "old_secret",
+                userName: "bot",
+              },
+            },
+          ],
+        },
+      },
+    });
+    mockApi.listAgents.mockResolvedValue([agent]);
+    render(<AgentsPage route={defaultRoute} />);
+
+    await screen.findByText("WS Edit Agent");
+    fireEvent.click(screen.getByTitle("Edit"));
+
+    const webhookInput = screen.getByLabelText("Linear Webhook Secret") as HTMLInputElement;
+    expect(webhookInput.value).toBe("old_secret");
+
+    // Simulate pasting a new signing secret from Linear
+    fireEvent.change(webhookInput, { target: { value: "new_linear_signing_secret" } });
+    expect(webhookInput.value).toBe("new_linear_signing_secret");
+  });
+
+  it("webhook secret field is editable for GitHub platform", async () => {
+    // GitHub also generates its own webhook secret, so the field must be editable.
+    const agent = makeAgent({
+      id: "gh-ws-edit",
+      name: "GH WS Edit Agent",
+      triggers: {
+        webhook: { enabled: false, secret: "" },
+        schedule: { enabled: false, expression: "0 8 * * *", recurring: true },
+        chat: {
+          enabled: true,
+          platforms: [
+            {
+              adapter: "github",
+              autoSubscribe: false,
+              credentials: {
+                token: "ghp_****",
+                webhookSecret: "gh_old_secret",
+                userName: "bot",
+              },
+            },
+          ],
+        },
+      },
+    });
+    mockApi.listAgents.mockResolvedValue([agent]);
+    render(<AgentsPage route={defaultRoute} />);
+
+    await screen.findByText("GH WS Edit Agent");
+    fireEvent.click(screen.getByTitle("Edit"));
+
+    const webhookInput = screen.getByLabelText("GitHub Webhook Secret") as HTMLInputElement;
+    expect(webhookInput.value).toBe("gh_old_secret");
+    expect(webhookInput.readOnly).toBeFalsy();
+
+    fireEvent.change(webhookInput, { target: { value: "new_gh_secret" } });
+    expect(webhookInput.value).toBe("new_gh_secret");
+  });
+
   it("webhook URL is displayed for saved agents with credentials", async () => {
     // When editing an existing agent that has chat credentials configured,
     // the webhook URL should be displayed with a copy button.

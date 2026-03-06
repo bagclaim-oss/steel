@@ -400,6 +400,94 @@ describe("LinearSettingsPage — OAuth Agent App section", () => {
     expect(saveBtn).toBeDisabled();
   });
 
+  it("shows 'Credentials saved' status when configured but not installed", async () => {
+    // Verifies the intermediate status text when OAuth has credentials saved
+    // on the server but no access token (not yet installed to workspace).
+    mockApi.getLinearOAuthStatus.mockResolvedValue({
+      configured: true,
+      hasClientId: true,
+      hasClientSecret: true,
+      hasWebhookSecret: false,
+      hasAccessToken: false,
+    });
+    mockApi.getSettings.mockResolvedValue({
+      anthropicApiKeyConfigured: false,
+      anthropicModel: "claude-sonnet-4.6",
+      linearApiKeyConfigured: true,
+      linearAutoTransition: false,
+      linearAutoTransitionStateName: "",
+      linearArchiveTransition: false,
+      linearArchiveTransitionStateName: "",
+      linearOAuthConfigured: true,
+    });
+
+    render(<LinearSettingsPage />);
+
+    expect(await screen.findByText(/Credentials saved/i)).toBeInTheDocument();
+  });
+
+  it("shows error when Save Credentials fails", async () => {
+    // Verifies that a server error on updateSettings shows the error message
+    mockApi.updateSettings.mockRejectedValueOnce(new Error("Server error"));
+
+    render(<LinearSettingsPage />);
+    await screen.findByText("Linear Agent App");
+
+    fireEvent.change(screen.getByLabelText("Client ID"), {
+      target: { value: "test-id" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Credentials" }));
+
+    expect(await screen.findByText("Server error")).toBeInTheDocument();
+  });
+
+  it("shows success message after saving OAuth credentials", async () => {
+    // Verifies the success banner appears after a successful save
+    render(<LinearSettingsPage />);
+    await screen.findByText("Linear Agent App");
+
+    fireEvent.change(screen.getByLabelText("Client ID"), {
+      target: { value: "test-id" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Credentials" }));
+
+    expect(await screen.findByText("OAuth credentials saved.")).toBeInTheDocument();
+  });
+
+  it("shows error when Install to Workspace API call fails", async () => {
+    // Verifies that an error from getLinearOAuthAuthorizeUrl is displayed
+    mockApi.getLinearOAuthStatus.mockResolvedValue({
+      configured: true,
+      hasClientId: true,
+      hasClientSecret: true,
+      hasWebhookSecret: false,
+      hasAccessToken: false,
+    });
+    mockApi.getSettings.mockResolvedValue({
+      anthropicApiKeyConfigured: false,
+      anthropicModel: "claude-sonnet-4.6",
+      linearApiKeyConfigured: true,
+      linearAutoTransition: false,
+      linearAutoTransitionStateName: "",
+      linearArchiveTransition: false,
+      linearArchiveTransitionStateName: "",
+      linearOAuthConfigured: true,
+    });
+    mockApi.getLinearOAuthAuthorizeUrl.mockRejectedValueOnce(new Error("Not configured"));
+
+    render(<LinearSettingsPage />);
+    await screen.findByText("Linear Agent App");
+
+    // Wait for the button to be enabled (oauthConfigured = true from API)
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Install to Workspace" })).not.toBeDisabled();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Install to Workspace" }));
+
+    expect(await screen.findByText("Not configured")).toBeInTheDocument();
+  });
+
   it("disables Install to Workspace when credentials are not persisted on server", async () => {
     // Verifies that typing a Client ID locally does NOT enable Install —
     // only server-side oauthConfigured makes the button clickable.

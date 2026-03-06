@@ -488,6 +488,40 @@ describe("LinearSettingsPage — OAuth Agent App section", () => {
     expect(await screen.findByText("Not configured")).toBeInTheDocument();
   });
 
+  it("handles OAuth success callback from URL hash", async () => {
+    // Verifies that when the URL hash contains oauth_success=true (from
+    // the OAuth redirect callback), the component shows the success state.
+    // Mock getLinearOAuthStatus to also return hasAccessToken=true so the
+    // success message shows "Agent app connected successfully!".
+    mockApi.getLinearOAuthStatus.mockResolvedValue({
+      configured: true, hasClientId: true, hasClientSecret: true,
+      hasWebhookSecret: true, hasAccessToken: true,
+    });
+
+    const originalHash = window.location.hash;
+    window.location.hash = "#/settings/linear?oauth_success=true";
+
+    render(<LinearSettingsPage />);
+
+    // The component should detect oauth_success in the URL and show connected state
+    expect(await screen.findByText("Agent app connected successfully!")).toBeInTheDocument();
+
+    window.location.hash = originalHash;
+  });
+
+  it("handles OAuth error callback from URL hash", async () => {
+    // Verifies that when the URL hash contains oauth_error=..., the
+    // component displays the decoded error message.
+    const originalHash = window.location.hash;
+    window.location.hash = "#/settings/linear?oauth_error=access_denied";
+
+    render(<LinearSettingsPage />);
+
+    expect(await screen.findByText("access_denied")).toBeInTheDocument();
+
+    window.location.hash = originalHash;
+  });
+
   it("disables Install to Workspace when credentials are not persisted on server", async () => {
     // Verifies that typing a Client ID locally does NOT enable Install —
     // only server-side oauthConfigured makes the button clickable.

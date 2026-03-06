@@ -2476,10 +2476,10 @@ describe("AgentsPage", () => {
     const apiKeyInput = screen.getByLabelText("Linear API Key") as HTMLInputElement;
     expect(apiKeyInput.value).toBe("lin_****");
 
-    // Webhook secret (non-masked, read-only) should show the actual value
+    // Webhook secret should be editable so users can paste their platform's signing secret
     const webhookInput = screen.getByLabelText("Linear Webhook Secret") as HTMLInputElement;
     expect(webhookInput.value).toBe("whs_abc123");
-    expect(webhookInput.readOnly).toBe(true);
+    expect(webhookInput.readOnly).toBeFalsy();
 
     // Bot username should be pre-filled
     const userInput = screen.getByLabelText("Linear Bot Username") as HTMLInputElement;

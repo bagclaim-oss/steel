@@ -178,7 +178,7 @@ export function createRoutes(
     registerChatProtectedRoutes(api, chatBot);
   }
 
-  // ─── Linear Agent SDK protected routes (OAuth callback, status) ─────
+  // ─── Linear Agent SDK protected routes (status, authorize URL, disconnect) ─────
   registerLinearAgentProtectedRoutes(api);
 
   // ─── Auth management (protected) ──────────────────────────────────

@@ -190,6 +190,10 @@ export class LinearAgentBridge {
       ephemeral: true,
     }).catch((err) => console.error("[linear-agent-bridge] Failed to post thought:", err));
 
+    // Re-establish relay for the new turn (resets pendingText accumulator).
+    // setupRelay calls cleanupRelay internally first, so old listeners are removed.
+    this.setupRelay(linearSessionId, companionSessionId);
+
     // Inject user message into the running Companion session
     this.wsBridge.injectUserMessage(companionSessionId, message);
   }
@@ -222,7 +226,9 @@ export class LinearAgentBridge {
     });
     cleanups.push(unsubAssistant);
 
-    // Relay turn completion → Linear response activity + cleanup session maps
+    // Relay turn completion → post accumulated text as a response activity.
+    // Do NOT clean up session mappings or relay — the Linear agent session
+    // is long-lived and supports multi-turn follow-ups via "prompted" events.
     const unsubResult = this.wsBridge.onResultForSession(companionSessionId, async () => {
       if (pendingText) {
         try {
@@ -235,13 +241,6 @@ export class LinearAgentBridge {
         }
         pendingText = "";
       }
-
-      // Defer cleanup to the next microtask to avoid unsub from inside its own callback
-      Promise.resolve().then(() => {
-        this.cleanupRelay(companionSessionId);
-        this.sessionMap.delete(linearSessionId);
-        this.reverseMap.delete(companionSessionId);
-      });
     });
     cleanups.push(unsubResult);
 

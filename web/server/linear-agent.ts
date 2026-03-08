@@ -323,7 +323,7 @@ export async function updateSessionPlan(
 /** Check if Linear OAuth is fully configured (has client credentials + access token). */
 export function isLinearOAuthConfigured(): boolean {
   const s = getSettings();
-  return !!(s.linearOAuthClientId && s.linearOAuthClientSecret && s.linearOAuthAccessToken);
+  return !!(s.linearOAuthClientId.trim() && s.linearOAuthClientSecret.trim() && s.linearOAuthAccessToken.trim());
 }
 
 /** Get the OAuth authorization URL for installing the app with actor=app. */

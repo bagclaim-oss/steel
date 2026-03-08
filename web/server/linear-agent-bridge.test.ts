@@ -417,6 +417,65 @@ describe("LinearAgentBridge", () => {
     });
   });
 
+  describe("multi-turn conversation", () => {
+    // Verifies that after the first turn completes, the session mapping
+    // and relay stay alive so follow-up prompted events work correctly.
+
+    it("keeps session mapping alive after first turn completes", async () => {
+      vi.mocked(agentStore.listAgents).mockReturnValue([testAgent] as ReturnType<typeof agentStore.listAgents>);
+      vi.mocked(executor.executeAgent).mockResolvedValue({ sessionId: "comp-sess-1" } as never);
+      await bridge.handleEvent(makeCreatedEvent());
+
+      // Capture the result callback and trigger turn completion
+      const resultCb = vi.mocked(wsBridge.onResultForSession).mock.calls[0][1];
+      vi.clearAllMocks();
+
+      await resultCb({} as never);
+
+      // Now send a follow-up — should inject into existing session, NOT create new
+      await bridge.handleEvent(makePromptedEvent("linear-session-1", "What about the tests?"));
+
+      expect(wsBridge.injectUserMessage).toHaveBeenCalledWith("comp-sess-1", "What about the tests?");
+      // Should NOT launch a new session
+      expect(executor.executeAgent).not.toHaveBeenCalled();
+    });
+
+    it("re-establishes relay on follow-up so responses are forwarded", async () => {
+      vi.mocked(agentStore.listAgents).mockReturnValue([testAgent] as ReturnType<typeof agentStore.listAgents>);
+      vi.mocked(executor.executeAgent).mockResolvedValue({ sessionId: "comp-sess-1" } as never);
+      await bridge.handleEvent(makeCreatedEvent());
+
+      // First turn: simulate response and turn completion
+      const assistantCb1 = vi.mocked(wsBridge.onAssistantMessageForSession).mock.calls[0][1];
+      const resultCb1 = vi.mocked(wsBridge.onResultForSession).mock.calls[0][1];
+      assistantCb1({ type: "assistant", message: { content: [{ type: "text", text: "First response" }] } } as never);
+      await resultCb1({} as never);
+
+      vi.clearAllMocks();
+
+      // Follow-up prompt — should re-establish relay
+      await bridge.handleEvent(makePromptedEvent("linear-session-1", "Follow up"));
+
+      // setupRelay should have registered new listeners
+      expect(wsBridge.onAssistantMessageForSession).toHaveBeenCalledWith("comp-sess-1", expect.any(Function));
+      expect(wsBridge.onResultForSession).toHaveBeenCalledWith("comp-sess-1", expect.any(Function));
+
+      // Simulate second turn response
+      const assistantCb2 = vi.mocked(wsBridge.onAssistantMessageForSession).mock.calls[0][1];
+      const resultCb2 = vi.mocked(wsBridge.onResultForSession).mock.calls[0][1];
+      vi.clearAllMocks();
+
+      assistantCb2({ type: "assistant", message: { content: [{ type: "text", text: "Second response" }] } } as never);
+      await resultCb2({} as never);
+
+      // The second response should be forwarded to Linear
+      expect(linearAgent.postActivity).toHaveBeenCalledWith(
+        "linear-session-1",
+        expect.objectContaining({ type: "response", body: "Second response" }),
+      );
+    });
+  });
+
   describe("shutdown", () => {
     it("cleans up all session mappings and relay listeners", async () => {
       // Create a session

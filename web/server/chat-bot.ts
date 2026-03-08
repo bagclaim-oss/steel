@@ -65,8 +65,9 @@ function createAdapterForBinding(binding: ChatPlatformBinding): Adapter | null {
     return createGithubAdapter(creds as Parameters<typeof createGithubAdapter>[0]);
   }
 
-  // Slack, Discord: not yet implemented at runtime
-  // Schema is forward-compatible; runtime support added when adapter packages are available
+  // Slack, Discord: not yet implemented at runtime.
+  // Linear is handled via the dedicated Agent Interaction SDK (see linear-agent-bridge.ts).
+  // Schema is forward-compatible; runtime support added when adapter packages are available.
   return null;
 }
 

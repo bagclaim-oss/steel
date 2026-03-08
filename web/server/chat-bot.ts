@@ -12,7 +12,7 @@
 
 import { Chat, ConsoleLogger } from "chat";
 import type { Adapter, Thread, Message as ChatMessage } from "chat";
-import { createGithubAdapter } from "@chat-adapter/github";
+import { createGitHubAdapter } from "@chat-adapter/github";
 import { createMemoryState } from "@chat-adapter/state-memory";
 import type { AgentExecutor } from "./agent-executor.js";
 import type { WsBridge } from "./ws-bridge.js";
@@ -62,7 +62,7 @@ function createAdapterForBinding(binding: ChatPlatformBinding): Adapter | null {
     const creds = binding.credentials as { token?: string; appId?: string; privateKey?: string; installationId?: string; webhookSecret: string; userName?: string };
     const hasAuth = creds.token || (creds.appId && creds.privateKey);
     if (!hasAuth || !creds.webhookSecret) return null;
-    return createGithubAdapter(creds as Parameters<typeof createGithubAdapter>[0]);
+    return createGitHubAdapter(creds as Parameters<typeof createGitHubAdapter>[0]);
   }
 
   // Slack, Discord: not yet implemented at runtime.

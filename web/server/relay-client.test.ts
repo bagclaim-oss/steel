@@ -77,7 +77,7 @@ afterEach(() => {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function createMockChatBot() {
+function createMockRouter() {
   return {
     webhooks: {} as Record<string, (req: Request, opts?: { waitUntil?: (task: Promise<unknown>) => void }) => Promise<Response>>,
   };
@@ -88,11 +88,11 @@ function createMockChatBot() {
 describe("RelayClient", () => {
   describe("connect()", () => {
     it("builds the correct WebSocket URL from an HTTPS relay URL", () => {
-      const chatBot = createMockChatBot();
+      const router = createMockRouter();
       const client = new RelayClient(
         "https://relay.example.com",
         "my-secret",
-        chatBot as any,
+        router as any,
       );
 
       client.connect();
@@ -103,11 +103,11 @@ describe("RelayClient", () => {
     });
 
     it("converts HTTP relay URL to WS (not WSS)", () => {
-      const chatBot = createMockChatBot();
+      const router = createMockRouter();
       const client = new RelayClient(
         "http://localhost:8787",
         "dev-secret",
-        chatBot as any,
+        router as any,
       );
 
       client.connect();
@@ -117,11 +117,11 @@ describe("RelayClient", () => {
 
     it("redacts the secret from log output", () => {
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-      const chatBot = createMockChatBot();
+      const router = createMockRouter();
       const client = new RelayClient(
         "https://relay.example.com",
         "super-secret-value",
-        chatBot as any,
+        router as any,
       );
 
       client.connect();
@@ -138,11 +138,11 @@ describe("RelayClient", () => {
     });
 
     it("strips trailing slashes from the relay URL", () => {
-      const chatBot = createMockChatBot();
+      const router = createMockRouter();
       const client = new RelayClient(
         "https://relay.example.com///",
         "s",
-        chatBot as any,
+        router as any,
       );
 
       client.connect();
@@ -153,8 +153,8 @@ describe("RelayClient", () => {
 
   describe("disconnect()", () => {
     it("closes the WebSocket and prevents reconnection", async () => {
-      const chatBot = createMockChatBot();
-      const client = new RelayClient("https://relay.example.com", "s", chatBot as any);
+      const router = createMockRouter();
+      const client = new RelayClient("https://relay.example.com", "s", router as any);
 
       client.connect();
       await vi.advanceTimersByTimeAsync(0); // let "open" event fire
@@ -169,13 +169,13 @@ describe("RelayClient", () => {
   });
 
   describe("handleWebhookRequest()", () => {
-    it("forwards a webhook request to the ChatBot handler and sends back the response", async () => {
-      const chatBot = createMockChatBot();
-      chatBot.webhooks = {
+    it("forwards a webhook request to the handler and sends back the response", async () => {
+      const router = createMockRouter();
+      router.webhooks = {
         github: vi.fn(async () => new Response("OK", { status: 200 })),
       };
 
-      const client = new RelayClient("https://relay.example.com", "s", chatBot as any);
+      const client = new RelayClient("https://relay.example.com", "s", router as any);
       client.connect();
       await vi.advanceTimersByTimeAsync(0);
 
@@ -193,7 +193,7 @@ describe("RelayClient", () => {
       await vi.advanceTimersByTimeAsync(10);
 
       // The chatBot webhook handler should have been called
-      expect(chatBot.webhooks.github).toHaveBeenCalledTimes(1);
+      expect(router.webhooks.github).toHaveBeenCalledTimes(1);
 
       // The relay client should have sent a webhook_response back
       expect(capturedWs!.sent).toHaveLength(1);
@@ -204,10 +204,10 @@ describe("RelayClient", () => {
     });
 
     it("returns 404 when no handler exists for the requested platform", async () => {
-      const chatBot = createMockChatBot();
-      chatBot.webhooks = {}; // No handlers
+      const router = createMockRouter();
+      router.webhooks = {}; // No handlers
 
-      const client = new RelayClient("https://relay.example.com", "s", chatBot as any);
+      const client = new RelayClient("https://relay.example.com", "s", router as any);
       client.connect();
       await vi.advanceTimersByTimeAsync(0);
 
@@ -230,12 +230,12 @@ describe("RelayClient", () => {
     });
 
     it("returns 500 when the webhook handler throws", async () => {
-      const chatBot = createMockChatBot();
-      chatBot.webhooks = {
+      const router = createMockRouter();
+      router.webhooks = {
         github: vi.fn(async () => { throw new Error("boom"); }),
       };
 
-      const client = new RelayClient("https://relay.example.com", "s", chatBot as any);
+      const client = new RelayClient("https://relay.example.com", "s", router as any);
       client.connect();
       await vi.advanceTimersByTimeAsync(0);
 
@@ -258,8 +258,8 @@ describe("RelayClient", () => {
 
   describe("message handling", () => {
     it("ignores unknown message types", async () => {
-      const chatBot = createMockChatBot();
-      const client = new RelayClient("https://relay.example.com", "s", chatBot as any);
+      const router = createMockRouter();
+      const client = new RelayClient("https://relay.example.com", "s", router as any);
       client.connect();
       await vi.advanceTimersByTimeAsync(0);
 
@@ -271,8 +271,8 @@ describe("RelayClient", () => {
     });
 
     it("ignores malformed JSON messages", async () => {
-      const chatBot = createMockChatBot();
-      const client = new RelayClient("https://relay.example.com", "s", chatBot as any);
+      const router = createMockRouter();
+      const client = new RelayClient("https://relay.example.com", "s", router as any);
       client.connect();
       await vi.advanceTimersByTimeAsync(0);
 
@@ -284,8 +284,8 @@ describe("RelayClient", () => {
     });
 
     it("ignores malformed webhook_request (missing required fields)", async () => {
-      const chatBot = createMockChatBot();
-      const client = new RelayClient("https://relay.example.com", "s", chatBot as any);
+      const router = createMockRouter();
+      const client = new RelayClient("https://relay.example.com", "s", router as any);
       client.connect();
       await vi.advanceTimersByTimeAsync(0);
 
@@ -299,8 +299,8 @@ describe("RelayClient", () => {
 
   describe("reconnection", () => {
     it("schedules a reconnection when the WebSocket closes unexpectedly", async () => {
-      const chatBot = createMockChatBot();
-      const client = new RelayClient("https://relay.example.com", "s", chatBot as any);
+      const router = createMockRouter();
+      const client = new RelayClient("https://relay.example.com", "s", router as any);
 
       client.connect();
       await vi.advanceTimersByTimeAsync(0);
@@ -316,8 +316,8 @@ describe("RelayClient", () => {
     });
 
     it("does not reconnect after an intentional disconnect", async () => {
-      const chatBot = createMockChatBot();
-      const client = new RelayClient("https://relay.example.com", "s", chatBot as any);
+      const router = createMockRouter();
+      const client = new RelayClient("https://relay.example.com", "s", router as any);
 
       client.connect();
       await vi.advanceTimersByTimeAsync(0);

@@ -144,7 +144,6 @@ describe("RunsPage", () => {
     const webhookPills = screen.getAllByText("Webhook");
     expect(webhookPills.length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Schedule")).toBeInTheDocument();
-    expect(screen.getByText("Chat")).toBeInTheDocument();
     // Linear trigger filter pill (added for Linear Agent SDK)
     expect(screen.getByText("Linear")).toBeInTheDocument();
   });
@@ -166,7 +165,7 @@ describe("RunsPage", () => {
     const exec = makeExecution({
       sessionId: "detail-sess",
       agentId: "agent-1",
-      triggerType: "chat",
+      triggerType: "webhook",
       startedAt: Date.now() - 120000,
     });
     mockApi.listExecutions.mockResolvedValue({ executions: [exec], total: 1 });

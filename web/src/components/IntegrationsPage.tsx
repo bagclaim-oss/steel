@@ -37,7 +37,6 @@ export function IntegrationsPage({ embedded = false }: IntegrationsPageProps) {
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
-
   }, []);
 
   const linearStatus = loading

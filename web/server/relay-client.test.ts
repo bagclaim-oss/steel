@@ -192,7 +192,7 @@ describe("RelayClient", () => {
       // Wait for async processing
       await vi.advanceTimersByTimeAsync(10);
 
-      // The chatBot webhook handler should have been called
+      // The webhook handler should have been called
       expect(router.webhooks.github).toHaveBeenCalledTimes(1);
 
       // The relay client should have sent a webhook_response back

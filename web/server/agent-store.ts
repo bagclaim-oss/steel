@@ -124,11 +124,9 @@ export function updateAgent(
     throw new Error(`An agent with a similar name already exists ("${newId}")`);
   }
 
-  const mergedUpdates = { ...updates };
-
   const agent: AgentConfig = {
     ...existing,
-    ...mergedUpdates,
+    ...updates,
     id: newId,
     name: newName,
     updatedAt: Date.now(),

@@ -293,7 +293,7 @@ export function registerLinearRoutes(api: Hono): void {
     if (!resolved) {
       return c.json({ error: "No Linear connection configured" }, 400);
     }
-    const { apiKey: linearApiKey } = resolved;
+    const { apiKey: linearApiKey, connectionId: resolvedId } = resolved;
 
     try {
       const input: Record<string, unknown> = {
@@ -383,9 +383,9 @@ export function registerLinearRoutes(api: Hono): void {
 
       // Invalidate caches so the new issue appears in lists
       if (typeof body.projectId === "string" && body.projectId.trim()) {
-        linearCache.invalidate(`project-issues:${body.projectId}`);
+        linearCache.invalidate(`${resolvedId}:project-issues:${body.projectId}`);
       }
-      linearCache.invalidate("search:");
+      linearCache.invalidate(`${resolvedId}:search:`);
 
       return c.json({
         ok: true,
@@ -510,7 +510,7 @@ export function registerLinearRoutes(api: Hono): void {
     const { apiKey: linearApiKey, connectionId: resolvedId } = resolved;
 
     try {
-      const cacheKey = `issue:${stored.id}`;
+      const cacheKey = `${resolvedId}:issue:${stored.id}`;
       const result = await linearCache.getOrFetch(cacheKey, 30_000, async () => {
         const response = await fetch("https://api.linear.app/graphql", {
           method: "POST",

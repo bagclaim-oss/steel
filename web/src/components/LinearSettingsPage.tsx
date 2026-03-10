@@ -750,9 +750,9 @@ export function LinearSettingsPage({ embedded = false }: LinearSettingsPageProps
                         <button
                           type="button"
                           onClick={onSaveConnectionSettings}
-                          disabled={editState.saving}
+                          disabled={editState.saving || (editState.autoTransition && !editState.autoTransitionStateId) || (editState.archiveTransition && !editState.archiveTransitionStateId)}
                           className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            editState.saving
+                            editState.saving || (editState.autoTransition && !editState.autoTransitionStateId) || (editState.archiveTransition && !editState.archiveTransitionStateId)
                               ? "bg-cc-hover text-cc-muted cursor-not-allowed"
                               : "bg-cc-primary hover:bg-cc-primary-hover text-white cursor-pointer"
                           }`}

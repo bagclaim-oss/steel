@@ -82,12 +82,8 @@ export function LinearSection({
         if (!active) return;
         setConnections(conns);
         setConnectionsLoaded(true);
-        if (conns.length === 1) {
-          // Auto-select single connection
-          setSelectedConnectionId(conns[0].id);
-          onConnectionSelect(conns[0].id);
-        } else if (conns.length > 1) {
-          // Default to first connection
+        if (conns.length > 0) {
+          // Auto-select first connection
           setSelectedConnectionId(conns[0].id);
           onConnectionSelect(conns[0].id);
         } else {
@@ -108,6 +104,8 @@ export function LinearSection({
   const handleConnectionChange = useCallback((connectionId: string) => {
     setSelectedConnectionId(connectionId);
     onConnectionSelect(connectionId);
+    // Clear selected issue since it belongs to a different workspace
+    onIssueSelect(null);
     // Clear current search results
     setLinearIssues([]);
     setLinearQuery("");
@@ -132,7 +130,7 @@ export function LinearSection({
         });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linearMapping, onConnectionSelect]);
+  }, [linearMapping, onConnectionSelect, onIssueSelect]);
 
   // When gitRepoInfo changes, check for Linear project mapping and fetch recent issues
   useEffect(() => {

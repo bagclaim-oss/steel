@@ -101,18 +101,25 @@ export function registerLinearConnectionRoutes(api: Hono): void {
     // Verify the API key against Linear
     const verification = await verifyLinearApiKey(apiKey);
 
+    // Only persist the connection if verification succeeds
+    if (!verification.ok) {
+      return c.json({
+        connection: null,
+        verified: false,
+        error: verification.error,
+      }, 201);
+    }
+
     const conn = createConnection({ name, apiKey });
 
     // Update with verification results
-    if (verification.ok) {
-      updateConnection(conn.id, {
-        connected: true,
-        workspaceName: verification.workspaceName || "",
-        workspaceId: verification.workspaceId || "",
-        viewerName: verification.viewerName || "",
-        viewerEmail: verification.viewerEmail || "",
-      });
-    }
+    updateConnection(conn.id, {
+      connected: true,
+      workspaceName: verification.workspaceName || "",
+      workspaceId: verification.workspaceId || "",
+      viewerName: verification.viewerName || "",
+      viewerEmail: verification.viewerEmail || "",
+    });
 
     const updated = getConnection(conn.id)!;
     return c.json({
@@ -126,12 +133,13 @@ export function registerLinearConnectionRoutes(api: Hono): void {
         viewerEmail: updated.viewerEmail,
         connected: updated.connected,
         autoTransition: updated.autoTransition,
+        autoTransitionStateId: updated.autoTransitionStateId,
         autoTransitionStateName: updated.autoTransitionStateName,
         archiveTransition: updated.archiveTransition,
+        archiveTransitionStateId: updated.archiveTransitionStateId,
         archiveTransitionStateName: updated.archiveTransitionStateName,
       },
-      verified: verification.ok,
-      error: verification.error,
+      verified: true,
     }, 201);
   });
 
@@ -147,7 +155,7 @@ export function registerLinearConnectionRoutes(api: Hono): void {
     const patch: Record<string, unknown> = {};
     if (typeof body.name === "string") patch.name = body.name;
     if (typeof body.apiKey === "string" && body.apiKey.trim()) {
-      patch.apiKey = body.apiKey;
+      patch.apiKey = body.apiKey.trim();
       // If the API key changed, mark as needing re-verification
       patch.connected = false;
     }
@@ -175,8 +183,10 @@ export function registerLinearConnectionRoutes(api: Hono): void {
         viewerEmail: updated.viewerEmail,
         connected: updated.connected,
         autoTransition: updated.autoTransition,
+        autoTransitionStateId: updated.autoTransitionStateId,
         autoTransitionStateName: updated.autoTransitionStateName,
         archiveTransition: updated.archiveTransition,
+        archiveTransitionStateId: updated.archiveTransitionStateId,
         archiveTransitionStateName: updated.archiveTransitionStateName,
       },
     });
@@ -220,6 +230,12 @@ export function registerLinearConnectionRoutes(api: Hono): void {
         viewerName: updated.viewerName,
         viewerEmail: updated.viewerEmail,
         connected: updated.connected,
+        autoTransition: updated.autoTransition,
+        autoTransitionStateId: updated.autoTransitionStateId,
+        autoTransitionStateName: updated.autoTransitionStateName,
+        archiveTransition: updated.archiveTransition,
+        archiveTransitionStateId: updated.archiveTransitionStateId,
+        archiveTransitionStateName: updated.archiveTransitionStateName,
       },
       verified: verification.ok,
       error: verification.error,

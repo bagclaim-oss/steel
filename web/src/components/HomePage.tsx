@@ -630,7 +630,7 @@ export function HomePage() {
           codexInternetAccess: backend === "codex" ? true : undefined,
           resumeSessionAt: effectiveResumeSessionAt,
           forkSession: effectiveForkSession,
-          linearConnectionId: selectedLinearConnectionId || undefined,
+          linearConnectionId: selectedLinearIssue ? (selectedLinearConnectionId || undefined) : undefined,
         },
         (progress) => {
           useStore.getState().addCreationProgress(progress);

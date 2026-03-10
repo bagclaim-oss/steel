@@ -365,14 +365,21 @@ describe("LinearSettingsPage — edit connection settings", () => {
     const switches = screen.getAllByRole("switch");
     fireEvent.click(switches[0]);
 
+    // Wait for the state dropdown to appear then select a state
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Select a status...")).toBeInTheDocument();
+    });
+    const stateSelect = screen.getByDisplayValue("Select a status...");
+    fireEvent.change(stateSelect, { target: { value: "s-inprogress" } });
+
     // Click Save Settings
     fireEvent.click(screen.getByRole("button", { name: "Save Settings" }));
 
     await waitFor(() => {
       expect(mockApi.updateLinearConnection).toHaveBeenCalledWith("conn-1", {
         autoTransition: true,
-        autoTransitionStateId: "",
-        autoTransitionStateName: "",
+        autoTransitionStateId: "s-inprogress",
+        autoTransitionStateName: "In Progress",
         archiveTransition: false,
         archiveTransitionStateId: "",
         archiveTransitionStateName: "",

@@ -359,20 +359,10 @@ describe("POST /api/linear/connections", () => {
     });
   });
 
-  it("creates a connection but reports verification failure when API key is invalid (201)", async () => {
-    // Validates that the connection is still created even when verification fails,
-    // but connected remains false and the error is included in the response
+  it("does not create a connection when verification fails (201 with error)", async () => {
+    // Validates that no connection is persisted when the API key verification fails
     const fetchMock = mockFetch();
     fetchMock.mockResolvedValue(linearError("Authentication failed"));
-
-    const createdConn = makeConnection({
-      id: "new-conn-id",
-      name: "Bad Key Workspace",
-      apiKey: "lin_api_badkey1234",
-      connected: false,
-    });
-    mockCreateConnection.mockReturnValue(createdConn);
-    mockGetConnection.mockReturnValue(createdConn);
 
     const res = await app.request("/api/linear/connections", {
       method: "POST",
@@ -384,20 +374,17 @@ describe("POST /api/linear/connections", () => {
     const json = await res.json();
     expect(json.verified).toBe(false);
     expect(json.error).toBe("Authentication failed");
-    expect(json.connection.connected).toBe(false);
+    expect(json.connection).toBeNull();
 
-    // updateConnection should NOT have been called because verification failed
+    // createConnection should NOT have been called because verification failed
+    expect(mockCreateConnection).not.toHaveBeenCalled();
     expect(mockUpdateConnection).not.toHaveBeenCalled();
   });
 
-  it("handles non-ok HTTP response from Linear during verification (201 with error)", async () => {
-    // Validates that a non-200 HTTP response from Linear results in failed verification
+  it("does not create a connection on non-ok HTTP response (201 with error)", async () => {
+    // Validates that a non-200 HTTP response from Linear results in no connection being created
     const fetchMock = mockFetch();
     fetchMock.mockResolvedValue(linearHttpError("Unauthorized", 401));
-
-    const createdConn = makeConnection({ id: "new-conn-id", connected: false });
-    mockCreateConnection.mockReturnValue(createdConn);
-    mockGetConnection.mockReturnValue(createdConn);
 
     const res = await app.request("/api/linear/connections", {
       method: "POST",
@@ -409,17 +396,14 @@ describe("POST /api/linear/connections", () => {
     const json = await res.json();
     expect(json.verified).toBe(false);
     expect(json.error).toBe("Unauthorized");
+    expect(json.connection).toBeNull();
+    expect(mockCreateConnection).not.toHaveBeenCalled();
   });
 
-  it("handles network error during verification (201 with error)", async () => {
-    // Validates that a network error (fetch throws) results in failed verification
-    // but the connection is still created
+  it("does not create a connection on network error (201 with error)", async () => {
+    // Validates that a network error (fetch throws) results in no connection being created
     const fetchMock = mockFetch();
     fetchMock.mockRejectedValue(new Error("ECONNREFUSED"));
-
-    const createdConn = makeConnection({ id: "new-conn-id", connected: false });
-    mockCreateConnection.mockReturnValue(createdConn);
-    mockGetConnection.mockReturnValue(createdConn);
 
     const res = await app.request("/api/linear/connections", {
       method: "POST",
@@ -431,7 +415,8 @@ describe("POST /api/linear/connections", () => {
     const json = await res.json();
     expect(json.verified).toBe(false);
     expect(json.error).toBe("ECONNREFUSED");
-    expect(mockUpdateConnection).not.toHaveBeenCalled();
+    expect(json.connection).toBeNull();
+    expect(mockCreateConnection).not.toHaveBeenCalled();
   });
 
   it("handles malformed JSON body gracefully", async () => {
@@ -447,14 +432,10 @@ describe("POST /api/linear/connections", () => {
     expect(json.error).toBe("name is required");
   });
 
-  it("handles non-Error throw during verification", async () => {
-    // Validates the catch block handles non-Error thrown values
+  it("does not create a connection on non-Error throw during verification", async () => {
+    // Validates the catch block handles non-Error thrown values without creating a connection
     const fetchMock = mockFetch();
     fetchMock.mockRejectedValue("string error");
-
-    const createdConn = makeConnection({ id: "new-conn-id", connected: false });
-    mockCreateConnection.mockReturnValue(createdConn);
-    mockGetConnection.mockReturnValue(createdConn);
 
     const res = await app.request("/api/linear/connections", {
       method: "POST",
@@ -465,8 +446,9 @@ describe("POST /api/linear/connections", () => {
     expect(res.status).toBe(201);
     const json = await res.json();
     expect(json.verified).toBe(false);
-    // Non-Error thrown values should produce "Verification failed" message
+    expect(json.connection).toBeNull();
     expect(json.error).toBe("Verification failed");
+    expect(mockCreateConnection).not.toHaveBeenCalled();
   });
 
   it("handles verification response with null viewer/organization fields", async () => {

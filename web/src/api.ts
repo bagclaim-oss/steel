@@ -972,7 +972,10 @@ export const api = {
 
   // Linear issue <-> session association
   linkLinearIssue: (sessionId: string, issue: LinearIssue, connectionId?: string) =>
-    put<{ ok: boolean }>(`/sessions/${encodeURIComponent(sessionId)}/linear-issue`, { ...issue, connectionId }),
+    put<{ ok: boolean }>(`/sessions/${encodeURIComponent(sessionId)}/linear-issue`, {
+      ...issue,
+      ...(connectionId !== undefined ? { connectionId } : {}),
+    }),
   unlinkLinearIssue: (sessionId: string) =>
     del<{ ok: boolean }>(`/sessions/${encodeURIComponent(sessionId)}/linear-issue`),
   getLinkedLinearIssue: (sessionId: string, refresh = false) =>

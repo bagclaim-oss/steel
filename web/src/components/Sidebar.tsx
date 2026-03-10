@@ -7,7 +7,7 @@ import { navigateToSession, navigateHome, parseHash } from "../utils/routing.js"
 import { ProjectGroup } from "./ProjectGroup.js";
 import { SessionItem } from "./SessionItem.js";
 import { groupSessionsByProject, type SessionItem as SessionItemType } from "../utils/project-grouping.js";
-import { SidebarMenu, NAV_ITEMS, EXTERNAL_LINKS } from "./SidebarMenu.js";
+import { NAV_ITEMS, EXTERNAL_LINKS } from "./SidebarMenu.js";
 
 export function Sidebar() {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
@@ -19,9 +19,7 @@ export function Sidebar() {
   const [archiveModalContainerized, setArchiveModalContainerized] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
-  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const sessions = useStore((s) => s.sessions);
   const sdkSessions = useStore((s) => s.sdkSessions);
   const currentSessionId = useStore((s) => s.currentSessionId);
@@ -34,15 +32,15 @@ export function Sidebar() {
   const pendingPermissions = useStore((s) => s.pendingPermissions);
   const linkedLinearIssues = useStore((s) => s.linkedLinearIssues);
   const sidebarGroupByProject = useStore((s) => s.sidebarGroupByProject);
+  const setSidebarGroupByProject = useStore((s) => s.setSidebarGroupByProject);
   const collapsedProjects = useStore((s) => s.collapsedProjects);
   const toggleProjectCollapse = useStore((s) => s.toggleProjectCollapse);
-  // Detect whether we're on an admin page (settings, prompts, etc.) to switch sidebar content
+  // Track current route for nav item active state
   const hash = useSyncExternalStore(
     (cb) => { window.addEventListener("hashchange", cb); return () => window.removeEventListener("hashchange", cb); },
     () => window.location.hash,
   );
   const route = useMemo(() => parseHash(hash), [hash]);
-  const isAdminPage = route.page !== "home" && route.page !== "session";
 
   // Poll for SDK sessions on mount
   useEffect(() => {
@@ -353,20 +351,6 @@ export function Sidebar() {
             </svg>
             <span>New Session</span>
           </button>
-          <button
-            ref={menuButtonRef}
-            onClick={() => setMenuOpen(!menuOpen)}
-            title="Menu"
-            aria-label="Navigation menu"
-            aria-expanded={menuOpen}
-            className="flex w-9 h-9 shrink-0 rounded-lg items-center justify-center text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer border border-cc-border/40"
-          >
-            {/* Gear icon */}
-            <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-              <path fillRule="evenodd" clipRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.53 1.53 0 01-2.29.95c-1.35-.8-2.92.77-2.12 2.12.54.9.07 2.04-.95 2.29-1.56.38-1.56 2.6 0 2.98 1.02.25 1.49 1.39.95 2.29-.8 1.35.77 2.92 2.12 2.12.9-.54 2.04-.07 2.29.95.38 1.56 2.6 1.56 2.98 0 .25-1.02 1.39-1.49 2.29-.95 1.35.8 2.92-.77 2.12-2.12-.54-.9-.07-2.04.95-2.29 1.56-.38 1.56-2.6 0-2.98-1.02-.25-1.49-1.39-.95-2.29.8-1.35-.77-2.92-2.12-2.12-.9.54-2.04.07-2.29-.95zM10 13a3 3 0 100-6 3 3 0 000 6z" />
-            </svg>
-          </button>
-          <SidebarMenu open={menuOpen} onClose={() => setMenuOpen(false)} anchorRef={menuButtonRef} />
           {/* Close button — mobile only */}
           <button
             onClick={() => useStore.getState().setSidebarOpen(false)}
@@ -410,45 +394,22 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* Main content: admin nav or session list */}
+      {/* Session list */}
       <div className="flex-1 overflow-y-auto px-2.5 pb-2">
-        {isAdminPage ? (
-          /* Admin page navigation */
-          <nav className="flex flex-col gap-0.5 pt-1" aria-label="Admin navigation">
-            {NAV_ITEMS.map((item) => {
-              const isActive = item.activePages
-                ? item.activePages.some((p) => route.page === p)
-                : route.page === item.id;
-              return (
+            {/* Group by project toggle */}
+            {activeSessions.length > 0 && (
+              <div className="flex justify-end px-1 pb-1">
                 <button
-                  key={item.id}
-                  onClick={() => {
-                    if (item.id !== "terminal") {
-                      useStore.getState().closeTerminal();
-                    }
-                    window.location.hash = item.hash;
-                    if (window.innerWidth < 768) {
-                      useStore.getState().setSidebarOpen(false);
-                    }
-                  }}
-                  aria-current={isActive ? "page" : undefined}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-[12px] rounded-md transition-colors cursor-pointer ${
-                    isActive
-                      ? "text-cc-fg bg-cc-active font-medium"
-                      : "text-cc-muted hover:text-cc-fg hover:bg-cc-hover"
-                  }`}
+                  onClick={() => setSidebarGroupByProject(!sidebarGroupByProject)}
+                  title={sidebarGroupByProject ? "Show flat list" : "Group by project"}
+                  className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-cc-muted/60 hover:text-cc-muted transition-colors cursor-pointer rounded"
                 >
-                  <svg viewBox={item.viewBox} fill="currentColor" className="w-3.5 h-3.5 shrink-0">
-                    <path d={item.iconPath} fillRule={item.fillRule} clipRule={item.clipRule} />
+                  <svg viewBox="0 0 16 16" fill="currentColor" className={`w-2.5 h-2.5 ${sidebarGroupByProject ? "text-cc-primary" : ""}`}>
+                    <path d="M1 2.5A1.5 1.5 0 012.5 1h3A1.5 1.5 0 017 2.5v3A1.5 1.5 0 015.5 7h-3A1.5 1.5 0 011 5.5v-3zm8 0A1.5 1.5 0 0110.5 1h3A1.5 1.5 0 0115 2.5v3A1.5 1.5 0 0113.5 7h-3A1.5 1.5 0 019 5.5v-3zm-8 8A1.5 1.5 0 012.5 9h3A1.5 1.5 0 017 10.5v3A1.5 1.5 0 015.5 15h-3A1.5 1.5 0 011 13.5v-3zm8 0A1.5 1.5 0 0110.5 9h3a1.5 1.5 0 011.5 1.5v3a1.5 1.5 0 01-1.5 1.5h-3A1.5 1.5 0 019 13.5v-3z" />
                   </svg>
-                  <span>{item.label}</span>
                 </button>
-              );
-            })}
-          </nav>
-        ) : (
-          /* Session list */
-          <>
+              </div>
+            )}
             {activeSessions.length === 0 && cronSessions.length === 0 && archivedSessions.length === 0 ? (
               <p className="px-3 py-8 text-xs text-cc-muted text-center leading-relaxed">
                 No sessions yet.
@@ -574,9 +535,43 @@ export function Sidebar() {
                 )}
               </>
             )}
-          </>
-        )}
       </div>
+
+      {/* Navigation items */}
+      <nav className="shrink-0 px-2.5 pb-1 pt-1 border-t border-cc-border/30" aria-label="Pages">
+        <div className="flex flex-col gap-0.5">
+          {NAV_ITEMS.map((item) => {
+            const isActive = item.activePages
+              ? item.activePages.some((p) => route.page === p)
+              : route.page === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  if (item.id !== "terminal") {
+                    useStore.getState().closeTerminal();
+                  }
+                  window.location.hash = item.hash;
+                  if (window.innerWidth < 768) {
+                    useStore.getState().setSidebarOpen(false);
+                  }
+                }}
+                aria-current={isActive ? "page" : undefined}
+                className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left text-[11px] rounded-md transition-colors cursor-pointer ${
+                  isActive
+                    ? "text-cc-fg bg-cc-active font-medium"
+                    : "text-cc-muted hover:text-cc-fg hover:bg-cc-hover"
+                }`}
+              >
+                <svg viewBox={item.viewBox} fill="currentColor" className="w-3 h-3 shrink-0">
+                  <path d={item.iconPath} fillRule={item.fillRule} clipRule={item.clipRule} />
+                </svg>
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
       {/* External links footer */}
       <div className="shrink-0 px-2.5 pb-2 pt-1 border-t border-cc-border/30">

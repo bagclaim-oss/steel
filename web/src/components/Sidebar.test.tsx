@@ -440,37 +440,32 @@ describe("Sidebar", () => {
   });
 
   it("navigates to environments page when Environments is clicked", () => {
-    // Navigation items are now in the gear menu dropdown.
+    // Navigation items are always visible at the bottom of the sidebar.
     render(<Sidebar />);
-    fireEvent.click(screen.getByLabelText("Navigation menu"));
     fireEvent.click(screen.getByText("Environments"));
     expect(window.location.hash).toBe("#/environments");
   });
 
   it("navigates to settings page when Settings is clicked", () => {
     render(<Sidebar />);
-    fireEvent.click(screen.getByLabelText("Navigation menu"));
     fireEvent.click(screen.getByText("Settings"));
     expect(window.location.hash).toBe("#/settings");
   });
 
   it("navigates to integrations page when Integrations is clicked", () => {
     render(<Sidebar />);
-    fireEvent.click(screen.getByLabelText("Navigation menu"));
     fireEvent.click(screen.getByText("Integrations"));
     expect(window.location.hash).toBe("#/integrations");
   });
 
   it("navigates to prompts page when Prompts is clicked", () => {
     render(<Sidebar />);
-    fireEvent.click(screen.getByLabelText("Navigation menu"));
     fireEvent.click(screen.getByText("Prompts"));
     expect(window.location.hash).toBe("#/prompts");
   });
 
   it("navigates to terminal page when Terminal is clicked", () => {
     render(<Sidebar />);
-    fireEvent.click(screen.getByLabelText("Navigation menu"));
     fireEvent.click(screen.getByText("Terminal"));
     expect(window.location.hash).toBe("#/terminal");
   });
@@ -758,28 +753,16 @@ describe("Sidebar", () => {
     expect(screen.queryByText("1h ago")).not.toBeInTheDocument();
   });
 
-  it("nav items are accessible via gear menu dropdown", () => {
-    // Navigation items moved from footer to a gear dropdown in the header.
-    // Clicking the gear button opens the SidebarMenu with all nav items.
+  it("nav items are always visible at the bottom of the sidebar", () => {
+    // Navigation items are rendered directly in the sidebar (no dropdown needed).
     render(<Sidebar />);
-    const gearButton = screen.getByLabelText("Navigation menu");
-    fireEvent.click(gearButton);
-    // After opening, nav items should be visible inside the dropdown
-    expect(screen.getByText("Environments")).toBeInTheDocument();
-    expect(screen.getByText("Integrations")).toBeInTheDocument();
-    expect(screen.getByText("Agents")).toBeInTheDocument();
-    expect(screen.getByText("Prompts")).toBeInTheDocument();
-    expect(screen.getByText("Terminal")).toBeInTheDocument();
-    expect(screen.getByText("Settings")).toBeInTheDocument();
-  });
-
-  it("gear menu button toggles open/closed state", () => {
-    // Verifies the gear button toggles the navigation dropdown.
-    render(<Sidebar />);
-    const gearButton = screen.getByLabelText("Navigation menu");
-    expect(gearButton).toHaveAttribute("aria-expanded", "false");
-    fireEvent.click(gearButton);
-    expect(gearButton).toHaveAttribute("aria-expanded", "true");
+    const pagesNav = screen.getByRole("navigation", { name: "Pages" });
+    expect(within(pagesNav).getByText("Environments")).toBeInTheDocument();
+    expect(within(pagesNav).getByText("Integrations")).toBeInTheDocument();
+    expect(within(pagesNav).getByText("Agents")).toBeInTheDocument();
+    expect(within(pagesNav).getByText("Prompts")).toBeInTheDocument();
+    expect(within(pagesNav).getByText("Terminal")).toBeInTheDocument();
+    expect(within(pagesNav).getByText("Settings")).toBeInTheDocument();
   });
 
   it("compact nav does not render helper subtitle lines", () => {
@@ -862,11 +845,10 @@ describe("Sidebar", () => {
     expect(nameEl).toHaveClass("truncate");
   });
 
-  it("gear menu and new session buttons have accessible labels", () => {
+  it("new session buttons have accessible labels", () => {
     // Verifies the header buttons have proper aria labels for accessibility.
     // There are two "New Session" buttons (desktop header + mobile FAB).
     render(<Sidebar />);
-    expect(screen.getByLabelText("Navigation menu")).toBeInTheDocument();
     const newSessionButtons = screen.getAllByLabelText("New Session");
     expect(newSessionButtons.length).toBeGreaterThanOrEqual(1);
   });
@@ -1521,18 +1503,17 @@ describe("Sidebar", () => {
     expect(screen.getByText(/Agents \(1\)/)).toBeInTheDocument();
   });
 
-  // ─── Gear menu nav: closeTerminal behavior ─────────────────────────────────
+  // ─── Nav item: closeTerminal behavior ───────────────────────────────────────
 
-  it("clicking a non-terminal nav item in gear menu calls closeTerminal", () => {
+  it("clicking a non-terminal nav item calls closeTerminal", () => {
     // Verifies that clicking any nav item except Terminal calls closeTerminal()
     // to dismiss the terminal overlay.
     render(<Sidebar />);
-    fireEvent.click(screen.getByLabelText("Navigation menu"));
     fireEvent.click(screen.getByText("Prompts"));
     expect(mockState.closeTerminal).toHaveBeenCalled();
   });
 
-  it("clicking Terminal nav item in gear menu does NOT call closeTerminal", () => {
+  it("clicking Terminal nav item does NOT call closeTerminal", () => {
     // Verifies that clicking the Terminal nav item does NOT call closeTerminal,
     // since the terminal should remain open when navigating to it.
     render(<Sidebar />);
@@ -1540,7 +1521,6 @@ describe("Sidebar", () => {
     // Reset mocks from initial poll
     mockState.closeTerminal.mockClear();
 
-    fireEvent.click(screen.getByLabelText("Navigation menu"));
     fireEvent.click(screen.getByText("Terminal"));
     expect(mockState.closeTerminal).not.toHaveBeenCalled();
   });
@@ -1569,19 +1549,16 @@ describe("Sidebar", () => {
     expect(mockState.closeTerminal).toHaveBeenCalled();
   });
 
-  // ─── Gear menu nav: active state ────────────────────────────────────────────
+  // ─── Nav item: active state ─────────────────────────────────────────────────
 
-  it("gear menu nav item shows active state when on its page", () => {
+  it("nav item shows active state when on its page", () => {
     // Verifies that the nav button for the current page gets the
     // bg-cc-active class to indicate the user is on that page.
-    // When on an admin page, both sidebar body nav and gear menu show nav items.
     window.location.hash = "#/settings";
     render(<Sidebar />);
-    fireEvent.click(screen.getByLabelText("Navigation menu"));
 
-    // Find the Settings button inside the gear menu (role="menu")
-    const menu = screen.getByRole("menu");
-    const settingsBtn = within(menu).getByText("Settings").closest("button");
+    const pagesNav = screen.getByRole("navigation", { name: "Pages" });
+    const settingsBtn = within(pagesNav).getByText("Settings").closest("button");
     expect(settingsBtn).toHaveClass("bg-cc-active");
   });
 
@@ -1590,58 +1567,36 @@ describe("Sidebar", () => {
     // to highlight for sub-pages like integration-linear.
     window.location.hash = "#/integrations";
     render(<Sidebar />);
-    fireEvent.click(screen.getByLabelText("Navigation menu"));
 
-    const menu = screen.getByRole("menu");
-    const integrationsBtn = within(menu).getByText("Integrations").closest("button");
+    const pagesNav = screen.getByRole("navigation", { name: "Pages" });
+    const integrationsBtn = within(pagesNav).getByText("Integrations").closest("button");
     expect(integrationsBtn).toHaveClass("bg-cc-active");
   });
 
   it("agents nav button is active on agent detail routes with aria-current", () => {
-    // Verifies active state and aria-current for nested agent pages in the gear menu.
+    // Verifies active state and aria-current for nested agent pages.
     window.location.hash = "#/agents/agent-123";
     render(<Sidebar />);
-    fireEvent.click(screen.getByLabelText("Navigation menu"));
 
-    const menu = screen.getByRole("menu");
-    const agentsBtn = within(menu).getByText("Agents").closest("button");
+    const pagesNav = screen.getByRole("navigation", { name: "Pages" });
+    const agentsBtn = within(pagesNav).getByText("Agents").closest("button");
     expect(agentsBtn).toHaveClass("bg-cc-active");
     expect(agentsBtn).toHaveAttribute("aria-current", "page");
   });
 
-  // ─── Admin nav in sidebar body ──────────────────────────────────────────────
+  // ─── Sessions and nav coexist ───────────────────────────────────────────────
 
-  it("shows admin nav items instead of sessions when on an admin page", () => {
-    // When navigated to an admin page (e.g. settings), the sidebar body
-    // should show navigation items instead of the session list.
-    window.location.hash = "#/settings";
-    render(<Sidebar />);
-
-    const adminNav = screen.getByRole("navigation", { name: "Admin navigation" });
-    expect(adminNav).toBeInTheDocument();
-    expect(within(adminNav).getByText("Prompts")).toBeInTheDocument();
-    expect(within(adminNav).getByText("Integrations")).toBeInTheDocument();
-    expect(within(adminNav).getByText("Settings")).toBeInTheDocument();
-  });
-
-  it("shows session list (not admin nav) when on home page", () => {
-    // When on home/session page, the sidebar should show sessions, not admin nav.
-    window.location.hash = "";
+  it("shows both sessions and nav items on the same page", () => {
+    // Sessions list and nav items are always both visible in the sidebar.
     const sdk = makeSdkSession("s1", { model: "claude" });
     mockState = createMockState({ sdkSessions: [sdk] });
     render(<Sidebar />);
 
-    expect(screen.queryByRole("navigation", { name: "Admin navigation" })).not.toBeInTheDocument();
-  });
-
-  it("admin nav highlights the active page with aria-current", () => {
-    // Verifies the sidebar admin nav marks the current page with aria-current.
-    window.location.hash = "#/prompts";
-    render(<Sidebar />);
-
-    const adminNav = screen.getByRole("navigation", { name: "Admin navigation" });
-    const promptsBtn = within(adminNav).getByText("Prompts").closest("button");
-    expect(promptsBtn).toHaveAttribute("aria-current", "page");
+    // Session is visible
+    expect(screen.getByText("claude")).toBeInTheDocument();
+    // Nav items are visible
+    const pagesNav = screen.getByRole("navigation", { name: "Pages" });
+    expect(within(pagesNav).getByText("Settings")).toBeInTheDocument();
   });
 
   // ─── External links footer ────────────────────────────────────────────────
@@ -1684,7 +1639,7 @@ describe("Sidebar", () => {
 
   it("sidebar header does not display a logo (simplified design)", () => {
     // The logo was removed from the sidebar header in the UI redesign.
-    // The sidebar now shows "New Session" button + gear menu instead.
+    // The sidebar now shows "New Session" button instead.
     const sdk = makeSdkSession("s1", { backendType: "codex" });
     mockState = createMockState({
       sdkSessions: [sdk],
@@ -1696,59 +1651,6 @@ describe("Sidebar", () => {
     expect(logo).toBeNull();
   });
 
-  // ─── External links in gear menu ────────────────────────────────────────────
-
-  it("renders external links for Documentation, GitHub, and Website in gear menu", () => {
-    // Verifies that all three external links appear in the gear menu dropdown
-    // with correct href values.
-    render(<Sidebar />);
-    fireEvent.click(screen.getByLabelText("Navigation menu"));
-
-    const docsLink = screen.getByText("Documentation").closest("a");
-    const githubLink = screen.getByText("GitHub").closest("a");
-    const websiteLink = screen.getByText("Website").closest("a");
-
-    expect(docsLink).toBeInTheDocument();
-    expect(githubLink).toBeInTheDocument();
-    expect(websiteLink).toBeInTheDocument();
-
-    expect(docsLink).toHaveAttribute("href", "https://docs.thecompanion.sh");
-    expect(githubLink).toHaveAttribute("href", "https://github.com/The-Vibe-Company/companion");
-    expect(websiteLink).toHaveAttribute("href", "https://thecompanion.sh");
-  });
-
-  it("external links in gear menu open in new tab with secure attributes", () => {
-    // Verifies that all external links use target="_blank" and
-    // rel="noopener noreferrer" to prevent reverse-tabnabbing.
-    render(<Sidebar />);
-    fireEvent.click(screen.getByLabelText("Navigation menu"));
-
-    const links = [
-      screen.getByText("Documentation").closest("a")!,
-      screen.getByText("GitHub").closest("a")!,
-      screen.getByText("Website").closest("a")!,
-    ];
-
-    for (const link of links) {
-      expect(link).toHaveAttribute("target", "_blank");
-      expect(link).toHaveAttribute("rel", "noopener noreferrer");
-    }
-  });
-
-  it("external links in gear menu are rendered as anchor elements (not buttons)", () => {
-    // Verifies that external links use <a> tags for proper semantic HTML,
-    // distinguishing them from internal nav buttons.
-    render(<Sidebar />);
-    fireEvent.click(screen.getByLabelText("Navigation menu"));
-
-    const docsLink = screen.getByText("Documentation").closest("a");
-    const githubLink = screen.getByText("GitHub").closest("a");
-    const websiteLink = screen.getByText("Website").closest("a");
-
-    expect(docsLink!.tagName).toBe("A");
-    expect(githubLink!.tagName).toBe("A");
-    expect(websiteLink!.tagName).toBe("A");
-  });
 
   // ─── Delete modal inner click propagation ──────────────────────────────────
 

@@ -75,9 +75,8 @@ export async function transitionLinearIssue(
     const updatedIssue = updateJson.data?.issueUpdate?.issue;
 
     // Invalidate cached issue data so the next fetch picks up the new state
-    linearCache.invalidate(`${connectionId || ""}:issue:${issueId}`);
-    // Also invalidate unprefixed key for backward compatibility
-    if (connectionId) linearCache.invalidate(`issue:${issueId}`);
+    const cachePrefix = connectionId ? `${connectionId}:` : "";
+    linearCache.invalidate(`${cachePrefix}issue:${issueId}`);
 
     return {
       ok: true,

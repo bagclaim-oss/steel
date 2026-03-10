@@ -1434,16 +1434,25 @@ export function createRoutes(
     }
 
     // Issue is not done — check if backlog state is available and if archive transition is configured
-    const settings = getSettings();
-    const linearApiKey = settings.linearApiKey.trim();
+    const resolved = resolveApiKey(linkedIssue.connectionId);
     let hasBacklogState = false;
-    if (linearApiKey && linkedIssue.teamId) {
-      const teams = await fetchLinearTeamStates(linearApiKey);
+    if (resolved && linkedIssue.teamId) {
+      const teams = await fetchLinearTeamStates(resolved.apiKey);
       const team = teams.find((t) => t.id === linkedIssue.teamId);
       if (team) {
         hasBacklogState = team.states.some((s) => s.type === "backlog");
       }
     }
+
+    // Use connection-level archive settings if available, fall back to global settings
+    const settings = getSettings();
+    const conn = resolved && resolved.connectionId !== "legacy" ? getConnection(resolved.connectionId) : null;
+    const archiveTransitionConfigured = conn
+      ? conn.archiveTransition && !!conn.archiveTransitionStateId.trim()
+      : settings.linearArchiveTransition && !!settings.linearArchiveTransitionStateId.trim();
+    const archiveTransitionStateName = conn
+      ? conn.archiveTransitionStateName || undefined
+      : settings.linearArchiveTransitionStateName || undefined;
 
     return c.json({
       hasLinkedIssue: true,
@@ -1456,8 +1465,8 @@ export function createRoutes(
         teamId: linkedIssue.teamId,
       },
       hasBacklogState,
-      archiveTransitionConfigured: settings.linearArchiveTransition && !!settings.linearArchiveTransitionStateId.trim(),
-      archiveTransitionStateName: settings.linearArchiveTransitionStateName || undefined,
+      archiveTransitionConfigured,
+      archiveTransitionStateName,
     });
   });
 

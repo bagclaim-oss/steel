@@ -1186,8 +1186,8 @@ describe("POST /api/linear/issues/:id/transition", () => {
     expect(json.issue.stateName).toBe("In Progress");
     expect(json.issue.stateType).toBe("started");
 
-    // Cache should be invalidated
-    expect(linearCache.invalidate).toHaveBeenCalledWith("issue:issue-1");
+    // Cache should be invalidated with connection prefix
+    expect(linearCache.invalidate).toHaveBeenCalledWith("test-conn:issue:issue-1");
   });
 
   it("returns 502 when Linear returns GraphQL errors", async () => {
@@ -1442,8 +1442,8 @@ describe("transitionLinearIssue helper", () => {
       stateName: "Backlog",
       stateType: "backlog",
     });
-    // Cache invalidation uses connectionId prefix (empty string when no connectionId passed)
-    expect(linearCache.invalidate).toHaveBeenCalledWith(":issue:issue-1");
+    // Cache invalidation uses no prefix when connectionId is not passed
+    expect(linearCache.invalidate).toHaveBeenCalledWith("issue:issue-1");
   });
 
   it("returns error when Linear returns GraphQL errors", async () => {

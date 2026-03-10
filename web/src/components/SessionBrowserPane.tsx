@@ -11,6 +11,7 @@ export function SessionBrowserPane({ sessionId }: SessionBrowserPaneProps) {
   const [browserUrl, setBrowserUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [navUrl, setNavUrl] = useState("http://localhost:3000");
+  const [navError, setNavError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const sdkSession = useStore((s) =>
@@ -57,7 +58,10 @@ export function SessionBrowserPane({ sessionId }: SessionBrowserPaneProps) {
 
   const handleNavigate = useCallback(() => {
     if (!navUrl.trim()) return;
-    api.navigateBrowser(sessionId, navUrl.trim()).catch(() => {});
+    setNavError(null);
+    api.navigateBrowser(sessionId, navUrl.trim()).catch((err) => {
+      setNavError(err instanceof Error ? err.message : "Navigation failed");
+    });
   }, [sessionId, navUrl]);
 
   const handleReload = useCallback(() => {
@@ -125,6 +129,14 @@ export function SessionBrowserPane({ sessionId }: SessionBrowserPaneProps) {
           Go
         </button>
       </div>
+
+      {/* Navigation error banner */}
+      {navError && (
+        <div className="shrink-0 px-3 py-1.5 bg-cc-error/10 border-b border-cc-error/30 text-xs text-cc-error flex items-center justify-between">
+          <span>{navError}</span>
+          <button type="button" onClick={() => setNavError(null)} className="ml-2 hover:underline cursor-pointer">Dismiss</button>
+        </div>
+      )}
 
       {/* noVNC iframe */}
       <div className="flex-1 min-h-0">

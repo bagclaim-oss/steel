@@ -333,14 +333,14 @@ export function createRoutes(
           ?? (Array.isArray(body.container?.ports)
             ? body.container.ports.map(Number).filter((n: number) => n > 0)
             : []);
-        const containerPorts = Array.from(
-          new Set([
+        const containerPorts: (number | { port: number; hostIp?: string })[] = [
+          ...Array.from(new Set([
             ...requestedPorts,
             VSCODE_EDITOR_CONTAINER_PORT,
-            NOVNC_CONTAINER_PORT,
             ...(backend === "codex" ? [CODEX_APP_SERVER_CONTAINER_PORT] : []),
-          ]),
-        );
+          ])),
+          { port: NOVNC_CONTAINER_PORT, hostIp: "127.0.0.1" },
+        ];
         const cConfig: ContainerConfig = {
           image: effectiveImage,
           ports: containerPorts,
@@ -680,14 +680,14 @@ export function createRoutes(
             ?? (Array.isArray(body.container?.ports)
               ? body.container.ports.map(Number).filter((n: number) => n > 0)
               : []);
-          const containerPorts = Array.from(
-            new Set([
+          const containerPorts: (number | { port: number; hostIp?: string })[] = [
+            ...Array.from(new Set([
               ...requestedPorts,
               VSCODE_EDITOR_CONTAINER_PORT,
-              NOVNC_CONTAINER_PORT,
               ...(backend === "codex" ? [CODEX_APP_SERVER_CONTAINER_PORT] : []),
-            ]),
-          );
+            ])),
+            { port: NOVNC_CONTAINER_PORT, hostIp: "127.0.0.1" },
+          ];
           const cConfig: ContainerConfig = {
             image: effectiveImage,
             ports: containerPorts,

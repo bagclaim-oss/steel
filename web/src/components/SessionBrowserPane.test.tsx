@@ -162,6 +162,33 @@ describe("SessionBrowserPane", () => {
     expect(mockNavigateBrowser).toHaveBeenCalledWith("s1", "http://localhost:5000");
   });
 
+  // ─── Navigation error feedback ────────────────────────────────────────
+  it("shows error banner when navigation fails", async () => {
+    mockStartBrowser.mockResolvedValue({
+      available: true,
+      mode: "container",
+      url: "/api/sessions/s1/browser/proxy/vnc.html",
+    });
+    mockNavigateBrowser.mockRejectedValue(new Error("Container stopped"));
+
+    render(<SessionBrowserPane sessionId="s1" />);
+    await waitFor(() => {
+      expect(screen.getByTitle("Browser preview")).toBeInTheDocument();
+    });
+
+    const input = screen.getByLabelText("Navigate URL");
+    fireEvent.change(input, { target: { value: "http://localhost:3000" } });
+    fireEvent.click(screen.getByText("Go"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Container stopped")).toBeInTheDocument();
+    });
+
+    // Dismiss the error
+    fireEvent.click(screen.getByText("Dismiss"));
+    expect(screen.queryByText("Container stopped")).not.toBeInTheDocument();
+  });
+
   // ─── Reload button ────────────────────────────────────────────────────
   it("reload button resets iframe src", async () => {
     mockStartBrowser.mockResolvedValue({

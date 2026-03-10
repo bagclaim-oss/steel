@@ -34,7 +34,14 @@ export function SessionBrowserPane({ sessionId }: SessionBrowserPaneProps) {
     api.startBrowser(sessionId).then((result) => {
       if (cancelled) return;
       if (result.available && result.url) {
-        setBrowserUrl(result.url);
+        // Inject auth token into the noVNC WebSocket path so it works on remote servers
+        const token = localStorage.getItem("companion_auth_token") || "";
+        const url = new URL(result.url, window.location.origin);
+        const wsPath = url.searchParams.get("path");
+        if (wsPath && token) {
+          url.searchParams.set("path", `${wsPath}?token=${encodeURIComponent(token)}`);
+        }
+        setBrowserUrl(url.pathname + url.search);
       } else {
         setError(result.message || "Browser preview unavailable.");
       }

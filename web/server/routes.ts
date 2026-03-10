@@ -345,7 +345,7 @@ export function createRoutes(
           image: effectiveImage,
           ports: containerPorts,
           volumes: companionEnv?.volumes ?? body.container?.volumes,
-          env: { ...envVars, DISPLAY: ":99" },
+          env: { ...(envVars ?? {}), DISPLAY: ":99" },
         };
         try {
           containerInfo = containerManager.createContainer(tempId, cwd, cConfig);
@@ -692,7 +692,7 @@ export function createRoutes(
             image: effectiveImage,
             ports: containerPorts,
             volumes: companionEnv?.volumes ?? body.container?.volumes,
-            env: { ...envVars, DISPLAY: ":99" },
+            env: { ...(envVars ?? {}), DISPLAY: ":99" },
           };
           try {
             containerInfo = containerManager.createContainer(tempId, cwd, cConfig);
@@ -1163,12 +1163,31 @@ export function createRoutes(
         15_000,
       );
 
-      // Optionally launch Chromium to a URL
-      const targetUrl = body.url || "about:blank";
+      // Optionally launch Chromium to a URL (validate scheme if provided)
+      let targetUrl = "about:blank";
+      if (body.url && typeof body.url === "string") {
+        try {
+          const parsed = new URL(body.url);
+          if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+            return c.json({
+              available: false,
+              mode: "container" as const,
+              message: "Only http:// and https:// URLs are allowed.",
+            });
+          }
+          targetUrl = body.url;
+        } catch {
+          return c.json({
+            available: false,
+            mode: "container" as const,
+            message: "Invalid URL provided.",
+          });
+        }
+      }
       const launchChrome = [
         "export DISPLAY=:99",
         'if ! pgrep -f "chromium.*--user-data-dir=/tmp/companion-chrome" >/dev/null 2>&1; then',
-        `  nohup chromium-browser --no-sandbox --disable-gpu --disable-dev-shm-usage --user-data-dir=/tmp/companion-chrome --window-size=1280,720 --window-position=0,0 ${shellEscapeArg(targetUrl)} &>/dev/null &`,
+        `  nohup chromium --no-sandbox --disable-gpu --disable-dev-shm-usage --user-data-dir=/tmp/companion-chrome --window-size=1280,720 --window-position=0,0 ${shellEscapeArg(targetUrl)} &>/dev/null &`,
         "fi",
       ].join("\n");
 
@@ -1179,14 +1198,26 @@ export function createRoutes(
       );
 
       // Wait for noVNC to be ready (up to 5s)
+      let noVncReady = false;
       for (let i = 0; i < 25; i++) {
         try {
           const res = await fetch(`http://127.0.0.1:${portMapping.hostPort}/`);
-          if (res.ok || res.status === 200) break;
+          if (res.ok || res.status === 200) {
+            noVncReady = true;
+            break;
+          }
         } catch {
           // not ready yet
         }
         await new Promise((r) => setTimeout(r, 200));
+      }
+
+      if (!noVncReady) {
+        return c.json({
+          available: false,
+          mode: "container" as const,
+          message: "Browser preview timed out waiting for noVNC to start.",
+        });
       }
 
       const proxyBase = `/api/sessions/${encodeURIComponent(id)}/browser/proxy`;
@@ -1217,11 +1248,30 @@ export function createRoutes(
     const url = body.url;
     if (!url || typeof url !== "string") return c.json({ error: "url is required" }, 400);
 
+    // Validate URL scheme — only allow http/https to prevent file:// access
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        return c.json({ error: "Only http:// and https:// URLs are allowed" }, 400);
+      }
+    } catch {
+      return c.json({ error: "Invalid URL" }, 400);
+    }
+
     const container = containerManager.getContainer(id);
     if (!container) return c.json({ error: "Container not found" }, 404);
 
     try {
-      const navScript = `export DISPLAY=:99 && chromium-browser --no-sandbox --disable-gpu --disable-dev-shm-usage --user-data-dir=/tmp/companion-chrome ${shellEscapeArg(url)} &>/dev/null &`;
+      // Use xdotool to send the URL to the existing Chromium window's address bar
+      // instead of spawning a new Chromium process each time
+      const navScript = [
+        "export DISPLAY=:99",
+        // Focus the Chromium window and navigate via keyboard shortcut
+        'xdotool search --onlyvisible --name "Chromium" windowactivate --sync key --clearmodifiers ctrl+l',
+        "sleep 0.1",
+        `xdotool type --clearmodifiers ${shellEscapeArg(url)}`,
+        "xdotool key --clearmodifiers Return",
+      ].join(" && ");
       containerManager.execInContainer(
         container.containerId,
         ["sh", "-c", navScript],

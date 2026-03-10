@@ -5274,6 +5274,72 @@ describe("POST /api/sessions/:id/browser/start", () => {
     expect(execSpy).toHaveBeenCalledTimes(2);
     fetchSpy.mockRestore();
   });
+
+  it("returns unavailable when noVNC polling times out", { timeout: 15_000 }, async () => {
+    launcher.getSession.mockReturnValue({
+      sessionId: "s1",
+      state: "running",
+      cwd: "/repo",
+      containerId: "cid-1",
+    });
+    vi.spyOn(containerManager, "getContainer").mockReturnValue({
+      containerId: "cid-1",
+      name: "companion-s1",
+      image: "the-companion:latest",
+      portMappings: [{ containerPort: 6080, hostPort: 49200 }],
+      hostCwd: "/repo",
+      containerCwd: "/workspace",
+      state: "running",
+    });
+    vi.spyOn(containerManager, "hasBinaryInContainer").mockReturnValue(true);
+    vi.spyOn(containerManager, "isContainerAlive").mockReturnValue("running");
+    vi.spyOn(containerManager, "execInContainer").mockReturnValue("");
+    // Simulate noVNC never becoming ready — all fetches throw
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("connection refused"));
+
+    const res = await app.request("/api/sessions/s1/browser/start", { method: "POST" });
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json).toMatchObject({
+      available: false,
+      mode: "container",
+    });
+    expect(json.message).toContain("timed out");
+    fetchSpy.mockRestore();
+  });
+
+  it("rejects file:// URL scheme in browser/start", async () => {
+    launcher.getSession.mockReturnValue({
+      sessionId: "s1",
+      state: "running",
+      cwd: "/repo",
+      containerId: "cid-1",
+    });
+    vi.spyOn(containerManager, "getContainer").mockReturnValue({
+      containerId: "cid-1",
+      name: "companion-s1",
+      image: "the-companion:latest",
+      portMappings: [{ containerPort: 6080, hostPort: 49200 }],
+      hostCwd: "/repo",
+      containerCwd: "/workspace",
+      state: "running",
+    });
+    vi.spyOn(containerManager, "hasBinaryInContainer").mockReturnValue(true);
+    vi.spyOn(containerManager, "isContainerAlive").mockReturnValue("running");
+    vi.spyOn(containerManager, "execInContainer").mockReturnValue("");
+
+    const res = await app.request("/api/sessions/s1/browser/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: "file:///etc/passwd" }),
+    });
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json).toMatchObject({ available: false });
+    expect(json.message).toContain("http://");
+  });
 });
 
 describe("POST /api/sessions/:id/browser/navigate", () => {
@@ -5303,6 +5369,25 @@ describe("POST /api/sessions/:id/browser/navigate", () => {
     });
 
     expect(res.status).toBe(400);
+  });
+
+  it("rejects file:// URL scheme", async () => {
+    launcher.getSession.mockReturnValue({
+      sessionId: "s1",
+      state: "running",
+      cwd: "/repo",
+      containerId: "cid-1",
+    });
+
+    const res = await app.request("/api/sessions/s1/browser/navigate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: "file:///etc/passwd" }),
+    });
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toContain("http://");
   });
 
   it("navigates Chrome to the given URL", async () => {

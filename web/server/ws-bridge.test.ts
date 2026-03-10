@@ -241,6 +241,46 @@ describe("prePopulateCommands", () => {
     expect(sentData.session.skills).toEqual(["prd"]);
   });
 
+  it("broadcasts session_init to already-connected browsers when state changes", () => {
+    // If a browser is already connected when prePopulateCommands runs
+    // (e.g. discovery resolved after browser connected), the browser should
+    // receive a session_init with the updated commands/skills.
+    const browser = makeBrowserSocket("s1");
+    bridge.handleBrowserOpen(browser, "s1");
+    browser.send.mockClear();
+
+    bridge.prePopulateCommands("s1", ["deploy"], ["prd"]);
+
+    expect(browser.send).toHaveBeenCalledTimes(1);
+    const sentData = JSON.parse(browser.send.mock.calls[0][0]);
+    expect(sentData.type).toBe("session_init");
+    expect(sentData.session.slash_commands).toEqual(["deploy"]);
+    expect(sentData.session.skills).toEqual(["prd"]);
+  });
+
+  it("does not broadcast when no browsers are connected", () => {
+    // When no browsers are subscribed, prePopulateCommands should not
+    // attempt to broadcast (no-op beyond state mutation).
+    bridge.prePopulateCommands("s1", ["deploy"], ["prd"]);
+    const session = bridge.getSession("s1")!;
+    // State should still be updated
+    expect(session.state.slash_commands).toEqual(["deploy"]);
+    expect(session.state.skills).toEqual(["prd"]);
+    // No browser sockets to verify send wasn't called -- just ensure no throw
+  });
+
+  it("does not broadcast when state did not change", () => {
+    // When provided arrays are empty, no state change occurs and no
+    // broadcast should be sent even if browsers are connected.
+    const browser = makeBrowserSocket("s1");
+    bridge.handleBrowserOpen(browser, "s1");
+    browser.send.mockClear();
+
+    bridge.prePopulateCommands("s1", [], []);
+
+    expect(browser.send).not.toHaveBeenCalled();
+  });
+
   it("system.init overwrites pre-populated data with authoritative list", () => {
     // After prePopulateCommands, when CLI sends system.init, the CLI's
     // authoritative list should replace the pre-populated data.

@@ -470,9 +470,8 @@ export function createRoutes(
 
       // Pre-populate slash commands and skills from filesystem so the slash
       // menu works before system.init arrives from the CLI
-      discoverCommandsAndSkills(cwd).then((discovered) => {
-        wsBridge.prePopulateCommands(session.sessionId, discovered.slash_commands, discovered.skills);
-      }).catch(() => { /* best-effort */ });
+      const discovered = await discoverCommandsAndSkills(cwd).catch(() => ({ slash_commands: [] as string[], skills: [] as string[] }));
+      wsBridge.prePopulateCommands(session.sessionId, discovered.slash_commands, discovered.skills);
 
       return c.json(session);
     } catch (e: unknown) {
@@ -863,9 +862,8 @@ export function createRoutes(
 
         // Pre-populate slash commands and skills from filesystem so the slash
         // menu works before system.init arrives from the CLI
-        discoverCommandsAndSkills(cwd).then((discovered) => {
-          wsBridge.prePopulateCommands(session.sessionId, discovered.slash_commands, discovered.skills);
-        }).catch(() => { /* best-effort */ });
+        const discovered = await discoverCommandsAndSkills(cwd).catch(() => ({ slash_commands: [] as string[], skills: [] as string[] }));
+        wsBridge.prePopulateCommands(session.sessionId, discovered.slash_commands, discovered.skills);
 
         await emitProgress(stream, "launching_cli", "Session started", "done");
 

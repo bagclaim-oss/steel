@@ -161,11 +161,11 @@ describe("settings-manager", () => {
   });
 
   it("updates linear key without touching anthropic settings", () => {
-    updateSettings({ anthropicApiKey: "sk-ant-key", anthropicModel: "claude-sonnet-4.6" });
+    updateSettings({ anthropicApiKey: "sk-ant-key", anthropicModel: "claude-sonnet-4-6" });
     const updated = updateSettings({ linearApiKey: "lin_api_123" });
 
     expect(updated.anthropicApiKey).toBe("sk-ant-key");
-    expect(updated.anthropicModel).toBe("claude-sonnet-4.6");
+    expect(updated.anthropicModel).toBe("claude-sonnet-4-6");
     expect(updated.linearApiKey).toBe("lin_api_123");
   });
 
@@ -236,7 +236,7 @@ describe("settings-manager", () => {
       settingsPath,
       JSON.stringify({
         anthropicApiKey: "key",
-        anthropicModel: "claude-sonnet-4.6",
+        anthropicModel: "claude-sonnet-4-6",
       }),
       "utf-8",
     );

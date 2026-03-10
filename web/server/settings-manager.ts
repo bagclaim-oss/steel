@@ -7,7 +7,7 @@ import {
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 
-export const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4.6";
+export const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
 
 export type UpdateChannel = "stable" | "prerelease";
 

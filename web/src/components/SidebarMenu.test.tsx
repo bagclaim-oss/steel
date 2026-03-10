@@ -8,6 +8,8 @@ import { createRef } from "react";
 const mockState = {
   closeTerminal: vi.fn(),
   setSidebarOpen: vi.fn(),
+  sidebarGroupByProject: false,
+  setSidebarGroupByProject: vi.fn(),
 };
 
 vi.mock("../store.js", () => {
@@ -129,8 +131,8 @@ describe("SidebarMenu", () => {
       <SidebarMenu open={true} onClose={vi.fn()} anchorRef={anchorRef} />,
     );
     const menuItems = screen.getAllByRole("menuitem");
-    // NAV_ITEMS + EXTERNAL_LINKS
-    expect(menuItems.length).toBe(NAV_ITEMS.length + EXTERNAL_LINKS.length);
+    // NAV_ITEMS + "Group by project" toggle + EXTERNAL_LINKS
+    expect(menuItems.length).toBe(NAV_ITEMS.length + 1 + EXTERNAL_LINKS.length);
   });
 
   it("passes axe accessibility checks", async () => {

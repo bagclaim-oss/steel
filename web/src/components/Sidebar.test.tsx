@@ -62,6 +62,7 @@ interface MockStoreState {
   clearRecentlyRenamed: ReturnType<typeof vi.fn>;
   setSdkSessions: ReturnType<typeof vi.fn>;
   closeTerminal: ReturnType<typeof vi.fn>;
+  setSidebarGroupByProject: ReturnType<typeof vi.fn>;
 }
 
 function makeSession(id: string, overrides: Partial<SessionState> = {}): SessionState {
@@ -128,6 +129,7 @@ function createMockState(overrides: Partial<MockStoreState> = {}): MockStoreStat
     clearRecentlyRenamed: vi.fn(),
     setSdkSessions: vi.fn(),
     closeTerminal: vi.fn(),
+    setSidebarGroupByProject: vi.fn(),
     ...overrides,
   };
 }
@@ -1591,14 +1593,15 @@ describe("Sidebar", () => {
     expect(integrationsBtn).toHaveClass("bg-cc-active");
   });
 
-  it("agents nav button is active on agent detail routes", () => {
-    // Verifies active state for nested agent pages in the gear menu.
+  it("agents nav button is active on agent detail routes with aria-current", () => {
+    // Verifies active state and aria-current for nested agent pages in the gear menu.
     window.location.hash = "#/agents/agent-123";
     render(<Sidebar />);
     fireEvent.click(screen.getByLabelText("Navigation menu"));
 
     const agentsBtn = screen.getByText("Agents").closest("button");
     expect(agentsBtn).toHaveClass("bg-cc-active");
+    expect(agentsBtn).toHaveAttribute("aria-current", "page");
   });
 
   // ─── Close sidebar button (mobile) ─────────────────────────────────────────

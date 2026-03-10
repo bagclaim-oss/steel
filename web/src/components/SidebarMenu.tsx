@@ -112,6 +112,8 @@ export function SidebarMenu({ open, onClose, anchorRef }: SidebarMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const hash = typeof window !== "undefined" ? window.location.hash : "";
   const route = parseHash(hash);
+  const sidebarGroupByProject = useStore((s) => s.sidebarGroupByProject);
+  const setSidebarGroupByProject = useStore((s) => s.setSidebarGroupByProject);
 
   // Close on click outside
   useEffect(() => {
@@ -158,6 +160,7 @@ export function SidebarMenu({ open, onClose, anchorRef }: SidebarMenuProps) {
           <button
             key={item.id}
             role="menuitem"
+            aria-current={isActive ? "page" : undefined}
             onClick={() => {
               if (item.id !== "terminal") {
                 useStore.getState().closeTerminal();
@@ -181,6 +184,28 @@ export function SidebarMenu({ open, onClose, anchorRef }: SidebarMenuProps) {
           </button>
         );
       })}
+
+      {/* Divider */}
+      <div className="my-1 border-t border-cc-border/50" />
+
+      {/* Group by project toggle */}
+      <button
+        role="menuitem"
+        onClick={() => {
+          setSidebarGroupByProject(!sidebarGroupByProject);
+        }}
+        className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-[12px] text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
+      >
+        <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 shrink-0">
+          <path d="M1 2.5A1.5 1.5 0 012.5 1h3A1.5 1.5 0 017 2.5v3A1.5 1.5 0 015.5 7h-3A1.5 1.5 0 011 5.5v-3zm8 0A1.5 1.5 0 0110.5 1h3A1.5 1.5 0 0115 2.5v3A1.5 1.5 0 0113.5 7h-3A1.5 1.5 0 019 5.5v-3zm-8 8A1.5 1.5 0 012.5 9h3A1.5 1.5 0 017 10.5v3A1.5 1.5 0 015.5 15h-3A1.5 1.5 0 011 13.5v-3zm8 0A1.5 1.5 0 0110.5 9h3a1.5 1.5 0 011.5 1.5v3a1.5 1.5 0 01-1.5 1.5h-3A1.5 1.5 0 019 13.5v-3z" />
+        </svg>
+        <span className="font-medium">Group by project</span>
+        {sidebarGroupByProject && (
+          <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 ml-auto text-cc-primary">
+            <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z" />
+          </svg>
+        )}
+      </button>
 
       {/* Divider */}
       <div className="my-1 border-t border-cc-border/50" />

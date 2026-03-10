@@ -346,11 +346,12 @@ export function Sidebar() {
             onClick={handleNewSession}
             title="New Session"
             aria-label="New Session"
-            className="hidden md:flex w-9 h-9 shrink-0 rounded-lg items-center justify-center text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer border border-cc-border/40"
+            className="hidden md:flex h-8 shrink-0 rounded-lg items-center gap-1.5 px-2.5 text-[12px] text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer border border-cc-border/40"
           >
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-3.5 h-3.5">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-3 h-3">
               <path d="M8 3v10M3 8h10" />
             </svg>
+            <span>New Session</span>
           </button>
           <button
             ref={menuButtonRef}

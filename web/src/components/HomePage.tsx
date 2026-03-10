@@ -131,7 +131,6 @@ export function HomePage() {
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showModeDropdown, setShowModeDropdown] = useState(false);
   const [showFolderPicker, setShowFolderPicker] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [showBranchingControls, setShowBranchingControls] = useState(false);
   const [resumeSessionAt, setResumeSessionAt] = useState("");
   const [forkSession, setForkSession] = useState(true);
@@ -1007,31 +1006,9 @@ export function HomePage() {
             onBranchesLoaded={handleBranchesLoaded}
           />
 
-          {/* Advanced toggle */}
-          <button
-            type="button"
-            onClick={() => setShowAdvanced((v) => {
-              // Reset branching controls when collapsing the Advanced panel
-              if (v) setShowBranchingControls(false);
-              return !v;
-            })}
-            className={`flex items-center gap-1.5 px-2.5 py-2 text-xs rounded-md transition-colors cursor-pointer ${
-              showAdvanced
-                ? "text-cc-primary bg-cc-primary/10 hover:bg-cc-primary/15"
-                : "text-cc-muted hover:text-cc-fg hover:bg-cc-hover"
-            }`}
-            aria-expanded={showAdvanced}
-          >
-            <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 opacity-60">
-              <path fillRule="evenodd" clipRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.53 1.53 0 01-2.29.95c-1.35-.8-2.92.77-2.12 2.12.54.9.07 2.04-.95 2.29-1.56.38-1.56 2.6 0 2.98 1.02.25 1.49 1.39.95 2.29-.8 1.35.77 2.92 2.12 2.12.9-.54 2.04-.07 2.29.95.38 1.56 2.6 1.56 2.98 0 .25-1.02 1.39-1.49 2.29-.95 1.35.8 2.92-.77 2.12-2.12-.54-.9-.07-2.04.95-2.29 1.56-.38 1.56-2.6 0-2.98-1.02-.25-1.49-1.39-.95-2.29.8-1.35-.77-2.92-2.12-2.12-.9.54-2.04.07-2.29-.95zM10 13a3 3 0 100-6 3 3 0 000 6z" />
-            </svg>
-            {showAdvanced ? "Hide advanced" : "Advanced"}
-          </button>
             </div>
 
-            {/* Advanced options panel — collapsed by default */}
-            {showAdvanced && (<>
-              <div className="mt-2 px-1 flex flex-col gap-2 animate-[menu-appear_150ms_ease-out]">
+              <div className="mt-2 px-1 flex flex-col gap-2">
                 <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
                   {/* Backend toggle */}
                   {backends.length > 1 && (
@@ -1401,7 +1378,6 @@ export function HomePage() {
             onBranchFromIssue={handleBranchFromIssue}
             onConnectionSelect={setSelectedLinearConnectionId}
           />
-            </>)}
           </div>
         </div>
 

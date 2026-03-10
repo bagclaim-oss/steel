@@ -99,12 +99,6 @@ function buildStoreMock(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** Opens the Advanced panel by clicking the "Advanced" toggle button. */
-function openAdvancedPanel() {
-  const advancedBtn = screen.getByRole("button", { name: /^Advanced$/i });
-  fireEvent.click(advancedBtn);
-}
-
 describe("HomePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -159,7 +153,7 @@ describe("HomePage", () => {
     // update the branch picker to Linear's recommended branch.
     render(<HomePage />);
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
 
     const issueTitle = await screen.findByText(/THE-147/i);
     const issueButton = issueTitle.closest("button");
@@ -205,7 +199,7 @@ describe("HomePage", () => {
     render(<HomePage />);
 
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
     fireEvent.click(screen.getByRole("button", { name: /branch from session/i }));
     fireEvent.click(await screen.findByRole("button", { name: /continue and open prior-session/i }));
 
@@ -244,7 +238,7 @@ describe("HomePage", () => {
     render(<HomePage />);
 
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
     fireEvent.click(screen.getByRole("button", { name: /branch from session/i }));
     fireEvent.click(await screen.findByRole("button", { name: /fork and open snazzy-baking-tarjan/i }));
 
@@ -289,7 +283,7 @@ describe("HomePage", () => {
     render(<HomePage />);
 
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
     fireEvent.click(screen.getByRole("button", { name: /branch from session/i }));
 
     await screen.findByText(/showing 1 of 1 recent claude session/i);
@@ -331,7 +325,7 @@ describe("HomePage", () => {
 
     render(<HomePage />);
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
     fireEvent.click(screen.getByRole("button", { name: /branch from session/i }));
 
     const search = await screen.findByPlaceholderText("Search sessions, branch, folder, or ID");
@@ -391,7 +385,7 @@ describe("HomePage", () => {
     // Model selector is in the Advanced panel.
     render(<HomePage />);
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
 
     // The default model label for claude backend is "Opus 4.6"
     const modelButton = screen.getByText("Opus 4.6");
@@ -520,7 +514,7 @@ describe("HomePage", () => {
 
     render(<HomePage />);
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
 
     // Both backends should be visible
     const claudeButton = screen.getByRole("button", { name: "Claude" });
@@ -550,7 +544,7 @@ describe("HomePage", () => {
 
     render(<HomePage />);
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
 
     const codexButton = await screen.findByTitle("Codex CLI not found in PATH");
     expect(codexButton).toBeDisabled();
@@ -569,7 +563,7 @@ describe("HomePage", () => {
 
     render(<HomePage />);
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
 
     // Click env selector (shows "No env" by default)
     const envButton = screen.getByText("No env").closest("button")!;
@@ -598,7 +592,7 @@ describe("HomePage", () => {
 
     render(<HomePage />);
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
 
     // Open env dropdown
     const envButton = screen.getByText("No env").closest("button")!;
@@ -628,7 +622,7 @@ describe("HomePage", () => {
 
     render(<HomePage />);
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
 
     // Open env dropdown and select an env first
     const envButton = screen.getByText("No env").closest("button")!;
@@ -905,7 +899,7 @@ describe("HomePage", () => {
     // Model selector is in the Advanced panel.
     render(<HomePage />);
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
 
     // Open model dropdown
     const modelButton = screen.getByText("Opus 4.6");
@@ -971,7 +965,7 @@ describe("HomePage", () => {
 
     render(<HomePage />);
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
 
     // The dynamically fetched model should appear in the Advanced panel
     await waitFor(() => {
@@ -988,7 +982,7 @@ describe("HomePage", () => {
 
     render(<HomePage />);
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
 
     // Open branching controls
     fireEvent.click(screen.getByRole("button", { name: /branch from session/i }));
@@ -1028,7 +1022,7 @@ describe("HomePage", () => {
 
     render(<HomePage />);
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
     fireEvent.click(screen.getByRole("button", { name: /branch from session/i }));
 
     // Should show recent only
@@ -1079,7 +1073,7 @@ describe("HomePage", () => {
 
     render(<HomePage />);
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
     fireEvent.click(screen.getByRole("button", { name: /branch from session/i }));
 
     await waitFor(() => {
@@ -1104,7 +1098,7 @@ describe("HomePage", () => {
 
     render(<HomePage />);
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
     fireEvent.click(screen.getByRole("button", { name: /branch from session/i }));
     await screen.findByRole("button", { name: /fork and open slug-1/i });
 
@@ -1128,7 +1122,7 @@ describe("HomePage", () => {
 
     render(<HomePage />);
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-    openAdvancedPanel();
+
 
     // Open the branching controls panel
     await act(async () => {
@@ -1195,11 +1189,11 @@ describe("HomePage", () => {
     });
   });
 
-  // ─── Advanced toggle ─────────────────────────────────────────────────────
+  // ─── Session options always visible ──────────────────────────────────────
 
-  it("hides advanced options by default and reveals them on toggle", async () => {
-    // The Advanced panel should be collapsed by default, hiding backend toggle,
-    // environment selector, and model selector until the user clicks "Advanced".
+  it("renders backend, model, and environment controls on initial render", async () => {
+    // All session creation options (backend toggle, environment selector,
+    // model selector) are always visible — no toggle needed.
     mockApi.getBackends.mockResolvedValue([
       { id: "claude", name: "Claude", available: true },
       { id: "codex", name: "Codex", available: true },
@@ -1209,36 +1203,11 @@ describe("HomePage", () => {
     render(<HomePage />);
     await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
 
-    // Advanced options should NOT be visible by default
-    expect(screen.queryByText("No env")).not.toBeInTheDocument();
-    expect(screen.queryByText("Opus 4.6")).not.toBeInTheDocument();
-
-    // Click "Advanced" to reveal them
-    const advancedBtn = screen.getByRole("button", { name: /^Advanced$/i });
-    expect(advancedBtn).toHaveAttribute("aria-expanded", "false");
-    fireEvent.click(advancedBtn);
-
-    // Now advanced options should appear
+    // Backend toggle, environment, and model should be visible immediately
     expect(screen.getByText("No env")).toBeInTheDocument();
     expect(screen.getByText("Opus 4.6")).toBeInTheDocument();
-
-    // Button text should change to "Hide advanced"
-    expect(screen.getByRole("button", { name: /Hide advanced/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Hide advanced/i })).toHaveAttribute("aria-expanded", "true");
-  });
-
-  it("collapses advanced options when toggled again", async () => {
-    // Clicking "Hide advanced" should collapse the panel.
-    render(<HomePage />);
-    await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
-
-    // Open Advanced
-    fireEvent.click(screen.getByRole("button", { name: /^Advanced$/i }));
-    expect(screen.getByText("No env")).toBeInTheDocument();
-
-    // Close Advanced
-    fireEvent.click(screen.getByRole("button", { name: /Hide advanced/i }));
-    expect(screen.queryByText("No env")).not.toBeInTheDocument();
+    expect(screen.getByText("Claude")).toBeInTheDocument();
+    expect(screen.getByText("Codex")).toBeInTheDocument();
   });
 
   describe("@ mention prompts", () => {

@@ -1620,9 +1620,9 @@ describe("POST /api/sessions/:id/archive — Linear transition", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.ok).toBe(true);
-    // Should have resolved backlog state from team states
-    expect(mockFetchLinearTeamStates).toHaveBeenCalledWith("lin_test_key");
-    expect(mockTransitionLinearIssue).toHaveBeenCalledWith("issue-1", "state-backlog", "lin_test_key");
+    // Should have resolved backlog state from team states (uses resolveApiKey)
+    expect(mockFetchLinearTeamStates).toHaveBeenCalledWith("lin_api_123");
+    expect(mockTransitionLinearIssue).toHaveBeenCalledWith("issue-1", "state-backlog", "lin_api_123", "test-conn");
     expect(json.linearTransition).toBeDefined();
     expect(json.linearTransition.ok).toBe(true);
     // Session should still be archived
@@ -1660,7 +1660,7 @@ describe("POST /api/sessions/:id/archive — Linear transition", () => {
       body: JSON.stringify({ linearTransition: "configured" }),
     });
     expect(res.status).toBe(200);
-    expect(mockTransitionLinearIssue).toHaveBeenCalledWith("issue-1", "state-custom", "lin_test_key");
+    expect(mockTransitionLinearIssue).toHaveBeenCalledWith("issue-1", "state-custom", "lin_api_123", "test-conn");
   });
 
   it("archives successfully even when transition fails", async () => {

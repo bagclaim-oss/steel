@@ -359,7 +359,7 @@ describe("POST /api/linear/connections", () => {
     });
   });
 
-  it("does not create a connection when verification fails (201 with error)", async () => {
+  it("does not create a connection when verification fails (422)", async () => {
     // Validates that no connection is persisted when the API key verification fails
     const fetchMock = mockFetch();
     fetchMock.mockResolvedValue(linearError("Authentication failed"));
@@ -370,7 +370,7 @@ describe("POST /api/linear/connections", () => {
       body: JSON.stringify({ name: "Bad Key Workspace", apiKey: "lin_api_badkey1234" }),
     });
 
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(422);
     const json = await res.json();
     expect(json.verified).toBe(false);
     expect(json.error).toBe("Authentication failed");
@@ -381,7 +381,7 @@ describe("POST /api/linear/connections", () => {
     expect(mockUpdateConnection).not.toHaveBeenCalled();
   });
 
-  it("does not create a connection on non-ok HTTP response (201 with error)", async () => {
+  it("does not create a connection on non-ok HTTP response (422)", async () => {
     // Validates that a non-200 HTTP response from Linear results in no connection being created
     const fetchMock = mockFetch();
     fetchMock.mockResolvedValue(linearHttpError("Unauthorized", 401));
@@ -392,7 +392,7 @@ describe("POST /api/linear/connections", () => {
       body: JSON.stringify({ name: "Workspace", apiKey: "lin_api_key12345" }),
     });
 
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(422);
     const json = await res.json();
     expect(json.verified).toBe(false);
     expect(json.error).toBe("Unauthorized");
@@ -400,7 +400,7 @@ describe("POST /api/linear/connections", () => {
     expect(mockCreateConnection).not.toHaveBeenCalled();
   });
 
-  it("does not create a connection on network error (201 with error)", async () => {
+  it("does not create a connection on network error (422)", async () => {
     // Validates that a network error (fetch throws) results in no connection being created
     const fetchMock = mockFetch();
     fetchMock.mockRejectedValue(new Error("ECONNREFUSED"));
@@ -411,7 +411,7 @@ describe("POST /api/linear/connections", () => {
       body: JSON.stringify({ name: "Workspace", apiKey: "lin_api_key12345" }),
     });
 
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(422);
     const json = await res.json();
     expect(json.verified).toBe(false);
     expect(json.error).toBe("ECONNREFUSED");
@@ -443,7 +443,7 @@ describe("POST /api/linear/connections", () => {
       body: JSON.stringify({ name: "Workspace", apiKey: "lin_api_key12345" }),
     });
 
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(422);
     const json = await res.json();
     expect(json.verified).toBe(false);
     expect(json.connection).toBeNull();

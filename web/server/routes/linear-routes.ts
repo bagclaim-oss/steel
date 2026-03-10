@@ -23,6 +23,7 @@ export async function transitionLinearIssue(
   issueId: string,
   stateId: string,
   linearApiKey: string,
+  connectionId?: string,
 ): Promise<{
   ok: boolean;
   error?: string;
@@ -74,7 +75,9 @@ export async function transitionLinearIssue(
     const updatedIssue = updateJson.data?.issueUpdate?.issue;
 
     // Invalidate cached issue data so the next fetch picks up the new state
-    linearCache.invalidate(`issue:${issueId}`);
+    linearCache.invalidate(`${connectionId || ""}:issue:${issueId}`);
+    // Also invalidate unprefixed key for backward compatibility
+    if (connectionId) linearCache.invalidate(`issue:${issueId}`);
 
     return {
       ok: true,
@@ -631,7 +634,7 @@ export function registerLinearRoutes(api: Hono): void {
     if (!resolved) {
       return c.json({ error: "No Linear connection configured" }, 400);
     }
-    const { apiKey: linearApiKey } = resolved;
+    const { apiKey: linearApiKey, connectionId: resolvedConnId } = resolved;
 
     const response = await fetch("https://api.linear.app/graphql", {
       method: "POST",
@@ -680,7 +683,7 @@ export function registerLinearRoutes(api: Hono): void {
     }
 
     // Invalidate cached issue data so the next poll picks up the new comment
-    linearCache.invalidate(`issue:${issueId}`);
+    linearCache.invalidate(`${resolvedConnId}:issue:${issueId}`);
 
     return c.json({
       ok: true,
@@ -936,7 +939,7 @@ export function registerLinearRoutes(api: Hono): void {
       return c.json({ ok: true, skipped: true, reason: "no_target_state_configured" });
     }
 
-    const result = await transitionLinearIssue(issueId, stateId, linearApiKey);
+    const result = await transitionLinearIssue(issueId, stateId, linearApiKey, resolvedConnId);
     if (!result.ok) {
       return c.json({ error: result.error }, 502);
     }

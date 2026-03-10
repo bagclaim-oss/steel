@@ -34,7 +34,7 @@ import { registerGitRoutes } from "./routes/git-routes.js";
 import { registerSystemRoutes } from "./routes/system-routes.js";
 import { registerLinearRoutes, transitionLinearIssue, fetchLinearTeamStates } from "./routes/linear-routes.js";
 import { registerLinearConnectionRoutes } from "./routes/linear-connection-routes.js";
-import { getConnection, listConnections } from "./linear-connections.js";
+import { getConnection, listConnections, resolveApiKey } from "./linear-connections.js";
 import { getSettings } from "./settings-manager.js";
 import { discoverClaudeSessions } from "./claude-session-discovery.js";
 import { getClaudeSessionHistoryPage } from "./claude-session-history.js";
@@ -1472,9 +1472,12 @@ export function createRoutes(
     if (linearTransition && linearTransition !== "none") {
       const linkedIssue = sessionLinearIssues.getLinearIssue(id);
       if (linkedIssue) {
-        const settings = getSettings();
-        const linearApiKey = settings.linearApiKey.trim();
-        if (linearApiKey) {
+        const resolved = resolveApiKey(linkedIssue.connectionId);
+        if (resolved) {
+          const { apiKey: linearApiKey, connectionId: resolvedConnId } = resolved;
+          const settings = getSettings();
+          // Use connection-level archive settings if available, else fall back to global
+          const conn = resolvedConnId !== "legacy" ? getConnection(resolvedConnId) : null;
           let targetStateId = "";
 
           if (linearTransition === "backlog" && linkedIssue.teamId) {
@@ -1486,12 +1489,13 @@ export function createRoutes(
               targetStateId = backlogState.id;
             }
           } else if (linearTransition === "configured") {
-            targetStateId = settings.linearArchiveTransitionStateId.trim();
+            const archiveStateId = conn ? conn.archiveTransitionStateId : settings.linearArchiveTransitionStateId;
+            targetStateId = archiveStateId.trim();
           }
 
           if (targetStateId) {
             try {
-              linearTransitionResult = await transitionLinearIssue(linkedIssue.id, targetStateId, linearApiKey);
+              linearTransitionResult = await transitionLinearIssue(linkedIssue.id, targetStateId, linearApiKey, resolvedConnId);
             } catch {
               linearTransitionResult = { ok: false, error: "Transition failed unexpectedly" };
             }

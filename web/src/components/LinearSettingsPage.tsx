@@ -746,20 +746,25 @@ export function LinearSettingsPage({ embedded = false }: LinearSettingsPageProps
                         </div>
                       )}
 
-                      <div className="flex justify-end">
-                        <button
-                          type="button"
-                          onClick={onSaveConnectionSettings}
-                          disabled={editState.saving || (editState.autoTransition && !editState.autoTransitionStateId) || (editState.archiveTransition && !editState.archiveTransitionStateId)}
-                          className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            editState.saving || (editState.autoTransition && !editState.autoTransitionStateId) || (editState.archiveTransition && !editState.archiveTransitionStateId)
-                              ? "bg-cc-hover text-cc-muted cursor-not-allowed"
-                              : "bg-cc-primary hover:bg-cc-primary-hover text-white cursor-pointer"
-                          }`}
-                        >
-                          {editState.saving ? "Saving..." : "Save Settings"}
-                        </button>
-                      </div>
+                      {(() => {
+                        const saveDisabled = editState.saving || (editState.autoTransition && !editState.autoTransitionStateId) || (editState.archiveTransition && !editState.archiveTransitionStateId);
+                        return (
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={onSaveConnectionSettings}
+                              disabled={saveDisabled}
+                              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                saveDisabled
+                                  ? "bg-cc-hover text-cc-muted cursor-not-allowed"
+                                  : "bg-cc-primary hover:bg-cc-primary-hover text-white cursor-pointer"
+                              }`}
+                            >
+                              {editState.saving ? "Saving..." : "Save Settings"}
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>

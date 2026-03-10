@@ -107,7 +107,7 @@ export function registerLinearConnectionRoutes(api: Hono): void {
         connection: null,
         verified: false,
         error: verification.error,
-      }, 201);
+      }, 422);
     }
 
     const conn = createConnection({ name, apiKey });

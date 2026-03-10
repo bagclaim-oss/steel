@@ -705,8 +705,8 @@ describe("POST /api/linear/issues/:issueId/comments", () => {
     expect(json.comment.userName).toBe("Test User");
     expect(json.comment.userAvatarUrl).toBeNull();
 
-    // Should invalidate cache for the issue
-    expect(linearCache.invalidate).toHaveBeenCalledWith("issue:issue-1");
+    // Should invalidate cache for the issue with connectionId prefix
+    expect(linearCache.invalidate).toHaveBeenCalledWith("test-conn:issue:issue-1");
   });
 
   it("returns 502 when Linear returns GraphQL errors (covers lines 366-369)", async () => {
@@ -1442,7 +1442,8 @@ describe("transitionLinearIssue helper", () => {
       stateName: "Backlog",
       stateType: "backlog",
     });
-    expect(linearCache.invalidate).toHaveBeenCalledWith("issue:issue-1");
+    // Cache invalidation uses connectionId prefix (empty string when no connectionId passed)
+    expect(linearCache.invalidate).toHaveBeenCalledWith(":issue:issue-1");
   });
 
   it("returns error when Linear returns GraphQL errors", async () => {

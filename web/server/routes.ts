@@ -49,6 +49,7 @@ const WEB_DIR = dirname(ROUTES_DIR);
 const VSCODE_EDITOR_CONTAINER_PORT = 13337;
 const CODEX_APP_SERVER_CONTAINER_PORT = Number(process.env.COMPANION_CODEX_CONTAINER_WS_PORT || "4502");
 const VSCODE_EDITOR_HOST_PORT = Number(process.env.COMPANION_EDITOR_PORT || "13338");
+const NOVNC_CONTAINER_PORT = 6080;
 
 function shellEscapeArg(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
@@ -336,6 +337,7 @@ export function createRoutes(
           new Set([
             ...requestedPorts,
             VSCODE_EDITOR_CONTAINER_PORT,
+            NOVNC_CONTAINER_PORT,
             ...(backend === "codex" ? [CODEX_APP_SERVER_CONTAINER_PORT] : []),
           ]),
         );
@@ -343,7 +345,7 @@ export function createRoutes(
           image: effectiveImage,
           ports: containerPorts,
           volumes: companionEnv?.volumes ?? body.container?.volumes,
-          env: envVars,
+          env: { ...envVars, DISPLAY: ":99" },
         };
         try {
           containerInfo = containerManager.createContainer(tempId, cwd, cConfig);
@@ -682,6 +684,7 @@ export function createRoutes(
             new Set([
               ...requestedPorts,
               VSCODE_EDITOR_CONTAINER_PORT,
+              NOVNC_CONTAINER_PORT,
               ...(backend === "codex" ? [CODEX_APP_SERVER_CONTAINER_PORT] : []),
             ]),
           );
@@ -689,7 +692,7 @@ export function createRoutes(
             image: effectiveImage,
             ports: containerPorts,
             volumes: companionEnv?.volumes ?? body.container?.volumes,
-            env: envVars,
+            env: { ...envVars, DISPLAY: ":99" },
           };
           try {
             containerInfo = containerManager.createContainer(tempId, cwd, cConfig);
@@ -1078,6 +1081,195 @@ export function createRoutes(
         mode: "host",
         message: `Failed to start VS Code editor: ${message}`,
       });
+    }
+  });
+
+  // ── Browser preview ──────────────────────────────────────────────────────
+
+  api.post("/sessions/:id/browser/start", async (c) => {
+    const id = c.req.param("id");
+    const body = await c.req.json().catch(() => ({} as { url?: string }));
+    const session = launcher.getSession(id);
+    if (!session) return c.json({ error: "Session not found" }, 404);
+
+    if (!session.containerId) {
+      return c.json({
+        available: false,
+        mode: "host" as const,
+        message: "Browser preview requires a containerized session.",
+      });
+    }
+
+    const container = containerManager.getContainer(id);
+    if (!container) {
+      return c.json({
+        available: false,
+        mode: "container" as const,
+        message: "Container not found for this session.",
+      });
+    }
+
+    const alive = containerManager.isContainerAlive(container.containerId);
+    if (alive === "stopped") {
+      containerManager.startContainer(container.containerId);
+    } else if (alive === "missing") {
+      return c.json({
+        available: false,
+        mode: "container" as const,
+        message: "Session container no longer exists.",
+      });
+    }
+
+    const portMapping = container.portMappings.find(
+      (p) => p.containerPort === NOVNC_CONTAINER_PORT,
+    );
+    if (!portMapping) {
+      return c.json({
+        available: false,
+        mode: "container" as const,
+        message: "Browser preview port not mapped. Start a new session to enable browser preview.",
+      });
+    }
+
+    const hasXvfb = containerManager.hasBinaryInContainer(container.containerId, "Xvfb");
+    const hasWebsockify = containerManager.hasBinaryInContainer(container.containerId, "websockify");
+    if (!hasXvfb || !hasWebsockify) {
+      return c.json({
+        available: false,
+        mode: "container" as const,
+        message: "Browser preview requires Xvfb and noVNC in the container image. Rebuild with the latest the-companion image.",
+      });
+    }
+
+    try {
+      // Start display stack (idempotent — guarded by pgrep)
+      const startScript = [
+        "export DISPLAY=:99",
+        'if ! pgrep -f "Xvfb :99" >/dev/null 2>&1; then',
+        "  Xvfb :99 -screen 0 1280x720x24 -ac -nolisten tcp &",
+        "  sleep 0.5",
+        "  fluxbox -display :99 &>/dev/null &",
+        "  sleep 0.3",
+        "  x11vnc -display :99 -forever -shared -nopw -rfbport 5900 -noxdamage -wait 20 &>/dev/null &",
+        "  sleep 0.3",
+        "  websockify --web /usr/share/novnc/ 6080 localhost:5900 &>/dev/null &",
+        "  sleep 0.5",
+        "fi",
+      ].join("\n");
+
+      containerManager.execInContainer(
+        container.containerId,
+        ["sh", "-c", startScript],
+        15_000,
+      );
+
+      // Optionally launch Chromium to a URL
+      const targetUrl = body.url || "about:blank";
+      const launchChrome = [
+        "export DISPLAY=:99",
+        'if ! pgrep -f "chromium.*--user-data-dir=/tmp/companion-chrome" >/dev/null 2>&1; then',
+        `  nohup chromium-browser --no-sandbox --disable-gpu --disable-dev-shm-usage --user-data-dir=/tmp/companion-chrome --window-size=1280,720 --window-position=0,0 ${shellEscapeArg(targetUrl)} &>/dev/null &`,
+        "fi",
+      ].join("\n");
+
+      containerManager.execInContainer(
+        container.containerId,
+        ["sh", "-c", launchChrome],
+        10_000,
+      );
+
+      // Wait for noVNC to be ready (up to 5s)
+      for (let i = 0; i < 25; i++) {
+        try {
+          const res = await fetch(`http://127.0.0.1:${portMapping.hostPort}/`);
+          if (res.ok || res.status === 200) break;
+        } catch {
+          // not ready yet
+        }
+        await new Promise((r) => setTimeout(r, 200));
+      }
+
+      const proxyBase = `/api/sessions/${encodeURIComponent(id)}/browser/proxy`;
+      const noVncUrl = `${proxyBase}/vnc.html?autoconnect=true&resize=scale&path=ws/novnc/${encodeURIComponent(id)}`;
+
+      return c.json({
+        available: true,
+        mode: "container" as const,
+        url: noVncUrl,
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return c.json({
+        available: false,
+        mode: "container" as const,
+        message: `Failed to start browser preview: ${message}`,
+      });
+    }
+  });
+
+  api.post("/sessions/:id/browser/navigate", async (c) => {
+    const id = c.req.param("id");
+    const body = await c.req.json().catch(() => ({} as { url?: string }));
+    const session = launcher.getSession(id);
+    if (!session) return c.json({ error: "Session not found" }, 404);
+    if (!session.containerId) return c.json({ error: "Not a container session" }, 400);
+
+    const url = body.url;
+    if (!url || typeof url !== "string") return c.json({ error: "url is required" }, 400);
+
+    const container = containerManager.getContainer(id);
+    if (!container) return c.json({ error: "Container not found" }, 404);
+
+    try {
+      const navScript = `export DISPLAY=:99 && chromium-browser --no-sandbox --disable-gpu --disable-dev-shm-usage --user-data-dir=/tmp/companion-chrome ${shellEscapeArg(url)} &>/dev/null &`;
+      containerManager.execInContainer(
+        container.containerId,
+        ["sh", "-c", navScript],
+        10_000,
+      );
+      return c.json({ ok: true, url });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return c.json({ error: `Navigation failed: ${message}` }, 500);
+    }
+  });
+
+  // HTTP proxy for noVNC static files — serves through the companion's port
+  api.get("/sessions/:id/browser/proxy/*", async (c) => {
+    const id = c.req.param("id");
+    const session = launcher.getSession(id);
+    if (!session) return c.json({ error: "Session not found" }, 404);
+    if (!session.containerId) return c.json({ error: "Not a container session" }, 400);
+
+    const container = containerManager.getContainer(id);
+    if (!container) return c.json({ error: "Container not found" }, 404);
+
+    const portMapping = container.portMappings.find(
+      (p) => p.containerPort === NOVNC_CONTAINER_PORT,
+    );
+    if (!portMapping) return c.json({ error: "Browser preview port not mapped" }, 400);
+
+    // Extract the wildcard path after /browser/proxy/
+    const fullPath = c.req.path;
+    const proxyPrefix = `/api/sessions/${id}/browser/proxy/`;
+    const subPath = fullPath.startsWith(proxyPrefix) ? fullPath.slice(proxyPrefix.length) : "";
+    const queryString = new URL(c.req.url).search;
+
+    try {
+      const targetUrl = `http://127.0.0.1:${portMapping.hostPort}/${subPath}${queryString}`;
+      const upstream = await fetch(targetUrl);
+      const headers = new Headers();
+      const ct = upstream.headers.get("content-type");
+      if (ct) headers.set("Content-Type", ct);
+      const cl = upstream.headers.get("content-length");
+      if (cl) headers.set("Content-Length", cl);
+      return new Response(upstream.body, {
+        status: upstream.status,
+        headers,
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return c.json({ error: `Proxy failed: ${message}` }, 502);
     }
   });
 

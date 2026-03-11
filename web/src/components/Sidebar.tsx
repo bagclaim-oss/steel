@@ -32,6 +32,7 @@ export function Sidebar() {
   const pendingPermissions = useStore((s) => s.pendingPermissions);
   const linkedLinearIssues = useStore((s) => s.linkedLinearIssues);
   const sidebarGroupByProject = useStore((s) => s.sidebarGroupByProject);
+  const setSidebarGroupByProject = useStore((s) => s.setSidebarGroupByProject);
   const collapsedProjects = useStore((s) => s.collapsedProjects);
   const toggleProjectCollapse = useStore((s) => s.toggleProjectCollapse);
 
@@ -404,9 +405,19 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* Sessions label */}
-      <div className="px-4 pt-2 pb-1">
+      {/* Sessions label + group toggle */}
+      <div className="px-4 pt-2 pb-1 flex items-center justify-between">
         <span className="text-[11px] font-medium text-cc-muted uppercase tracking-wider">Sessions</span>
+        <button
+          onClick={() => setSidebarGroupByProject(!sidebarGroupByProject)}
+          title={sidebarGroupByProject ? "Show flat list" : "Group by project"}
+          aria-label={sidebarGroupByProject ? "Show flat list" : "Group by project"}
+          className={`w-5 h-5 rounded flex items-center justify-center transition-colors cursor-pointer ${sidebarGroupByProject ? "text-cc-fg bg-cc-hover" : "text-cc-muted hover:text-cc-fg hover:bg-cc-hover"}`}
+        >
+          <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+            <path d="M1.5 2.5A1.5 1.5 0 013 1h1a1.5 1.5 0 011.5 1.5v1A1.5 1.5 0 014 5H3a1.5 1.5 0 01-1.5-1.5v-1zM1.5 9.5A1.5 1.5 0 013 8h1a1.5 1.5 0 011.5 1.5v1A1.5 1.5 0 014 12H3a1.5 1.5 0 01-1.5-1.5v-1zM7.5 2.75a.75.75 0 01.75-.75h6a.75.75 0 010 1.5h-6a.75.75 0 01-.75-.75zM7.5 9.75a.75.75 0 01.75-.75h6a.75.75 0 010 1.5h-6a.75.75 0 01-.75-.75z" />
+          </svg>
+        </button>
       </div>
 
       {/* Session list */}

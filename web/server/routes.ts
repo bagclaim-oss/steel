@@ -1156,10 +1156,10 @@ export function createRoutes(
         "fi",
       ].join("\n");
 
-      containerManager.execInContainer(
+      await containerManager.execInContainerAsync(
         container.containerId,
         ["sh", "-c", startScript],
-        15_000,
+        { timeout: 15_000 },
       );
 
       // Optionally launch Chromium to a URL (validate scheme if provided)
@@ -1190,10 +1190,10 @@ export function createRoutes(
         "fi",
       ].join("\n");
 
-      containerManager.execInContainer(
+      await containerManager.execInContainerAsync(
         container.containerId,
         ["sh", "-c", launchChrome],
-        10_000,
+        { timeout: 10_000 },
       );
 
       // Wait for noVNC to be ready (up to 10s)
@@ -1271,10 +1271,10 @@ export function createRoutes(
         `xdotool type --clearmodifiers ${shellEscapeArg(url)}`,
         "xdotool key --clearmodifiers Return",
       ].join(" && ");
-      containerManager.execInContainer(
+      await containerManager.execInContainerAsync(
         container.containerId,
         ["sh", "-c", navScript],
-        10_000,
+        { timeout: 10_000 },
       );
       return c.json({ ok: true, url });
     } catch (e) {
@@ -1341,10 +1341,11 @@ export function createRoutes(
       return c.json({ error: "Invalid port" }, 400);
     }
 
-    // Block proxying to the companion server itself (would bypass remote auth via localhost check)
+    // Block well-known sensitive service ports to limit SSRF surface area
+    const BLOCKED_PORTS = new Set([22, 23, 25, 110, 143, 3306, 5432, 6379, 27017, 11211]);
     const serverPort = port || (process.env.NODE_ENV === "production" ? 3456 : 3457);
-    if (portNum === serverPort) {
-      return c.json({ error: "Cannot proxy to the companion server" }, 400);
+    if (portNum === serverPort || BLOCKED_PORTS.has(portNum)) {
+      return c.json({ error: "Port not allowed" }, 400);
     }
 
     // Reconstruct path from wildcard — only take path, query comes separately

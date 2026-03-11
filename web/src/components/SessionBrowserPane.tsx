@@ -151,6 +151,9 @@ export function SessionBrowserPane({ sessionId }: SessionBrowserPaneProps) {
             src={browserUrl}
             className="w-full h-full border-0"
             title="Browser preview"
+            // Container mode needs allow-same-origin for noVNC WebSocket connections.
+            // This is intentional: noVNC content is trusted (our own server in the container).
+            // Host mode omits allow-same-origin to isolate proxied third-party content.
             sandbox={browserMode === "container" ? "allow-scripts allow-same-origin allow-forms allow-popups" : "allow-scripts allow-forms allow-popups"}
           />
         ) : browserMode === "host" ? (

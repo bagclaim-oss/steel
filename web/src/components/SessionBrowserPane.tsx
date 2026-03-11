@@ -62,6 +62,10 @@ export function SessionBrowserPane({ sessionId }: SessionBrowserPaneProps) {
           setNavError("Only http:// and https:// URLs are supported");
           return;
         }
+        if (parsed.hostname !== "localhost" && parsed.hostname !== "127.0.0.1") {
+          setNavError("Host mode only supports localhost URLs (e.g. http://localhost:3000)");
+          return;
+        }
         const port = parsed.port || (parsed.protocol === "https:" ? "443" : "80");
         const subPath = parsed.pathname.replace(/^\//, "");
         const proxyUrl = `/api/sessions/${encodeURIComponent(sessionId)}/browser/host-proxy/${port}/${subPath}${parsed.search}`;

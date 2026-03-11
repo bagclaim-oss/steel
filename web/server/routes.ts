@@ -1277,9 +1277,8 @@ export function createRoutes(
         { timeout: 10_000 },
       );
       return c.json({ ok: true, url });
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      return c.json({ error: `Navigation failed: ${message}` }, 500);
+    } catch {
+      return c.json({ error: "Navigation failed" }, 500);
     }
   });
 
@@ -1330,7 +1329,7 @@ export function createRoutes(
 
   // HTTP proxy for host browser preview — proxies localhost requests through the companion’s port
   const HOP_BY_HOP = new Set(["connection", "keep-alive", "transfer-encoding", "upgrade", "proxy-connection", "te", "trailer"]);
-  api.get("/sessions/:id/browser/host-proxy/:port/*", async (c) => {
+  api.all("/sessions/:id/browser/host-proxy/:port/*", async (c) => {
     const id = c.req.param("id");
     const session = launcher.getSession(id);
     if (!session) return c.json({ error: "Session not found" }, 404);
@@ -1364,7 +1363,13 @@ export function createRoutes(
     const timeout = setTimeout(() => controller.abort(), 15_000);
     try {
       const targetUrl = `http://127.0.0.1:${portNum}/${subPath}${queryString}`;
-      const upstream = await fetch(targetUrl, { redirect: "follow", signal: controller.signal });
+      const upstream = await fetch(targetUrl, {
+        method: c.req.method,
+        headers: { "accept": c.req.header("accept") || "*/*" },
+        body: ["GET", "HEAD"].includes(c.req.method) ? undefined : c.req.raw.body,
+        redirect: "follow",
+        signal: controller.signal,
+      });
       clearTimeout(timeout);
       // Forward response headers, stripping hop-by-hop headers
       const headers = new Headers();

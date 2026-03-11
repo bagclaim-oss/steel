@@ -100,7 +100,7 @@ describe("SessionBrowserPane", () => {
     });
 
     const input = screen.getByLabelText("Navigate URL");
-    fireEvent.change(input, { target: { value: "http://example.com/path" } });
+    fireEvent.change(input, { target: { value: "http://localhost/path" } });
     fireEvent.click(screen.getByText("Go"));
 
     await waitFor(() => {
@@ -163,6 +163,24 @@ describe("SessionBrowserPane", () => {
     fireEvent.click(screen.getByText("Go"));
 
     expect(screen.getByText("Only http:// and https:// URLs are supported")).toBeInTheDocument();
+  });
+
+  it("rejects non-localhost hostnames in host mode", async () => {
+    // Host mode only proxies localhost — remote hostnames are not supported
+    mockStartBrowser.mockResolvedValue({
+      available: true,
+      mode: "host",
+    });
+    render(<SessionBrowserPane sessionId="s1" />);
+    await waitFor(() => {
+      expect(screen.getByText("Enter a URL and click Go to preview.")).toBeInTheDocument();
+    });
+
+    const input = screen.getByLabelText("Navigate URL");
+    fireEvent.change(input, { target: { value: "http://example.com/path" } });
+    fireEvent.click(screen.getByText("Go"));
+
+    expect(screen.getByText("Host mode only supports localhost URLs (e.g. http://localhost:3000)")).toBeInTheDocument();
   });
 
   // ─── API returns unavailable ──────────────────────────────────────────

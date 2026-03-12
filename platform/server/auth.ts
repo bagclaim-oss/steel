@@ -46,7 +46,7 @@ export function getAuth(): Auth {
           creatorRole: "owner",
         }),
       ],
-    });
+    }) as unknown as Auth;
   }
-  return _auth;
+  return _auth!;
 }

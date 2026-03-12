@@ -760,26 +760,26 @@ describe("environment API", () => {
     expect(opts.method).toBe("DELETE");
   });
 
-  it("buildEnvImage sends POST to /api/envs/:slug/build", async () => {
-    const data = { ok: true, imageTag: "my-env:latest" };
+  it("buildSandboxImage sends POST to /api/sandboxes/:slug/build", async () => {
+    const data = { success: true, imageTag: "companion-sandbox-my-sandbox:latest" };
     mockFetch.mockResolvedValueOnce(mockResponse(data));
 
-    const result = await api.buildEnvImage("my-env");
+    const result = await api.buildSandboxImage("my-sandbox");
 
     const [url, opts] = mockFetch.mock.calls[0];
-    expect(url).toBe("/api/envs/my-env/build");
+    expect(url).toBe("/api/sandboxes/my-sandbox/build");
     expect(opts.method).toBe("POST");
     expect(result).toEqual(data);
   });
 
-  it("getEnvBuildStatus sends GET to /api/envs/:slug/build-status", async () => {
-    const data = { buildStatus: "success", lastBuiltAt: 1234, imageTag: "my-env:latest" };
+  it("getSandboxBuildStatus sends GET to /api/sandboxes/:slug/build-status", async () => {
+    const data = { buildStatus: "success", lastBuiltAt: 1234, imageTag: "companion-sandbox-my-sandbox:latest" };
     mockFetch.mockResolvedValueOnce(mockResponse(data));
 
-    const result = await api.getEnvBuildStatus("my-env");
+    const result = await api.getSandboxBuildStatus("my-sandbox");
 
     const [url] = mockFetch.mock.calls[0];
-    expect(url).toBe("/api/envs/my-env/build-status");
+    expect(url).toBe("/api/sandboxes/my-sandbox/build-status");
     expect(result).toEqual(data);
   });
 
@@ -806,27 +806,16 @@ describe("environment API", () => {
     expect(result).toEqual(data);
   });
 
-  it("createEnv includes docker options when provided", async () => {
-    const envData = { name: "Docker", slug: "docker", variables: {}, createdAt: 1, updatedAt: 1 };
+  it("createEnv sends name and variables only", async () => {
+    const envData = { name: "My Env", slug: "my-env", variables: { KEY: "val" }, createdAt: 1, updatedAt: 1 };
     mockFetch.mockResolvedValueOnce(mockResponse(envData));
 
-    await api.createEnv("Docker", { KEY: "val" }, {
-      dockerfile: "FROM node:20",
-      baseImage: "node:20",
-      ports: [3000],
-      volumes: ["/data"],
-      initScript: "npm install",
-    });
+    await api.createEnv("My Env", { KEY: "val" });
 
     const [, opts] = mockFetch.mock.calls[0];
     expect(JSON.parse(opts.body)).toEqual({
-      name: "Docker",
+      name: "My Env",
       variables: { KEY: "val" },
-      dockerfile: "FROM node:20",
-      baseImage: "node:20",
-      ports: [3000],
-      volumes: ["/data"],
-      initScript: "npm install",
     });
   });
 });

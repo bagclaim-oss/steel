@@ -59,8 +59,9 @@ async function createInstanceStream(
 
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+    // Flush the decoder on stream end (handles buffered multi-byte sequences),
+    // otherwise decode the incoming chunk in streaming mode.
+    buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
 
     // Parse SSE events: split on double newlines
     const chunks = buffer.split("\n\n");
@@ -90,6 +91,8 @@ async function createInstanceStream(
         throw new Error((parsed as { error: string }).error || "Instance creation failed");
       }
     }
+
+    if (done) break;
   }
 
   if (!result) {

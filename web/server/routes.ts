@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { setCookie } from "hono/cookie";
+import { getCookie, setCookie } from "hono/cookie";
 import { streamSSE, type SSEStreamingApi } from "hono/streaming";
 import { execSync } from "node:child_process";
 import { resolveBinary } from "./path-resolver.js";
@@ -164,7 +164,10 @@ export function createRoutes(
 
     const authHeader = c.req.header("Authorization");
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-    if (!verifyToken(token)) {
+    // Also check the companion_auth cookie — iframes (browser preview) can't
+    // send Authorization headers, but browsers do forward cookies automatically.
+    const cookieToken = getCookie(c, "companion_auth") ?? null;
+    if (!verifyToken(token) && !verifyToken(cookieToken)) {
       return c.json({ error: "unauthorized" }, 401);
     }
     return next();

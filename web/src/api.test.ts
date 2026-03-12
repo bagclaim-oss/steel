@@ -760,6 +760,63 @@ describe("environment API", () => {
     expect(opts.method).toBe("DELETE");
   });
 
+  it("listSandboxes sends GET to /api/sandboxes", async () => {
+    const sandboxes = [{ name: "Dev", slug: "dev", createdAt: 1, updatedAt: 1 }];
+    mockFetch.mockResolvedValueOnce(mockResponse(sandboxes));
+
+    const result = await api.listSandboxes();
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/sandboxes");
+    expect(result).toEqual(sandboxes);
+  });
+
+  it("getSandbox sends GET to /api/sandboxes/:slug", async () => {
+    const sandbox = { name: "Dev", slug: "dev", createdAt: 1, updatedAt: 1 };
+    mockFetch.mockResolvedValueOnce(mockResponse(sandbox));
+
+    const result = await api.getSandbox("dev");
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/sandboxes/dev");
+    expect(result).toEqual(sandbox);
+  });
+
+  it("createSandbox sends POST to /api/sandboxes with name and options", async () => {
+    const sandbox = { name: "My Sandbox", slug: "my-sandbox", dockerfile: "FROM node:20", createdAt: 1, updatedAt: 1 };
+    mockFetch.mockResolvedValueOnce(mockResponse(sandbox));
+
+    const result = await api.createSandbox("My Sandbox", { dockerfile: "FROM node:20" });
+
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/sandboxes");
+    expect(opts.method).toBe("POST");
+    expect(JSON.parse(opts.body)).toEqual({ name: "My Sandbox", dockerfile: "FROM node:20" });
+    expect(result).toEqual(sandbox);
+  });
+
+  it("updateSandbox sends PUT to /api/sandboxes/:slug", async () => {
+    const sandbox = { name: "Renamed", slug: "renamed", createdAt: 1, updatedAt: 2 };
+    mockFetch.mockResolvedValueOnce(mockResponse(sandbox));
+
+    await api.updateSandbox("my-sandbox", { name: "Renamed" });
+
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/sandboxes/my-sandbox");
+    expect(opts.method).toBe("PUT");
+    expect(JSON.parse(opts.body)).toEqual({ name: "Renamed" });
+  });
+
+  it("deleteSandbox sends DELETE to /api/sandboxes/:slug", async () => {
+    mockFetch.mockResolvedValueOnce(mockResponse({ ok: true }));
+
+    await api.deleteSandbox("old-sandbox");
+
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/sandboxes/old-sandbox");
+    expect(opts.method).toBe("DELETE");
+  });
+
   it("buildSandboxImage sends POST to /api/sandboxes/:slug/build", async () => {
     const data = { success: true, imageTag: "companion-sandbox-my-sandbox:latest" };
     mockFetch.mockResolvedValueOnce(mockResponse(data));

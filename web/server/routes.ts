@@ -219,7 +219,7 @@ export function createRoutes(
       // Resolve sandbox configuration
       const sandboxEnabled = body.sandboxEnabled === true;
       const companionSandbox = body.sandboxSlug ? sandboxManager.getSandbox(body.sandboxSlug) : null;
-      if (body.sandboxSlug && !companionSandbox) {
+      if (sandboxEnabled && body.sandboxSlug && !companionSandbox) {
         return c.json({ error: `Sandbox "${body.sandboxSlug}" not found` }, 404);
       }
 
@@ -543,7 +543,7 @@ export function createRoutes(
         // Resolve sandbox configuration
         const sandboxEnabled = body.sandboxEnabled === true;
         const companionSandbox = body.sandboxSlug ? sandboxManager.getSandbox(body.sandboxSlug) : null;
-        if (body.sandboxSlug && !companionSandbox) {
+        if (sandboxEnabled && body.sandboxSlug && !companionSandbox) {
           await stream.writeSSE({
             event: "error",
             data: JSON.stringify({ error: `Sandbox "${body.sandboxSlug}" not found`, step: "resolving_env" }),

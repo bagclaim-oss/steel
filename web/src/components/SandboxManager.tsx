@@ -44,12 +44,15 @@ export function SandboxManager({ embedded = false }: Props) {
   const [buildStatuses, setBuildStatuses] = useState<
     Record<string, { buildStatus: string; buildError?: string; lastBuiltAt?: number; imageTag?: string }>
   >({});
-  const buildPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const buildPollRefs = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
 
-  // Cleanup build polling interval on unmount
+  // Cleanup all build polling intervals on unmount
   useEffect(() => {
     return () => {
-      if (buildPollRef.current) clearInterval(buildPollRef.current);
+      for (const interval of buildPollRefs.current.values()) {
+        clearInterval(interval);
+      }
+      buildPollRefs.current.clear();
     };
   }, []);
 
@@ -192,7 +195,11 @@ export function SandboxManager({ embedded = false }: Props) {
       }));
     }
 
-    // Start polling build status (cleaned up via ref on unmount)
+    // Start polling build status (cleaned up via refs on unmount)
+    // Clear any existing poll for this slug first
+    const existingPoll = buildPollRefs.current.get(slug);
+    if (existingPoll) clearInterval(existingPoll);
+
     const pollInterval = setInterval(() => {
       api.getSandboxBuildStatus(slug)
         .then((status) => {
@@ -202,16 +209,16 @@ export function SandboxManager({ embedded = false }: Props) {
           }));
           if (status.buildStatus !== "building") {
             clearInterval(pollInterval);
-            buildPollRef.current = null;
+            buildPollRefs.current.delete(slug);
             refresh();
           }
         })
         .catch(() => {
           clearInterval(pollInterval);
-          buildPollRef.current = null;
+          buildPollRefs.current.delete(slug);
         });
     }, 2000);
-    buildPollRef.current = pollInterval;
+    buildPollRefs.current.set(slug, pollInterval);
   }
 
   const dockerBadge =

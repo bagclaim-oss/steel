@@ -660,8 +660,8 @@ export class CliLauncher {
    */
   private async spawnCodexWs(sessionId: string, info: SdkSessionInfo, options: LaunchOptions): Promise<void> {
     const isContainerized = !!options.containerId;
-    const connectTimeoutMs = Number(process.env.COMPANION_CODEX_WS_CONNECT_TIMEOUT_MS || "30000");
-    const pongTimeoutMs = Number(process.env.COMPANION_CODEX_PONG_TIMEOUT_MS || "30000");
+    const connectTimeoutMs = Math.max(1000, parseInt(process.env.COMPANION_CODEX_WS_CONNECT_TIMEOUT_MS ?? "", 10) || 30000);
+    const pongTimeoutMs = Math.max(1000, parseInt(process.env.COMPANION_CODEX_PONG_TIMEOUT_MS ?? "", 10) || 30000);
 
     let binary = options.codexBinary || "codex";
     if (!isContainerized) {

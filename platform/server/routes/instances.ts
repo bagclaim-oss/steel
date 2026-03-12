@@ -355,6 +355,9 @@ instances.post("/create-stream", async (c) => {
           config: { plan, flyAppName },
         })
         .returning();
+      // DB save succeeded — clear provisioned so the catch block won't
+      // deprovision resources that are now referenced by the DB record.
+      provisioned = null;
       await emitProgress(stream, "saving_db", "Saving instance", "done");
       activeStep = null;
 

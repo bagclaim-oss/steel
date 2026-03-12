@@ -82,13 +82,15 @@ describe("managed-auth middleware", () => {
     return app;
   }
 
-  it("passes through when COMPANION_AUTH_ENABLED is not set", async () => {
+  it("enforces auth even without COMPANION_AUTH_ENABLED (enable decision is in index.ts)", async () => {
+    // The middleware is always active when registered — the enable/disable
+    // decision moved to index.ts which only registers it when appropriate.
     delete process.env.COMPANION_AUTH_ENABLED;
+    process.env.COMPANION_AUTH_SECRET = TEST_SECRET;
     const app = createTestApp();
 
     const res = await app.request("/api/sessions");
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true });
+    expect(res.status).toBe(401);
   });
 
   it("bypasses auth for /health endpoint", async () => {

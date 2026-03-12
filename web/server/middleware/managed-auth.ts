@@ -12,8 +12,9 @@ import type { Context } from "hono";
  *  - /health    — monitoring endpoint used by control plane health checks
  */
 export const managedAuth = createMiddleware(async (c: Context, next) => {
-  // Bypass entirely when managed auth is not enabled (self-hosted mode)
-  if (process.env.COMPANION_AUTH_ENABLED !== "1") return next();
+  // This middleware is only registered by index.ts when managed auth is
+  // enabled (COMPANION_AUTH_ENABLED=1 or COMPANION_AUTH_SECRET is set).
+  // No redundant env check needed here.
 
   const path = c.req.path;
 

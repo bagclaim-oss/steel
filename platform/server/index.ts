@@ -18,7 +18,7 @@ app.use(
   "/api/*",
   cors({
     origin: (origin) => {
-      const allowed = (process.env.COMPANION_CLOUD_ORIGINS || "http://localhost:5175").split(",");
+      const allowed = (process.env.COMPANION_CLOUD_ORIGINS || "http://localhost:5175").split(",").map(s => s.trim());
       return allowed.includes(origin) ? origin : allowed[0];
     },
     credentials: true,

@@ -83,7 +83,7 @@ export class Provisioner {
     // Step 2: Create machine
     const env: Record<string, string> = {
       NODE_ENV: "production",
-      HOST: "::",
+      HOST: "0.0.0.0",
       COMPANION_HOME: "/data/companion",
       COMPANION_SESSION_DIR: "/data/sessions",
       COMPANION_AUTH_ENABLED: "1",
@@ -133,7 +133,10 @@ export class Provisioner {
       // Step 3: Wait for machine to be running
       await this.machines.waitForState(machine.id, "started", 90_000);
     } catch (err) {
-      // Clean up the volume if machine creation/startup fails
+      // Clean up resources if machine creation/startup fails
+      if (machine) {
+        try { await this.machines.destroyMachine(machine.id, true); } catch {}
+      }
       try { await this.volumes.deleteVolume(volume.id); } catch {}
       throw err;
     }

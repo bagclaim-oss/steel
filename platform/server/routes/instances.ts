@@ -163,6 +163,13 @@ async function getOwnedInstance(instanceId: string, orgId: string, userId: strin
 // All instance routes require auth + active organization.
 instances.use("/*", requireAuth, requireOrganization);
 
+/** Strip sensitive fields before returning instance data to clients */
+function sanitizeInstance(row: Record<string, unknown>) {
+  const { authSecret, ...safe } = row as Record<string, unknown> & { authSecret?: unknown };
+  return safe;
+}
+
+
 instances.get("/", async (c) => {
   const orgId = c.get("organizationId");
   const userId = c.get("auth").userId;
@@ -175,7 +182,7 @@ instances.get("/", async (c) => {
     ),
   });
 
-  return c.json({ instances: rows, organizationId: orgId, userId });
+  return c.json({ instances: rows.map(sanitizeInstance), organizationId: orgId, userId });
 });
 
 instances.post("/", async (c) => {
@@ -258,7 +265,7 @@ instances.get("/:id", async (c) => {
   const row = await getAuthorizedInstance(id, orgId, userId);
   if (!row) return c.json({ error: "Instance not found" }, 404);
 
-  return c.json(row);
+  return c.json(sanitizeInstance(row));
 });
 
 instances.delete("/:id", async (c) => {

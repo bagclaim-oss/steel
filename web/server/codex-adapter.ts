@@ -911,9 +911,14 @@ export class CodexAdapter {
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       if (errMsg.startsWith("RPC timeout")) {
-        this.emit({ type: "error", message: "Codex is not responding. Try relaunching the session." });
+        this.emit({ type: "error", message: "Codex is not responding. Relaunching session..." });
+        // Trigger auto-relaunch via the disconnect chain
+        this.connected = false;
+        this.disconnectCb?.();
       } else if (errMsg === "Transport closed") {
-        this.emit({ type: "error", message: "Connection to Codex lost. Try relaunching the session." });
+        this.emit({ type: "error", message: "Connection to Codex lost. Relaunching session..." });
+        this.connected = false;
+        this.disconnectCb?.();
       } else {
         this.emit({ type: "error", message: `Failed to start turn: ${err}` });
       }
@@ -1019,7 +1024,10 @@ export class CodexAdapter {
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       if (errMsg.startsWith("RPC timeout")) {
-        this.emit({ type: "error", message: "Codex is not responding to interrupt. Try relaunching the session." });
+        this.emit({ type: "error", message: "Codex is not responding to interrupt. Relaunching session..." });
+        // Trigger auto-relaunch via the disconnect chain
+        this.connected = false;
+        this.disconnectCb?.();
       } else {
         console.warn("[codex-adapter] Interrupt failed:", err);
       }

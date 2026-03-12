@@ -660,6 +660,8 @@ export class CliLauncher {
    */
   private async spawnCodexWs(sessionId: string, info: SdkSessionInfo, options: LaunchOptions): Promise<void> {
     const isContainerized = !!options.containerId;
+    const connectTimeoutMs = Number(process.env.COMPANION_CODEX_WS_CONNECT_TIMEOUT_MS || "30000");
+    const pongTimeoutMs = Number(process.env.COMPANION_CODEX_PONG_TIMEOUT_MS || "30000");
 
     let binary = options.codexBinary || "codex";
     if (!isContainerized) {
@@ -807,7 +809,7 @@ export class CliLauncher {
     const codexBinaryDir = isContainerized ? undefined : resolve(binary, "..");
     const proxyNodeCandidate = codexBinaryDir ? join(codexBinaryDir, "node") : undefined;
     const proxyNode = proxyNodeCandidate && existsSync(proxyNodeCandidate) ? proxyNodeCandidate : "node";
-    const proxyProc = Bun.spawn([proxyNode, CODEX_WS_PROXY_PATH, wsUrl, "10000"], {
+    const proxyProc = Bun.spawn([proxyNode, CODEX_WS_PROXY_PATH, wsUrl, String(connectTimeoutMs), String(pongTimeoutMs)], {
       cwd: info.cwd,
       env: {
         ...process.env,

@@ -524,10 +524,10 @@ describe("SandboxManager delete flow", () => {
     await screen.findByText("delete error string");
   });
 
-  it("resets editing state when the sandbox being edited is deleted", async () => {
-    // If a sandbox is being edited and then deleted, the editing state
-    // should be cleared. We test this by verifying that the edit form
-    // disappears after the delete API call completes.
+  it("can delete a different sandbox while editing another", async () => {
+    // When one sandbox is in edit mode and the user deletes a different
+    // sandbox, the delete should succeed and the editing state should
+    // remain for the sandbox being edited.
     mockListSandboxes.mockResolvedValue([
       makeSandbox(),
       makeSandbox({ name: "Other", slug: "other" }),
@@ -535,13 +535,27 @@ describe("SandboxManager delete flow", () => {
     render(<SandboxManager embedded />);
     await screen.findByText("My Sandbox");
 
-    // Start editing "My Sandbox"
+    // Start editing "My Sandbox" — this replaces its row with the edit form
     const editButtons = screen.getAllByRole("button", { name: "Edit" });
     fireEvent.click(editButtons[0]);
     expect(screen.getByDisplayValue("My Sandbox")).toBeInTheDocument();
 
-    // The delete logic checks if editingSlug === slug and resets.
-    // After deletion, the list refreshes and the edit form goes away.
+    // "Other" sandbox still has its Delete button visible (it's not being edited)
+    // After deletion of "Other", the list refreshes without it.
+    mockListSandboxes.mockResolvedValue([
+      makeSandbox(),
+    ]);
+
+    // Click Delete on "Other" (the only visible Delete button now)
+    const deleteButtons = screen.getAllByRole("button", { name: "Delete" });
+    fireEvent.click(deleteButtons[0]);
+
+    await waitFor(() => {
+      expect(mockDeleteSandbox).toHaveBeenCalledWith("other");
+    });
+
+    // Edit form for "My Sandbox" should still be visible
+    expect(screen.getByDisplayValue("My Sandbox")).toBeInTheDocument();
   });
 });
 

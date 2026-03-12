@@ -148,6 +148,8 @@ describe("HomePage", () => {
     mockApi.listPrompts.mockResolvedValue([]);
     mockApi.listLinearConnections.mockResolvedValue({ connections: [] });
     mockApi.listSandboxes.mockResolvedValue([]);
+    mockApi.getImageStatus.mockResolvedValue({ status: "idle" });
+    mockApi.pullImage.mockResolvedValue({ ok: true });
   });
 
   it("auto-sets branch from selected mapped Linear issue", async () => {
@@ -1296,6 +1298,148 @@ describe("HomePage", () => {
 
       // Should replace @rev with the prompt content, keeping the prefix
       expect(textarea.value).toBe("Please Please review this code ");
+    });
+  });
+
+  describe("Sandbox toggle", () => {
+    it("shows sandbox toggle only for Claude backend", async () => {
+      // The sandbox toggle should only appear when the backend is "claude"
+      render(<HomePage />);
+      await screen.findByLabelText("Task description");
+
+      // Claude backend shows sandbox toggle
+      expect(screen.getByText("Sandbox")).toBeInTheDocument();
+    });
+
+    it("hides sandbox toggle for codex backend", async () => {
+      // When the backend is "codex", the sandbox toggle should be hidden
+      mockApi.getBackends.mockResolvedValue([
+        { id: "codex", name: "Codex", available: true },
+      ]);
+      localStorage.setItem("cc-backend", "codex");
+      render(<HomePage />);
+      await screen.findByLabelText("Task description");
+
+      expect(screen.queryByText("Sandbox")).not.toBeInTheDocument();
+    });
+
+    it("toggles sandbox enabled state on click", async () => {
+      // Clicking the sandbox button should toggle the sandboxEnabled flag
+      // and persist it to localStorage.
+      render(<HomePage />);
+      await screen.findByLabelText("Task description");
+
+      const sandboxBtn = screen.getByText("Sandbox").closest("button")!;
+      await act(async () => { fireEvent.click(sandboxBtn); });
+
+      expect(localStorage.getItem("cc-sandbox-enabled")).toBe("true");
+
+      // When toggled on, it should fetch image status
+      expect(mockApi.getImageStatus).toHaveBeenCalled();
+    });
+
+    it("shows sandbox profile dropdown when enabled and clicked", async () => {
+      // When sandbox is enabled, clicking the profile picker should open
+      // the dropdown showing available sandbox profiles.
+      mockApi.listSandboxes.mockResolvedValue([
+        { slug: "my-sandbox", name: "My Sandbox", createdAt: Date.now(), updatedAt: Date.now() },
+      ]);
+      mockApi.getImageStatus.mockResolvedValue({ status: "ready" });
+      localStorage.setItem("cc-sandbox-enabled", "true");
+      render(<HomePage />);
+      await screen.findByLabelText("Task description");
+
+      // The profile picker should appear
+      const profileBtn = await screen.findByText("Default");
+      await act(async () => { fireEvent.click(profileBtn.closest("button")!); });
+
+      // The dropdown should show the default option and our sandbox
+      await screen.findByText("Default (the-companion:latest)");
+      await screen.findByText("My Sandbox");
+    });
+
+    it("selects a sandbox profile from the dropdown", async () => {
+      // Selecting a specific sandbox profile should update localStorage
+      // and close the dropdown.
+      mockApi.listSandboxes.mockResolvedValue([
+        { slug: "my-sandbox", name: "My Sandbox", createdAt: Date.now(), updatedAt: Date.now() },
+      ]);
+      mockApi.getImageStatus.mockResolvedValue({ status: "ready" });
+      localStorage.setItem("cc-sandbox-enabled", "true");
+      render(<HomePage />);
+      await screen.findByLabelText("Task description");
+
+      // Open profile dropdown
+      const profileBtn = await screen.findByText("Default");
+      await act(async () => { fireEvent.click(profileBtn.closest("button")!); });
+
+      // Select "My Sandbox"
+      const mySandbox = await screen.findByText("My Sandbox");
+      await act(async () => { fireEvent.click(mySandbox.closest("button")!); });
+
+      expect(localStorage.getItem("cc-selected-sandbox")).toBe("my-sandbox");
+    });
+
+    it("does not send sandbox flags for codex backend", async () => {
+      // Even if sandbox was previously enabled in localStorage,
+      // creating a session with codex backend should NOT send sandbox flags.
+      mockApi.getBackends.mockResolvedValue([
+        { id: "codex", name: "Codex", available: true },
+      ]);
+      localStorage.setItem("cc-backend", "codex");
+      localStorage.setItem("cc-sandbox-enabled", "true");
+      localStorage.setItem("cc-selected-sandbox", "my-sandbox");
+      createSessionStreamMock.mockReturnValue(new ReadableStream({
+        start(controller) {
+          controller.enqueue(JSON.stringify({ type: "complete", sessionId: "sess-1" }) + "\n");
+          controller.close();
+        },
+      }));
+
+      render(<HomePage />);
+      const textarea = await screen.findByLabelText("Task description");
+      await act(async () => {
+        fireEvent.change(textarea, { target: { value: "test" } });
+      });
+
+      const sendButton = screen.getByTitle("Send message");
+      await act(async () => {
+        fireEvent.click(sendButton);
+      });
+
+      await waitFor(() => {
+        expect(createSessionStreamMock).toHaveBeenCalled();
+      });
+
+      const callArgs = createSessionStreamMock.mock.calls[0][0];
+      expect(callArgs.sandboxEnabled).toBeUndefined();
+      expect(callArgs.sandboxSlug).toBeUndefined();
+    });
+
+    it("shows image status indicator when pulling", async () => {
+      // When sandbox is enabled and the image is pulling, a pulsing
+      // amber dot should be visible next to the Sandbox button.
+      mockApi.getImageStatus.mockResolvedValue({ status: "pulling", progress: "downloading..." });
+      localStorage.setItem("cc-sandbox-enabled", "true");
+      render(<HomePage />);
+      await screen.findByLabelText("Task description");
+
+      await waitFor(() => {
+        expect(screen.getByTitle("Pulling Docker image...")).toBeInTheDocument();
+      });
+    });
+
+    it("shows image error indicator", async () => {
+      // When sandbox is enabled but image pull failed, a red dot with
+      // error info should appear.
+      mockApi.getImageStatus.mockResolvedValue({ status: "error", error: "pull failed" });
+      localStorage.setItem("cc-sandbox-enabled", "true");
+      render(<HomePage />);
+      await screen.findByLabelText("Task description");
+
+      await waitFor(() => {
+        expect(screen.getByTitle("Image error: pull failed")).toBeInTheDocument();
+      });
     });
   });
 });

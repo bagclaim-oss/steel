@@ -44,6 +44,14 @@ export function SandboxManager({ embedded = false }: Props) {
   const [buildStatuses, setBuildStatuses] = useState<
     Record<string, { buildStatus: string; buildError?: string; lastBuiltAt?: number; imageTag?: string }>
   >({});
+  const buildPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Cleanup build polling interval on unmount
+  useEffect(() => {
+    return () => {
+      if (buildPollRef.current) clearInterval(buildPollRef.current);
+    };
+  }, []);
 
   const refresh = useCallback(() => {
     api.listSandboxes().then(setSandboxes).catch(() => {}).finally(() => setLoading(false));
@@ -184,7 +192,7 @@ export function SandboxManager({ embedded = false }: Props) {
       }));
     }
 
-    // Start polling build status
+    // Start polling build status (cleaned up via ref on unmount)
     const pollInterval = setInterval(() => {
       api.getSandboxBuildStatus(slug)
         .then((status) => {
@@ -194,13 +202,16 @@ export function SandboxManager({ embedded = false }: Props) {
           }));
           if (status.buildStatus !== "building") {
             clearInterval(pollInterval);
+            buildPollRef.current = null;
             refresh();
           }
         })
         .catch(() => {
           clearInterval(pollInterval);
+          buildPollRef.current = null;
         });
     }, 2000);
+    buildPollRef.current = pollInterval;
   }
 
   const dockerBadge =

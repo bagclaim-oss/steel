@@ -50,9 +50,13 @@ export function registerSandboxRoutes(
   });
 
   api.delete("/sandboxes/:slug", (c) => {
-    const deleted = sandboxManager.deleteSandbox(c.req.param("slug"));
-    if (!deleted) return c.json({ error: "Sandbox not found" }, 404);
-    return c.json({ ok: true });
+    try {
+      const deleted = sandboxManager.deleteSandbox(c.req.param("slug"));
+      if (!deleted) return c.json({ error: "Sandbox not found" }, 404);
+      return c.json({ ok: true });
+    } catch (e: unknown) {
+      return c.json({ error: e instanceof Error ? e.message : String(e) }, 400);
+    }
   });
 
   api.post("/sandboxes/:slug/build", async (c) => {

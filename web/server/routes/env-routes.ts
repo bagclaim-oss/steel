@@ -49,9 +49,13 @@ export function registerEnvRoutes(
   });
 
   api.delete("/envs/:slug", (c) => {
-    const deleted = envManager.deleteEnv(c.req.param("slug"));
-    if (!deleted) return c.json({ error: "Environment not found" }, 404);
-    return c.json({ ok: true });
+    try {
+      const deleted = envManager.deleteEnv(c.req.param("slug"));
+      if (!deleted) return c.json({ error: "Environment not found" }, 404);
+      return c.json({ ok: true });
+    } catch (e: unknown) {
+      return c.json({ error: e instanceof Error ? e.message : String(e) }, 400);
+    }
   });
 
   api.post("/docker/build-base", async (c) => {

@@ -217,6 +217,7 @@ describe("buildFallbackPath", () => {
     const originalPlatform = process.platform;
 
     beforeEach(() => {
+      _resetPathCache();
       Object.defineProperty(process, "platform", { value: "win32", configurable: true });
     });
 
@@ -310,6 +311,7 @@ describe("getEnrichedPath", () => {
     const originalPlatform = process.platform;
 
     beforeEach(() => {
+      _resetPathCache();
       Object.defineProperty(process, "platform", { value: "win32", configurable: true });
     });
 
@@ -412,6 +414,7 @@ describe("resolveBinary", () => {
     const originalPlatform = process.platform;
 
     beforeEach(() => {
+      _resetPathCache();
       Object.defineProperty(process, "platform", { value: "win32", configurable: true });
     });
 
@@ -431,25 +434,42 @@ describe("resolveBinary", () => {
       expect(resolveBinary("D:\\nonexistent\\claude.cmd")).toBeNull();
     });
 
-    it("falls back to 'where' when 'which' fails on Windows", () => {
+    it("tries 'where' first on Windows and prefers .cmd result", () => {
       _resetPathCache();
       mockExecSync.mockImplementation((cmd: string) => {
         if (typeof cmd === "string" && cmd.includes("-lic")) {
           return "___PATH_START___/usr/bin___PATH_END___\n";
         }
-        // 'which' fails on Windows CMD
-        if (typeof cmd === "string" && cmd.startsWith("which")) {
-          throw new Error("not found");
-        }
-        // 'where' succeeds
+        // 'where' succeeds with multiple results
         if (typeof cmd === "string" && cmd.startsWith("where")) {
           return "C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd\r\nC:\\Users\\me\\AppData\\Roaming\\npm\\claude\r\n";
+        }
+        // 'which' should not be reached
+        throw new Error("not found");
+      });
+
+      // Should use 'where' result and prefer .cmd
+      expect(resolveBinary("claude")).toBe("C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd");
+    });
+
+    it("falls back to 'which' when 'where' fails on Windows", () => {
+      _resetPathCache();
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (typeof cmd === "string" && cmd.includes("-lic")) {
+          return "___PATH_START___/usr/bin___PATH_END___\n";
+        }
+        // 'where' fails
+        if (typeof cmd === "string" && cmd.startsWith("where")) {
+          throw new Error("not found");
+        }
+        // 'which' succeeds (Git Bash)
+        if (typeof cmd === "string" && cmd.startsWith("which")) {
+          return "/c/Users/me/AppData/Roaming/npm/claude.cmd\n";
         }
         throw new Error("not found");
       });
 
-      // Should prefer .cmd result from 'where' output
-      expect(resolveBinary("claude")).toBe("C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd");
+      expect(resolveBinary("claude")).toBe("/c/Users/me/AppData/Roaming/npm/claude.cmd");
     });
 
     it("prefers .cmd result from 'where' output with multiple lines", () => {
@@ -457,9 +477,6 @@ describe("resolveBinary", () => {
       mockExecSync.mockImplementation((cmd: string) => {
         if (typeof cmd === "string" && cmd.includes("-lic")) {
           return "___PATH_START___/usr/bin___PATH_END___\n";
-        }
-        if (typeof cmd === "string" && cmd.startsWith("which")) {
-          throw new Error("not found");
         }
         if (typeof cmd === "string" && cmd.startsWith("where")) {
           return "C:\\Program Files\\nodejs\\node\r\nC:\\Users\\me\\AppData\\Roaming\\npm\\node.cmd\r\n";
@@ -475,9 +492,6 @@ describe("resolveBinary", () => {
       mockExecSync.mockImplementation((cmd: string) => {
         if (typeof cmd === "string" && cmd.includes("-lic")) {
           return "___PATH_START___/usr/bin___PATH_END___\n";
-        }
-        if (typeof cmd === "string" && cmd.startsWith("which")) {
-          throw new Error("not found");
         }
         if (typeof cmd === "string" && cmd.startsWith("where")) {
           return "C:\\Program Files\\nodejs\\node.exe\r\n";

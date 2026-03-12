@@ -155,7 +155,7 @@ export function resolveBinary(name: string): string | null {
   const enrichedPath = getEnrichedPath();
 
   // Try `which` (Unix/Git Bash), then `where` (Windows CMD/PowerShell)
-  const commands = process.platform === "win32" ? ["which", "where"] : ["which"];
+  const commands = process.platform === "win32" ? ["where", "which"] : ["which"];
   for (const cmd of commands) {
     try {
       const result = execSync(`${cmd} ${sanitized}`, {

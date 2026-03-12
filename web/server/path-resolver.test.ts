@@ -310,6 +310,7 @@ describe("getEnrichedPath", () => {
     const originalPlatform = process.platform;
 
     beforeEach(() => {
+      _resetPathCache(); // ensure no cross-contamination from non-Windows tests
       Object.defineProperty(process, "platform", { value: "win32", configurable: true });
     });
 
@@ -431,7 +432,7 @@ describe("resolveBinary", () => {
       expect(resolveBinary("D:\\nonexistent\\claude.cmd")).toBeNull();
     });
 
-    it("falls back to 'where' when 'which' fails on Windows", () => {
+    it("prefers 'where' over 'which' on Windows", () => {
       _resetPathCache();
       mockExecSync.mockImplementation((cmd: string) => {
         if (typeof cmd === "string" && cmd.includes("-lic")) {

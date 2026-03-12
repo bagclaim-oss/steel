@@ -475,6 +475,79 @@ describe("launch", () => {
     expect(mockSpawn).not.toHaveBeenCalled();
   });
 
+  // ─── Windows cmd.exe /c spawning ──────────────────────────────────────────
+
+  describe("Windows cmd.exe /c wrapping", () => {
+    const originalPlatform = process.platform;
+
+    beforeEach(() => {
+      Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true });
+    });
+
+    it("wraps .cmd binary with cmd.exe /c for Claude sessions on win32", () => {
+      // Simulate Windows where claude resolves to a .cmd shim
+      mockResolveBinary.mockReturnValue("C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd");
+      launcher.launch({ cwd: "/tmp/project" });
+
+      const [cmdAndArgs] = mockSpawn.mock.calls[0];
+      // Should be wrapped: ["cmd.exe", "/c", "C:\...\claude.cmd", ...args]
+      expect(cmdAndArgs[0]).toBe("cmd.exe");
+      expect(cmdAndArgs[1]).toBe("/c");
+      expect(cmdAndArgs[2]).toBe("C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd");
+    });
+
+    it("wraps .bat binary with cmd.exe /c for Claude sessions on win32", () => {
+      mockResolveBinary.mockReturnValue("C:\\tools\\claude.bat");
+      launcher.launch({ cwd: "/tmp/project" });
+
+      const [cmdAndArgs] = mockSpawn.mock.calls[0];
+      expect(cmdAndArgs[0]).toBe("cmd.exe");
+      expect(cmdAndArgs[1]).toBe("/c");
+      expect(cmdAndArgs[2]).toBe("C:\\tools\\claude.bat");
+    });
+
+    it("does not wrap non-.cmd/.bat binaries on win32", () => {
+      mockResolveBinary.mockReturnValue("C:\\Program Files\\claude\\claude.exe");
+      launcher.launch({ cwd: "/tmp/project" });
+
+      const [cmdAndArgs] = mockSpawn.mock.calls[0];
+      expect(cmdAndArgs[0]).toBe("C:\\Program Files\\claude\\claude.exe");
+      expect(cmdAndArgs[1]).not.toBe("/c");
+    });
+
+    it("wraps .cmd binary with cmd.exe /c for Codex stdio sessions on win32", () => {
+      mockResolveBinary.mockReturnValue("C:\\Users\\me\\AppData\\Roaming\\npm\\codex.cmd");
+      mockSpawn.mockReturnValueOnce(createMockCodexProc());
+
+      launcher.launch({
+        backendType: "codex",
+        cwd: "/tmp/project",
+        codexSandbox: "workspace-write",
+      });
+
+      const [cmdAndArgs] = mockSpawn.mock.calls[0];
+      expect(cmdAndArgs[0]).toBe("cmd.exe");
+      expect(cmdAndArgs[1]).toBe("/c");
+      expect(cmdAndArgs[2]).toBe("C:\\Users\\me\\AppData\\Roaming\\npm\\codex.cmd");
+    });
+  });
+
+  describe("cmd.exe /c not applied on non-Windows", () => {
+    it("does not wrap .cmd binary when platform is not win32", () => {
+      // On Linux/macOS, even if the binary path somehow ends in .cmd, don't wrap
+      mockResolveBinary.mockReturnValue("/some/path/claude.cmd");
+      launcher.launch({ cwd: "/tmp/project" });
+
+      const [cmdAndArgs] = mockSpawn.mock.calls[0];
+      expect(cmdAndArgs[0]).toBe("/some/path/claude.cmd");
+      expect(cmdAndArgs[0]).not.toBe("cmd.exe");
+    });
+  });
+
 });
 
 // ─── state management ────────────────────────────────────────────────────────

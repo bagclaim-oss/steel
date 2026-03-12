@@ -43,7 +43,7 @@ export const managedAuth = createMiddleware(async (c: Context, next) => {
 
   // When auth arrives via URL query once, persist it to a cookie so static
   // assets and subsequent API calls are authenticated without ?token=...
-  if (!cookieToken && queryToken) {
+  if (queryToken && queryToken !== cookieToken) {
     setAuthCookie(c, queryToken);
   }
 

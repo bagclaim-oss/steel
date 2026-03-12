@@ -72,11 +72,13 @@ export class FlyMachinesClient {
     });
 
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Fly API ${method} ${path} failed (${res.status}): ${text}`);
+      const errText = await res.text();
+      throw new Error(`Fly API ${method} ${path} failed (${res.status}): ${errText}`);
     }
 
-    return res.json() as Promise<T>;
+    const text = await res.text();
+    if (!text) return undefined as T;
+    return JSON.parse(text) as T;
   }
 
   async createMachine(input: CreateMachineInput): Promise<FlyMachine> {

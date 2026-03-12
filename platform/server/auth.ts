@@ -32,7 +32,7 @@ export function getAuth(): Auth {
     _auth = betterAuth({
       secret,
       baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3458",
-      trustedOrigins: ["http://localhost:5175"],
+      trustedOrigins: (process.env.BETTER_AUTH_TRUSTED_ORIGINS || "http://localhost:5175").split(","),
       database: drizzleAdapter(getDb(), { provider: "pg" }),
       emailAndPassword: {
         enabled: true,

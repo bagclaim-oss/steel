@@ -20,6 +20,7 @@ export default function App() {
   const session = authClient.useSession();
   const [orgReady, setOrgReady] = useState(false);
   const [orgError, setOrgError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const onHashChange = () => setHash(window.location.hash);
@@ -70,7 +71,7 @@ export default function App() {
     })();
 
     return () => { cancelled = true; };
-  }, [session.data]);
+  }, [session.data, retryCount]);
 
   // Styled loading state while checking session.
   // If there's an error (e.g. auth server not configured), treat as unauthenticated.
@@ -99,7 +100,7 @@ export default function App() {
         <div className="flex flex-col items-center gap-4 text-center max-w-sm">
           <p className="text-cc-error text-sm">{orgError}</p>
           <button
-            onClick={() => { setOrgError(null); setOrgReady(false); }}
+            onClick={() => { setOrgError(null); setOrgReady(false); setRetryCount(c => c + 1); }}
             className="text-cc-primary text-xs hover:underline"
           >
             Retry

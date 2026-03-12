@@ -45,6 +45,7 @@ jobs:
 
             if [ ! -f "$SUMMARY" ]; then
               echo "::warning::$PROJECT coverage-summary.json not found."
+              FAIL=1
               return
             fi
 

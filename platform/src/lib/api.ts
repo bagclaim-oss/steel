@@ -17,11 +17,13 @@ async function request<T>(
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`API ${method} ${path} failed (${res.status}): ${text}`);
+    const errText = await res.text();
+    throw new Error(`API ${method} ${path} failed (${res.status}): ${errText}`);
   }
 
-  return res.json();
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }
 
 export const api = {

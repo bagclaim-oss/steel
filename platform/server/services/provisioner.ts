@@ -95,41 +95,48 @@ export class Provisioner {
       env.TAILSCALE_AUTH_KEY = input.tailscaleAuthKey;
     }
 
-    const machine = await this.machines.createMachine({
-      name: makeMachineName(input.hostname),
-      region: input.region,
-      config: {
-        image: this.companionImage,
-        guest: {
-          cpus: config.cpus,
-          memory_mb: config.memory_mb,
-          cpu_kind: config.cpu_kind,
+    let machine;
+    try {
+      machine = await this.machines.createMachine({
+        name: makeMachineName(input.hostname),
+        region: input.region,
+        config: {
+          image: this.companionImage,
+          guest: {
+            cpus: config.cpus,
+            memory_mb: config.memory_mb,
+            cpu_kind: config.cpu_kind,
+          },
+          env,
+          services: [
+            {
+              ports: [
+                { port: 443, handlers: ["tls", "http"] },
+                { port: 80, handlers: ["http"] },
+              ],
+              internal_port: 3456,
+              protocol: "tcp",
+              min_machines_running: 1,
+            },
+          ],
+          mounts: [
+            {
+              volume: volume.id,
+              path: "/data",
+            },
+          ],
+          auto_stop: "off",
+          auto_start: true,
         },
-        env,
-        services: [
-          {
-            ports: [
-              { port: 443, handlers: ["tls", "http"] },
-              { port: 80, handlers: ["http"] },
-            ],
-            internal_port: 3456,
-            protocol: "tcp",
-            min_machines_running: 1,
-          },
-        ],
-        mounts: [
-          {
-            volume: volume.id,
-            path: "/data",
-          },
-        ],
-        auto_stop: "off",
-        auto_start: true,
-      },
-    });
+      });
 
-    // Step 3: Wait for machine to be running
-    await this.machines.waitForState(machine.id, "started", 90_000);
+      // Step 3: Wait for machine to be running
+      await this.machines.waitForState(machine.id, "started", 90_000);
+    } catch (err) {
+      // Clean up the volume if machine creation/startup fails
+      try { await this.volumes.deleteVolume(volume.id); } catch {}
+      throw err;
+    }
 
     // TODO: Persist authSecret to the instances table in the database so the
     // control plane can reissue tokens later (e.g. for the /token endpoint).

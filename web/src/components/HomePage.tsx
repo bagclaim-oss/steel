@@ -25,7 +25,6 @@ import { readFileAsBase64, type ImageAttachment } from "../utils/image.js";
 import { LinearSection } from "./home/LinearSection.js";
 import { BranchPicker } from "./home/BranchPicker.js";
 import { MentionMenu } from "./MentionMenu.js";
-import { SandboxPickerModal } from "./SandboxPickerModal.js";
 import { useMentionMenu } from "../utils/use-mention-menu.js";
 import type { SavedPrompt } from "../api.js";
 import type { SdkSessionInfo } from "../types.js";
@@ -127,7 +126,8 @@ export function HomePage() {
   const [sandboxEnabled, setSandboxEnabled] = useState(() => localStorage.getItem("cc-sandbox-enabled") === "true");
   const [sandboxes, setSandboxes] = useState<CompanionSandbox[]>([]);
   const [selectedSandbox, setSelectedSandbox] = useState(() => localStorage.getItem("cc-selected-sandbox") || "");
-  const [showSandboxModal, setShowSandboxModal] = useState(false);
+  const [showSandboxDropdown, setShowSandboxDropdown] = useState(false);
+  const sandboxDropdownRef = useRef<HTMLDivElement>(null);
 
   // Sandbox image readiness
   const [sandboxImageState, setSandboxImageState] = useState<ImagePullState | null>(null);
@@ -298,6 +298,9 @@ export function HomePage() {
       }
       if (envDropdownRef.current && !envDropdownRef.current.contains(e.target as Node)) {
         setShowEnvDropdown(false);
+      }
+      if (sandboxDropdownRef.current && !sandboxDropdownRef.current.contains(e.target as Node)) {
+        setShowSandboxDropdown(false);
       }
     }
     document.addEventListener("pointerdown", handleClick);
@@ -1114,14 +1117,15 @@ export function HomePage() {
           </div>
 
           {/* Sandbox selector — only available for Claude Code backend */}
-          {backend === "claude" && <>
+          {backend === "claude" && <div className="relative" ref={sandboxDropdownRef}>
             <button
               onClick={() => {
-                if (sandboxes.length === 0) {
+                if (!showSandboxDropdown) {
                   api.listSandboxes().then(setSandboxes).catch(() => {});
                 }
-                setShowSandboxModal(true);
+                setShowSandboxDropdown(!showSandboxDropdown);
               }}
+              aria-expanded={showSandboxDropdown}
               className={`flex items-center gap-1.5 px-2.5 py-2 text-xs rounded-md transition-colors cursor-pointer ${
                 sandboxEnabled
                   ? "text-cc-primary bg-cc-primary/10 hover:bg-cc-primary/15"
@@ -1159,23 +1163,67 @@ export function HomePage() {
                 <path d="M4 6l4 4 4-4" />
               </svg>
             </button>
-            {showSandboxModal && (
-              <SandboxPickerModal
-                sandboxes={sandboxes}
-                selectedSandbox={selectedSandbox}
-                sandboxEnabled={sandboxEnabled}
-                onSelect={(slug) => {
-                  setSelectedSandbox(slug);
-                  localStorage.setItem("cc-selected-sandbox", slug);
-                }}
-                onToggle={(enabled) => {
-                  setSandboxEnabled(enabled);
-                  localStorage.setItem("cc-sandbox-enabled", String(enabled));
-                }}
-                onClose={() => setShowSandboxModal(false)}
-              />
+            {showSandboxDropdown && (
+              <div className="absolute left-0 bottom-full mb-1 w-56 bg-cc-card border border-cc-border rounded-[10px] shadow-lg z-10 py-1 overflow-hidden">
+                <button
+                  onClick={() => {
+                    setSandboxEnabled(false);
+                    localStorage.setItem("cc-sandbox-enabled", "false");
+                    setShowSandboxDropdown(false);
+                  }}
+                  className={`w-full px-3 py-2 text-xs text-left hover:bg-cc-hover transition-colors cursor-pointer ${
+                    !sandboxEnabled ? "text-cc-primary font-medium" : "text-cc-fg"
+                  }`}
+                >
+                  Off
+                </button>
+                <div className="border-t border-cc-border my-0.5" />
+                <button
+                  onClick={() => {
+                    setSandboxEnabled(true);
+                    localStorage.setItem("cc-sandbox-enabled", "true");
+                    setSelectedSandbox("");
+                    localStorage.setItem("cc-selected-sandbox", "");
+                    setShowSandboxDropdown(false);
+                  }}
+                  className={`w-full px-3 py-2 text-xs text-left hover:bg-cc-hover transition-colors cursor-pointer ${
+                    sandboxEnabled && !selectedSandbox ? "text-cc-primary font-medium" : "text-cc-fg"
+                  }`}
+                >
+                  Default (the-companion:latest)
+                </button>
+                {sandboxes.map((sb) => (
+                  <button
+                    key={sb.slug}
+                    onClick={() => {
+                      setSandboxEnabled(true);
+                      localStorage.setItem("cc-sandbox-enabled", "true");
+                      setSelectedSandbox(sb.slug);
+                      localStorage.setItem("cc-selected-sandbox", sb.slug);
+                      setShowSandboxDropdown(false);
+                    }}
+                    className={`w-full px-3 py-2 text-xs text-left hover:bg-cc-hover transition-colors cursor-pointer flex items-center gap-1 ${
+                      sandboxEnabled && sb.slug === selectedSandbox ? "text-cc-primary font-medium" : "text-cc-fg"
+                    }`}
+                  >
+                    <span className="truncate">{sb.name}</span>
+                    {sb.imageTag && (
+                      <span className="text-[10px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 ml-auto shrink-0">custom</span>
+                    )}
+                  </button>
+                ))}
+                <div className="border-t border-cc-border mt-1 pt-1">
+                  <a
+                    href="#/sandboxes"
+                    className="block w-full px-3 py-2 text-xs text-left text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
+                    onClick={() => setShowSandboxDropdown(false)}
+                  >
+                    Manage sandboxes...
+                  </a>
+                </div>
+              </div>
             )}
-          </>}
+          </div>}
 
           {/* Model selector */}
           <div className="relative" ref={modelDropdownRef}>

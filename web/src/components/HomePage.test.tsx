@@ -1324,7 +1324,7 @@ describe("HomePage", () => {
     });
 
     it("toggles sandbox enabled state on click", async () => {
-      // Clicking the sandbox button opens a modal; selecting "Default"
+      // Clicking the sandbox button opens a dropdown; selecting "Default"
       // enables sandbox and persists to localStorage.
       render(<HomePage />);
       await screen.findByLabelText("Task description");
@@ -1332,15 +1332,15 @@ describe("HomePage", () => {
       const sandboxBtn = screen.getByText("Sandbox").closest("button")!;
       await act(async () => { fireEvent.click(sandboxBtn); });
 
-      // Modal opens — select Default to enable sandbox
+      // Dropdown opens — select Default to enable sandbox
       const defaultOption = await screen.findByText("Default (the-companion:latest)");
       await act(async () => { fireEvent.click(defaultOption.closest("button")!); });
 
       expect(localStorage.getItem("cc-sandbox-enabled")).toBe("true");
     });
 
-    it("shows sandbox picker modal when clicked", async () => {
-      // Clicking the sandbox button should open a modal showing
+    it("shows sandbox dropdown when clicked", async () => {
+      // Clicking the sandbox button should open a dropdown showing
       // Off, Default, and available sandbox profiles.
       mockApi.listSandboxes.mockResolvedValue([
         { slug: "my-sandbox", name: "My Sandbox", createdAt: Date.now(), updatedAt: Date.now() },
@@ -1350,19 +1350,19 @@ describe("HomePage", () => {
       render(<HomePage />);
       await screen.findByLabelText("Task description");
 
-      // Click the sandbox button to open the modal
+      // Click the sandbox button to open the dropdown
       const sandboxBtn = screen.getByText("Sandbox").closest("button")!;
       await act(async () => { fireEvent.click(sandboxBtn); });
 
-      // The modal should show Off, Default, and our sandbox
+      // The dropdown should show Off, Default, and our sandbox
       await screen.findByText("Off");
       await screen.findByText("Default (the-companion:latest)");
       await screen.findByText("My Sandbox");
     });
 
-    it("selects a sandbox profile from the modal", async () => {
-      // Selecting a specific sandbox profile in the modal should update
-      // localStorage and close the modal.
+    it("selects a sandbox profile from the dropdown", async () => {
+      // Selecting a specific sandbox profile in the dropdown should update
+      // localStorage and close the dropdown.
       mockApi.listSandboxes.mockResolvedValue([
         { slug: "my-sandbox", name: "My Sandbox", createdAt: Date.now(), updatedAt: Date.now() },
       ]);
@@ -1371,7 +1371,7 @@ describe("HomePage", () => {
       render(<HomePage />);
       await screen.findByLabelText("Task description");
 
-      // Open sandbox modal
+      // Open sandbox dropdown
       const sandboxBtn = screen.getByText("Sandbox").closest("button")!;
       await act(async () => { fireEvent.click(sandboxBtn); });
 

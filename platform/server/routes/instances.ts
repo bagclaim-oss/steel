@@ -304,30 +304,40 @@ instances.post("/create-stream", async (c) => {
     });
 
   return streamSSE(c, async (stream) => {
+    // Track the last in-progress step so we can mark it as error on failure.
+    let activeStep: { step: string; label: string } | null = null;
+    // Track provisioned resources so we can clean up on DB-save failure.
+    let provisioned: Awaited<ReturnType<Provisioner["provision"]>> | null = null;
+
     try {
       // Step 1: Ensure Fly app
+      activeStep = { step: "ensuring_app", label: "Ensuring Fly app exists" };
       await emitProgress(stream, "ensuring_app", "Ensuring Fly app exists", "in_progress");
       const apps = getAppsClient();
       await apps.ensureAppExists(flyAppName);
       await apps.ensurePublicIps(flyAppName);
       await emitProgress(stream, "ensuring_app", "Ensuring Fly app exists", "done");
+      activeStep = null;
 
       // Step 2-4: Provision (volume, machine, wait) — progress emitted by provisioner
       const hostname = makeHostname(flyAppName, body.hostname);
       const loginUrl = resolveLoginUrl(c);
 
-      const provisioned = await provisioner.provision({
+      provisioned = await provisioner.provision({
         organizationId: orgId,
         plan,
         region,
         hostname,
         loginUrl,
         onProgress: (step, label, status) => {
+          if (status === "in_progress") activeStep = { step, label };
+          else if (status === "done") activeStep = null;
           void emitProgress(stream, step, label, status).catch(() => {});
         },
       });
 
       // Step 5: Save to DB
+      activeStep = { step: "saving_db", label: "Saving instance" };
       await emitProgress(stream, "saving_db", "Saving instance", "in_progress");
       const db = getDb();
       const [created] = await db
@@ -346,6 +356,7 @@ instances.post("/create-stream", async (c) => {
         })
         .returning();
       await emitProgress(stream, "saving_db", "Saving instance", "done");
+      activeStep = null;
 
       // Done
       await stream.writeSSE({
@@ -353,6 +364,20 @@ instances.post("/create-stream", async (c) => {
         data: JSON.stringify({ instance: sanitizeInstance(created) }),
       });
     } catch (err: any) {
+      // Mark the in-flight step as error so the UI stops spinning.
+      if (activeStep) {
+        await emitProgress(stream, activeStep.step, activeStep.label, "error").catch(() => {});
+      }
+
+      // Clean up orphaned Fly resources if provisioning succeeded but DB save failed.
+      if (provisioned) {
+        try {
+          await provisioner.deprovision(provisioned.flyMachineId, provisioned.flyVolumeId);
+        } catch {
+          // Best-effort cleanup — log but don't mask the original error.
+        }
+      }
+
       const message = err.message || "Instance creation failed";
       await stream.writeSSE({
         event: "error",

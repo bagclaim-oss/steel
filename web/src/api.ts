@@ -422,6 +422,7 @@ export interface AppSettings {
   aiValidationAutoDeny: boolean;
   publicUrl: string;
   updateChannel: "stable" | "prerelease";
+  dockerAutoUpdate: boolean;
 }
 
 export interface LinearConnectionSummary {
@@ -937,6 +938,7 @@ export const api = {
     editorTabEnabled?: boolean;
     publicUrl?: string;
     updateChannel?: "stable" | "prerelease";
+    dockerAutoUpdate?: boolean;
   }) => put<AppSettings>("/settings", data),
   verifyAnthropicKey: (apiKey: string) =>
     post<{ valid: boolean; error?: string }>("/settings/anthropic/verify", { apiKey }),

@@ -159,6 +159,8 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env.COMPANION_CODEX_TRANSPORT;
+  delete process.env.COMPANION_CODEX_WS_CONNECT_TIMEOUT_MS;
+  delete process.env.COMPANION_CODEX_PONG_TIMEOUT_MS;
   rmSync(tempDir, { recursive: true, force: true });
 });
 
@@ -932,9 +934,6 @@ describe("codex websocket launcher", () => {
     const [proxyCmd] = mockSpawn.mock.calls[1];
     expect(proxyCmd[3]).toBe("60000");
     expect(proxyCmd[4]).toBe("45000");
-
-    delete process.env.COMPANION_CODEX_WS_CONNECT_TIMEOUT_MS;
-    delete process.env.COMPANION_CODEX_PONG_TIMEOUT_MS;
   });
 
   it("relaunch kills the old codex process and ws proxy before spawning replacements", async () => {

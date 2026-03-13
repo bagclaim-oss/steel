@@ -130,7 +130,7 @@ export function WizardStepAgent({ onNext, onBack }: WizardStepAgentProps) {
             type="text"
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            placeholder={backend === "claude" ? "claude-sonnet-4-6 (default)" : "Leave empty for default"}
+            placeholder={`${getDefaultModel(backend)} (default)`}
             className={inputClass}
           />
         </div>

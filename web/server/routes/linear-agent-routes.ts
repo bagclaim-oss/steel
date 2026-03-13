@@ -71,8 +71,10 @@ export function registerLinearAgentWebhookRoute(
       return c.redirect("/#/settings/linear?oauth_error=invalid_state");
     }
 
-    // Determine redirect target — use returnTo from state if provided, otherwise default
-    const redirectBase = stateResult.returnTo || "/#/settings/linear";
+    // Determine redirect target — validate returnTo is a safe relative hash-router path
+    // to prevent open redirects (state passes through the browser and could be tampered with)
+    const rawReturnTo = stateResult.returnTo;
+    const redirectBase = (rawReturnTo && /^\/?#\//.test(rawReturnTo)) ? rawReturnTo : "/#/settings/linear";
 
     // Build redirect URI (must match what was sent in the authorize request)
     const settings = getSettings();

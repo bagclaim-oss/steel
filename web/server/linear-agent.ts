@@ -148,7 +148,21 @@ export interface AgentSessionEventPayload {
   guidance?: string | null;
   /** Present on "prompted" events — the user's follow-up activity */
   agentActivity?: {
+    id?: string;
+    /** Nested content with type and body */
+    content?: {
+      type?: string;
+      body?: string;
+    };
+    /** Direct body (legacy/alternative format) */
     body?: string;
+    sourceCommentId?: string;
+    userId?: string;
+    user?: {
+      id: string;
+      name: string;
+      email?: string;
+    };
   };
   webhookTimestamp?: number;
   webhookId?: string;

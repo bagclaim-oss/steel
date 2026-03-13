@@ -158,14 +158,14 @@ export class LinearAgentBridge {
   private async handlePrompted(payload: AgentSessionEventPayload): Promise<void> {
     const linearSessionId = payload.agentSession?.id;
 
-    console.log(`[linear-agent-bridge] Prompted event payload:`, JSON.stringify(payload, null, 2));
-
     // Extract follow-up message from multiple possible locations:
-    // 1. agentActivity.body — the activity/message from the user
-    // 2. agentSession.comment.body — the comment that triggered the follow-up
-    // 3. promptContext — the full XML context (last resort)
+    // 1. agentActivity.content.body — the nested content from the prompted activity
+    // 2. agentActivity.body — direct body (alternative format)
+    // 3. agentSession.comment.body — the comment that triggered the follow-up
+    // 4. promptContext — the full XML context (last resort)
     const message = (
-      payload.agentActivity?.body
+      payload.agentActivity?.content?.body
+      || payload.agentActivity?.body
       || payload.agentSession?.comment?.body
       || payload.promptContext
       || ""

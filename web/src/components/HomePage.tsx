@@ -257,8 +257,6 @@ export function HomePage() {
 
     if (!sandboxEnabled) return;
 
-    // Determine effective image
-    const sandbox = sandboxes.find((s) => s.slug === selectedSandbox);
     const effectiveImage = "the-companion:latest";
 
     const checkAndPull = () => {
@@ -285,7 +283,7 @@ export function HomePage() {
         sandboxImagePollRef.current = null;
       }
     };
-  }, [sandboxEnabled, selectedSandbox, sandboxes]);
+  }, [sandboxEnabled]);
 
   // Close dropdowns on outside click
   useEffect(() => {

@@ -537,8 +537,6 @@ describe("SandboxManager test init script flow", () => {
     // When testInitScript rejects with an error, the component should
     // display the error message as a test failure.
     mockTestInitScript.mockRejectedValue(new Error("Docker crashed"));
-    // Make updateSandbox resolve first (save before test)
-    mockUpdateSandbox.mockResolvedValue(makeSandbox());
     render(<SandboxManager embedded />);
     await screen.findByText("My Sandbox");
 
@@ -554,9 +552,10 @@ describe("SandboxManager test init script flow", () => {
     expect(screen.getByText("Docker crashed")).toBeInTheDocument();
   });
 
-  it("saves sandbox before testing init script", async () => {
-    // The test button should first save the current edits, then run the test.
-    // This ensures the backend tests the latest script content.
+  it("sends init script content directly without saving first", async () => {
+    // The test button should send the current (unsaved) init script content
+    // to the test endpoint without calling updateSandbox, so Cancel still
+    // discards edits.
     render(<SandboxManager embedded />);
     await screen.findByText("My Sandbox");
 
@@ -569,9 +568,10 @@ describe("SandboxManager test init script flow", () => {
     fireEvent.click(screen.getByRole("button", { name: /test init script/i }));
 
     await waitFor(() => {
-      // updateSandbox should be called first (save), then testInitScript
-      expect(mockUpdateSandbox).toHaveBeenCalled();
-      expect(mockTestInitScript).toHaveBeenCalledWith("my-sandbox", "/home/user/project");
+      // testInitScript should be called with the init script content
+      expect(mockTestInitScript).toHaveBeenCalledWith("my-sandbox", "/home/user/project", "bun install");
+      // updateSandbox should NOT be called — no silent save
+      expect(mockUpdateSandbox).not.toHaveBeenCalled();
     });
   });
 });

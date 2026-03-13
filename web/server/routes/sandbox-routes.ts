@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import type { Hono } from "hono";
 import * as sandboxManager from "../sandbox-manager.js";
 import { containerManager, type ContainerConfig } from "../container-manager.js";
@@ -57,18 +58,25 @@ export function registerSandboxRoutes(
     }
   });
 
-  // Test the init script of a sandbox in an ephemeral container
+  // Test the init script of a sandbox in an ephemeral container.
+  // Accepts an optional `initScript` body param to test unsaved content
+  // without persisting it first. Falls back to the stored script.
   api.post("/sandboxes/:slug/test-init", async (c) => {
     const slug = c.req.param("slug");
     const body = await c.req.json().catch(() => ({}));
-    const cwd = body.cwd;
+    const rawCwd = body.cwd;
 
     const sandbox = sandboxManager.getSandbox(slug);
     if (!sandbox) return c.json({ error: "Sandbox not found" }, 404);
 
-    const initScript = sandbox.initScript?.trim();
+    // Prefer body initScript (unsaved draft) over stored value
+    const initScript = (typeof body.initScript === "string" ? body.initScript : sandbox.initScript ?? "").trim();
     if (!initScript) return c.json({ error: "No init script configured for this sandbox" }, 400);
-    if (!cwd) return c.json({ error: "Working directory (cwd) is required" }, 400);
+    if (!rawCwd) return c.json({ error: "Working directory (cwd) is required" }, 400);
+
+    // Normalize path to collapse traversal sequences
+    const cwd = resolve(String(rawCwd));
+
     if (!containerManager.checkDocker()) return c.json({ error: "Docker is not available" }, 503);
 
     const effectiveImage = "the-companion:latest";
@@ -76,7 +84,7 @@ export function registerSandboxRoutes(
       return c.json({ error: `Docker image ${effectiveImage} is not available. Pull it first.` }, 503);
     }
 
-    const tempId = `test-${crypto.randomUUID().slice(0, 8)}`;
+    const tempId = `t${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
     let containerId: string | undefined;
 
     try {

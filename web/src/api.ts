@@ -901,10 +901,10 @@ export const api = {
     },
   ) => put<CompanionSandbox>(`/sandboxes/${encodeURIComponent(slug)}`, data),
   deleteSandbox: (slug: string) => del(`/sandboxes/${encodeURIComponent(slug)}`),
-  testInitScript: (slug: string, cwd: string) =>
+  testInitScript: (slug: string, cwd: string, initScript?: string) =>
     post<{ success: boolean; exitCode: number; output: string }>(
       `/sandboxes/${encodeURIComponent(slug)}/test-init`,
-      { cwd },
+      { cwd, initScript },
     ),
 
   buildBaseImage: () =>

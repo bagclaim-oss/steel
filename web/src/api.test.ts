@@ -817,16 +817,16 @@ describe("environment API", () => {
     expect(opts.method).toBe("DELETE");
   });
 
-  it("testInitScript sends POST to /api/sandboxes/:slug/test-init", async () => {
+  it("testInitScript sends POST to /api/sandboxes/:slug/test-init with initScript", async () => {
     const data = { success: true, exitCode: 0, output: "hello\n" };
     mockFetch.mockResolvedValueOnce(mockResponse(data));
 
-    const result = await api.testInitScript("my-sandbox", "/home/user/project");
+    const result = await api.testInitScript("my-sandbox", "/home/user/project", "echo hi");
 
     const [url, opts] = mockFetch.mock.calls[0];
     expect(url).toBe("/api/sandboxes/my-sandbox/test-init");
     expect(opts.method).toBe("POST");
-    expect(JSON.parse(opts.body)).toEqual({ cwd: "/home/user/project" });
+    expect(JSON.parse(opts.body)).toEqual({ cwd: "/home/user/project", initScript: "echo hi" });
     expect(result).toEqual(data);
   });
 

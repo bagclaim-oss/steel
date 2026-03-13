@@ -152,12 +152,9 @@ export function SandboxManager({ embedded = false }: Props) {
     setTestingSlug(slug);
     setTestResult(null);
     try {
-      // Save current edits first so the backend tests the latest script
-      await api.updateSandbox(slug, {
-        name: editName.trim() || undefined,
-        initScript: editInitScript || undefined,
-      });
-      const result = await api.testInitScript(slug, serverCwd);
+      // Send the current (possibly unsaved) init script content directly
+      // to the test endpoint — no save needed, so Cancel still discards edits.
+      const result = await api.testInitScript(slug, serverCwd, editInitScript);
       setTestResult(result);
     } catch (e: unknown) {
       setTestResult({

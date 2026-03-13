@@ -456,4 +456,58 @@ describe("POST /api/sandboxes/:slug/test-init", () => {
     // Container should be cleaned up even on error
     expect(containerManager.removeContainer).toHaveBeenCalled();
   });
+
+  it("uses body initScript over stored initScript when provided", async () => {
+    // The endpoint accepts an optional initScript body param so the frontend
+    // can test unsaved draft content without persisting first.
+    const sandbox = makeSandbox({ initScript: "stored script" });
+    vi.mocked(sandboxManager.getSandbox).mockReturnValue(sandbox as any);
+    vi.mocked(containerManager.checkDocker).mockReturnValue(true);
+    vi.mocked(imagePullManager.isReady).mockReturnValue(true);
+    vi.mocked(containerManager.execInContainerAsync).mockResolvedValue({
+      exitCode: 0,
+      output: "draft ok\n",
+    });
+
+    const res = await app.request("/api/sandboxes/my-sandbox/test-init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cwd: "/tmp", initScript: "echo draft" }),
+    });
+
+    expect(res.status).toBe(200);
+    // Should exec the body initScript, not the stored one
+    expect(containerManager.execInContainerAsync).toHaveBeenCalledWith(
+      "test-container-123",
+      ["sh", "-lc", "echo draft"],
+      expect.any(Object),
+    );
+  });
+
+  it("normalizes cwd to prevent path traversal", async () => {
+    // The cwd should be resolved to an absolute path to collapse
+    // traversal sequences like ../../etc.
+    const sandbox = makeSandbox({ initScript: "echo test" });
+    vi.mocked(sandboxManager.getSandbox).mockReturnValue(sandbox as any);
+    vi.mocked(containerManager.checkDocker).mockReturnValue(true);
+    vi.mocked(imagePullManager.isReady).mockReturnValue(true);
+    vi.mocked(containerManager.execInContainerAsync).mockResolvedValue({
+      exitCode: 0,
+      output: "ok\n",
+    });
+
+    const res = await app.request("/api/sandboxes/my-sandbox/test-init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cwd: "/home/user/../../../etc" }),
+    });
+
+    expect(res.status).toBe(200);
+    // The cwd passed to createContainer should be the resolved path
+    expect(containerManager.createContainer).toHaveBeenCalledWith(
+      expect.any(String),
+      "/etc",
+      expect.any(Object),
+    );
+  });
 });

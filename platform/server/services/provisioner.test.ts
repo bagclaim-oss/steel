@@ -371,4 +371,119 @@ describe("Provisioner", () => {
       expect(status).toBe("stopped");
     });
   });
+
+  // ── hetzner provider ────────────────────────────────────────────────
+
+  describe("hetzner provider", () => {
+    const HETZNER_BASE = "https://api.hetzner.cloud/v1";
+    let hetznerProvisioner: Provisioner;
+
+    beforeEach(() => {
+      let serverStatus = "running";
+      fetchMock.mockImplementation((url: string, opts: RequestInit) => {
+        const method = opts.method ?? "GET";
+
+        if (url === `${HETZNER_BASE}/volumes` && method === "POST") {
+          return Promise.resolve(okResponse({ volume: { id: 901, name: "companion_acme", size: 10 } }));
+        }
+        if (url === `${HETZNER_BASE}/servers` && method === "POST") {
+          return Promise.resolve(okResponse({
+            server: { id: 801, name: "companion-acme", status: "starting", public_net: { ipv4: { ip: "1.2.3.4" } } },
+            action: { id: 701, status: "running", command: "create_server" },
+          }));
+        }
+        if (url === `${HETZNER_BASE}/actions/701` && method === "GET") {
+          return Promise.resolve(okResponse({ action: { id: 701, status: "success", command: "create_server" } }));
+        }
+        if (url === `${HETZNER_BASE}/actions/702` && method === "GET") {
+          return Promise.resolve(okResponse({ action: { id: 702, status: "success", command: "poweron" } }));
+        }
+        if (url === `${HETZNER_BASE}/actions/703` && method === "GET") {
+          return Promise.resolve(okResponse({ action: { id: 703, status: "success", command: "poweroff" } }));
+        }
+        if (url === `${HETZNER_BASE}/actions/704` && method === "GET") {
+          return Promise.resolve(okResponse({ action: { id: 704, status: "success", command: "change_type" } }));
+        }
+        if (url === `${HETZNER_BASE}/servers/801` && method === "GET") {
+          return Promise.resolve(okResponse({
+            server: { id: 801, name: "companion-acme", status: serverStatus, public_net: { ipv4: { ip: "1.2.3.4" } } },
+          }));
+        }
+        if (url === `${HETZNER_BASE}/servers/801/actions/poweron` && method === "POST") {
+          serverStatus = "running";
+          return Promise.resolve(okResponse({ action: { id: 702, status: "success", command: "poweron" } }));
+        }
+        if (url === `${HETZNER_BASE}/servers/801/actions/poweroff` && method === "POST") {
+          serverStatus = "off";
+          return Promise.resolve(okResponse({ action: { id: 703, status: "success", command: "poweroff" } }));
+        }
+        if (url === `${HETZNER_BASE}/servers/801/actions/change_type` && method === "POST") {
+          serverStatus = "running";
+          return Promise.resolve(okResponse({ action: { id: 704, status: "success", command: "change_type" } }));
+        }
+        if (url === `${HETZNER_BASE}/servers/801` && method === "DELETE") {
+          return Promise.resolve(okResponse({}));
+        }
+        if (url === `${HETZNER_BASE}/volumes/901` && method === "DELETE") {
+          return Promise.resolve(okResponse({}));
+        }
+
+        return Promise.resolve(okResponse({}));
+      });
+
+      hetznerProvisioner = new Provisioner({
+        provider: "hetzner",
+        hetznerToken: "hcloud-token",
+        companionImage: "docker.io/stangirard/the-companion-server:latest",
+        hetznerServerTypes: {
+          starter: "cx22",
+          pro: "cx32",
+          enterprise: "cx42",
+        },
+      });
+    });
+
+    it("provisions volume + server and returns IDs for hetzner", async () => {
+      const result = await hetznerProvisioner.provision(baseInput({ hostname: "acme" }));
+      expect(result.flyMachineId).toBe("801");
+      expect(result.flyVolumeId).toBe("901");
+      expect(result.hostname).toBe("acme");
+
+      const serverCall = fetchMock.mock.calls.find((c: any[]) => c[0] === `${HETZNER_BASE}/servers`);
+      expect(serverCall).toBeTruthy();
+      const body = JSON.parse(serverCall![1].body);
+      expect(body.server_type).toBe("cx22");
+      expect(body.image).toBe("ubuntu-24.04");
+      expect(body.user_data).toContain("COMPANION_AUTH_SECRET=");
+      expect(body.user_data).toContain("docker.io/stangirard/the-companion-server:latest");
+    });
+
+    it("uses ipv4 as hostname fallback when hostname is empty", async () => {
+      const result = await hetznerProvisioner.provision(baseInput({ hostname: "" }));
+      expect(result.hostname).toBe("1.2.3.4");
+    });
+
+    it("supports start/stop/getStatus/resize for hetzner", async () => {
+      await expect(hetznerProvisioner.start("801")).resolves.toBeUndefined();
+      await expect(hetznerProvisioner.stop("801")).resolves.toBeUndefined();
+      await expect(hetznerProvisioner.resize("801", "pro")).resolves.toBeUndefined();
+      await expect(hetznerProvisioner.getStatus("801")).resolves.toBe("running");
+
+      const changeTypeCall = fetchMock.mock.calls.find(
+        (c: any[]) => c[0] === `${HETZNER_BASE}/servers/801/actions/change_type`,
+      );
+      expect(changeTypeCall).toBeTruthy();
+      const body = JSON.parse(changeTypeCall![1].body);
+      expect(body.server_type).toBe("cx32");
+    });
+
+    it("deprovisions server and volume for hetzner", async () => {
+      await expect(hetznerProvisioner.deprovision("801", "901")).resolves.toBeUndefined();
+
+      const methods = fetchMock.mock.calls.map((c: any[]) => `${c[1].method} ${c[0]}`);
+      expect(methods).toContain(`POST ${HETZNER_BASE}/servers/801/actions/poweroff`);
+      expect(methods).toContain(`DELETE ${HETZNER_BASE}/servers/801`);
+      expect(methods).toContain(`DELETE ${HETZNER_BASE}/volumes/901`);
+    });
+  });
 });

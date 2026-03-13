@@ -5,14 +5,19 @@
 // 2. Finds the right Companion agent to handle it
 // 3. Launches a CLI session via AgentExecutor
 // 4. Relays CLI output back to Linear as agent activities
+// 5. Relays TodoWrite → Linear plan checklist
+// 6. Periodically flushes intermediate progress as ephemeral thoughts
 
 import type { AgentExecutor } from "./agent-executor.js";
 import type { WsBridge } from "./ws-bridge.js";
 import type { BrowserIncomingMessage } from "./session-types.js";
 import * as agentStore from "./agent-store.js";
 import * as linearAgent from "./linear-agent.js";
-import type { AgentSessionEventPayload } from "./linear-agent.js";
+import type { AgentSessionEventPayload, AgentPlanItem } from "./linear-agent.js";
 import { getSettings } from "./settings-manager.js";
+
+/** Interval (ms) for flushing intermediate progress as ephemeral thoughts. */
+const PROGRESS_FLUSH_INTERVAL_MS = 30_000;
 
 /** Safely extract the content array from an assistant-type message. */
 function getAssistantContent(msg: BrowserIncomingMessage): unknown[] | null {
@@ -36,19 +41,89 @@ function extractTextFromAssistant(msg: BrowserIncomingMessage): string {
     .join("\n");
 }
 
-/** Extract all tool use blocks from assistant message content */
-function extractToolUses(msg: BrowserIncomingMessage): Array<{ name: string; input: string }> {
+/** Extract all tool use blocks from assistant message content (with raw input for plan extraction) */
+function extractToolUses(msg: BrowserIncomingMessage): Array<{ id?: string; name: string; input: string; rawInput?: Record<string, unknown> }> {
   const content = getAssistantContent(msg);
   if (!content) return [];
   return content
-    .filter((b): b is { type: string; name: string; input?: Record<string, unknown> } =>
+    .filter((b): b is { type: string; id?: string; name: string; input?: Record<string, unknown> } =>
       typeof b === "object" && b !== null
       && (b as Record<string, unknown>).type === "tool_use"
       && typeof (b as Record<string, unknown>).name === "string")
     .map((toolBlock) => ({
+      id: typeof toolBlock.id === "string" ? toolBlock.id : undefined,
       name: toolBlock.name,
       input: toolBlock.input ? JSON.stringify(toolBlock.input).slice(0, 200) : "",
+      rawInput: toolBlock.input,
     }));
+}
+
+/** Extract tool_result blocks from assistant message content. */
+function extractToolResults(msg: BrowserIncomingMessage): Array<{ tool_use_id: string; content: string }> {
+  const content = getAssistantContent(msg);
+  if (!content) return [];
+  return content
+    .filter((b): b is { type: string; tool_use_id: string; content?: unknown } =>
+      typeof b === "object" && b !== null
+      && (b as Record<string, unknown>).type === "tool_result"
+      && typeof (b as Record<string, unknown>).tool_use_id === "string")
+    .map((block) => ({
+      tool_use_id: block.tool_use_id,
+      content: typeof block.content === "string"
+        ? block.content.slice(0, 500)
+        : Array.isArray(block.content)
+          ? (block.content as Array<{ type?: string; text?: string }>)
+            .filter((c) => c.type === "text" && typeof c.text === "string")
+            .map((c) => c.text)
+            .join("\n")
+            .slice(0, 500)
+          : "",
+    }));
+}
+
+/** Map TodoWrite status values to Linear plan item status values. */
+function mapTodoStatus(status: string): AgentPlanItem["status"] {
+  if (status === "in_progress") return "inProgress";
+  if (status === "completed") return "completed";
+  if (status === "canceled") return "canceled";
+  return "pending";
+}
+
+/** Build an enriched prompt from the webhook payload's structured data. */
+export function buildPrompt(payload: AgentSessionEventPayload): string {
+  const parts: string[] = [];
+  const issue = payload.agentSession?.issue;
+  const comment = payload.agentSession?.comment;
+
+  if (issue) {
+    parts.push(`[Linear Issue ${issue.identifier}] ${issue.title}`);
+    parts.push(`URL: ${issue.url}`);
+    if (issue.description) {
+      parts.push(`\nDescription:\n${issue.description}`);
+    }
+  }
+
+  if (comment?.body) {
+    parts.push(`\nUser comment:\n${comment.body}`);
+  }
+
+  if (payload.previousComments?.length) {
+    const commentLines = payload.previousComments.map((c) => `- ${c.body}`).join("\n");
+    parts.push(`\nThread context (${payload.previousComments.length} previous comments):\n${commentLines}`);
+  }
+
+  if (payload.guidance) {
+    parts.push(`\nAgent guidance:\n${payload.guidance}`);
+  }
+
+  const promptContext = payload.promptContext ?? "";
+
+  // If we have structured context, prepend it before the XML prompt context
+  if (parts.length > 0) {
+    return parts.join("\n") + "\n\n---\n\n" + promptContext;
+  }
+
+  return promptContext;
 }
 
 export class LinearAgentBridge {
@@ -65,6 +140,19 @@ export class LinearAgentBridge {
   constructor(agentExecutor: AgentExecutor, wsBridge: WsBridge) {
     this.agentExecutor = agentExecutor;
     this.wsBridge = wsBridge;
+    this.restoreSessionMaps();
+  }
+
+  /** Restore Linear↔Companion session mappings from persisted session state. */
+  private restoreSessionMaps(): void {
+    const mappings = this.wsBridge.getLinearSessionMappings();
+    for (const { sessionId, linearSessionId } of mappings) {
+      this.sessionMap.set(linearSessionId, sessionId);
+      this.reverseMap.set(sessionId, linearSessionId);
+    }
+    if (mappings.length > 0) {
+      console.log(`[linear-agent-bridge] Restored ${mappings.length} session mapping(s) from disk`);
+    }
   }
 
   /** Handle an incoming AgentSessionEvent from Linear. */
@@ -79,7 +167,7 @@ export class LinearAgentBridge {
   /** Handle a new agent session (user mentioned or assigned the agent). */
   private async handleCreated(payload: AgentSessionEventPayload): Promise<void> {
     const linearSessionId = payload.agentSession?.id;
-    const promptContext = payload.promptContext ?? "";
+    const enrichedPrompt = buildPrompt(payload);
 
     if (!linearSessionId) {
       console.error("[linear-agent-bridge] No session ID found in payload:", JSON.stringify(payload));
@@ -105,9 +193,9 @@ export class LinearAgentBridge {
       return;
     }
 
-    // 3. Launch the CLI session
+    // 3. Launch the CLI session with enriched prompt
     try {
-      const sessionInfo = await this.agentExecutor.executeAgent(agent.id, promptContext, {
+      const sessionInfo = await this.agentExecutor.executeAgent(agent.id, enrichedPrompt, {
         force: true,
         triggerType: "linear",
       });
@@ -127,9 +215,10 @@ export class LinearAgentBridge {
 
       const companionSessionId = sessionInfo.sessionId;
 
-      // 4. Map sessions
+      // 4. Map sessions and persist
       this.sessionMap.set(linearSessionId, companionSessionId);
       this.reverseMap.set(companionSessionId, linearSessionId);
+      this.wsBridge.setLinearSessionId(companionSessionId, linearSessionId);
 
       // 5. Set external URL linking back to Companion
       const settings = getSettings();
@@ -235,6 +324,8 @@ export class LinearAgentBridge {
 
     const cleanups: Array<() => void> = [];
     let pendingText = "";
+    // Track pending tool uses by ID so we can post results when they come back
+    const pendingToolUseIds = new Map<string, string>(); // tool_use_id → tool name
 
     // Relay assistant messages → Linear activities
     const unsubAssistant = this.wsBridge.onAssistantMessageForSession(companionSessionId, (msg) => {
@@ -245,15 +336,70 @@ export class LinearAgentBridge {
 
       // Relay all tool use blocks as action activities (supports parallel tool calls)
       for (const tool of extractToolUses(msg)) {
+        // Track tool use IDs for result matching (id is on the block itself)
+        if (tool.id) {
+          pendingToolUseIds.set(tool.id, tool.name);
+        }
+
         linearAgent.postActivity(linearSessionId, {
           type: "action",
           action: tool.name,
           parameter: tool.input || undefined,
           ephemeral: true,
         }).catch((err) => console.error("[linear-agent-bridge] Failed to post action:", err));
+
+        // Relay TodoWrite → Linear plan checklist
+        if (tool.name === "TodoWrite" && tool.rawInput) {
+          const todos = (tool.rawInput as { todos?: unknown[] }).todos;
+          if (Array.isArray(todos)) {
+            const planItems: AgentPlanItem[] = todos
+              .filter((t): t is { content: string; status: string } =>
+                typeof t === "object" && t !== null
+                && typeof (t as Record<string, unknown>).content === "string"
+                && typeof (t as Record<string, unknown>).status === "string")
+              .map((t) => ({
+                content: t.content,
+                status: mapTodoStatus(t.status),
+              }));
+            if (planItems.length > 0) {
+              linearAgent.updateSessionPlan(linearSessionId, planItems)
+                .catch((err) => console.error("[linear-agent-bridge] Failed to update plan:", err));
+            }
+          }
+        }
+      }
+
+      // Relay tool results back to Linear as action activities with result field
+      for (const result of extractToolResults(msg)) {
+        const toolName = pendingToolUseIds.get(result.tool_use_id);
+        if (toolName && result.content) {
+          pendingToolUseIds.delete(result.tool_use_id);
+          linearAgent.postActivity(linearSessionId, {
+            type: "action",
+            action: toolName,
+            result: result.content,
+            ephemeral: true,
+          }).catch((err) => console.error("[linear-agent-bridge] Failed to post tool result:", err));
+        }
       }
     });
     cleanups.push(unsubAssistant);
+
+    // Intermediate progress flush — post accumulated text as ephemeral thoughts
+    // every PROGRESS_FLUSH_INTERVAL_MS so Linear doesn't look stalled.
+    let lastFlushedLength = 0;
+    const progressTimer = setInterval(() => {
+      if (pendingText.length > lastFlushedLength) {
+        const newText = pendingText.slice(lastFlushedLength);
+        lastFlushedLength = pendingText.length;
+        linearAgent.postActivity(linearSessionId, {
+          type: "thought",
+          body: newText.slice(0, 2000),
+          ephemeral: true,
+        }).catch((err) => console.error("[linear-agent-bridge] Failed to post progress:", err));
+      }
+    }, PROGRESS_FLUSH_INTERVAL_MS);
+    cleanups.push(() => clearInterval(progressTimer));
 
     // Relay turn completion → post accumulated text as a response activity.
     // Do NOT clean up session mappings or relay — the Linear agent session
@@ -269,6 +415,7 @@ export class LinearAgentBridge {
           console.error("[linear-agent-bridge] Failed to post response:", err);
         }
         pendingText = "";
+        lastFlushedLength = 0;
       }
     });
     cleanups.push(unsubResult);

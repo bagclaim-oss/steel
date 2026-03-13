@@ -17,11 +17,17 @@ export function DockerUpdateDialog() {
   const [pullState, setPullState] = useState<ImagePullState | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Load the current dockerAutoUpdate setting on open
+  // Load the current dockerAutoUpdate setting on open.
+  // If the user has opted into auto-updates, skip the prompt and start pulling immediately.
   useEffect(() => {
     if (!open) return;
     api.getSettings()
-      .then((s) => setAlwaysUpdate(s.dockerAutoUpdate))
+      .then((s) => {
+        setAlwaysUpdate(s.dockerAutoUpdate);
+        if (s.dockerAutoUpdate) {
+          triggerPull();
+        }
+      })
       .catch(() => {});
   }, [open]);
 
@@ -58,13 +64,20 @@ export function DockerUpdateDialog() {
 
   if (!open) return null;
 
-  function handleUpdate() {
+  function triggerPull() {
     setPhase("pulling");
     api.pullImage("the-companion:latest")
       .then((res) => {
         if (res.state) setPullState(res.state);
       })
-      .catch(() => setPhase("error"));
+      .catch(() => {
+        // Only transition to error if polling hasn't already moved us past "pulling"
+        setPhase((current) => (current === "pulling" ? "error" : current));
+      });
+  }
+
+  function handleUpdate() {
+    triggerPull();
   }
 
   function handleSkip() {

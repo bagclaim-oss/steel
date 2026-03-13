@@ -148,8 +148,26 @@ describe("DockerUpdateDialog", () => {
     expect(mockedApi.updateSettings).toHaveBeenCalledWith({ dockerAutoUpdate: true });
   });
 
+  it("auto-triggers pull when dockerAutoUpdate is already enabled", async () => {
+    // When dockerAutoUpdate is true, the dialog should skip the prompt
+    // and go straight to the pulling phase
+    mockedApi.getSettings.mockResolvedValue({ dockerAutoUpdate: true });
+    useStore.getState().setDockerUpdateDialogOpen(true);
+
+    render(<DockerUpdateDialog />);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+
+    // Should have started pulling automatically without user interaction
+    expect(mockedApi.pullImage).toHaveBeenCalledWith("the-companion:latest");
+    expect(screen.getByText("Updating Sandbox Image...")).toBeTruthy();
+  });
+
   it("shows done phase when pull completes successfully", async () => {
     // After a successful pull, dialog should show the success state
+    mockedApi.getSettings.mockResolvedValue({ dockerAutoUpdate: false });
     mockedApi.getImageStatus.mockResolvedValue({
       image: "the-companion:latest",
       status: "ready",
@@ -180,6 +198,7 @@ describe("DockerUpdateDialog", () => {
 
   it("shows error phase when pull fails", async () => {
     // Error state should be shown with a retry option
+    mockedApi.getSettings.mockResolvedValue({ dockerAutoUpdate: false });
     mockedApi.getImageStatus.mockResolvedValue({
       image: "the-companion:latest",
       status: "error",
@@ -213,6 +232,7 @@ describe("DockerUpdateDialog", () => {
 
   it("closes dialog when Done is clicked after successful pull", async () => {
     // Done button in the success state should close the dialog
+    mockedApi.getSettings.mockResolvedValue({ dockerAutoUpdate: false });
     mockedApi.getImageStatus.mockResolvedValue({
       image: "the-companion:latest",
       status: "ready",

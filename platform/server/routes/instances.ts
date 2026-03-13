@@ -113,6 +113,18 @@ function sanitizeInstance(row: Record<string, unknown>) {
   return safe;
 }
 
+function resolveAuthMode(row: { config?: unknown }): "managed_jwt" | "static_token" {
+  const cfg = row.config;
+  if (cfg && typeof cfg === "object") {
+    const mode = (cfg as Record<string, unknown>).authMode;
+    if (mode === "static_token" || mode === "managed_jwt") {
+      return mode;
+    }
+  }
+  // Backward-compatible default for existing instances created before authMode tracking.
+  return "managed_jwt";
+}
+
 instances.get("/", async (c) => {
   const orgId = c.get("organizationId");
   const userId = c.get("auth").userId;
@@ -178,7 +190,7 @@ instances.post("/", async (c) => {
       hostname: provisioned.hostname,
       machineStatus: "started",
       authSecret: provisioned.authSecret,
-      config: { plan, provider: "hetzner" },
+      config: { plan, provider: "hetzner", authMode: "static_token" },
     })
     .returning();
 
@@ -261,7 +273,7 @@ instances.post("/create-stream", async (c) => {
           hostname: provisioned.hostname,
           machineStatus: "started",
           authSecret: provisioned.authSecret,
-          config: { plan, provider: "hetzner" },
+          config: { plan, provider: "hetzner", authMode: "static_token" },
         })
         .returning();
       provisioned = null;
@@ -410,7 +422,10 @@ instances.post("/:id/scale", async (c) => {
   const db = getDb();
   await db
     .update(instancesTable)
-    .set({ machineStatus: "started", config: { ...currentConfig, plan, provider: "hetzner" } })
+    .set({
+      machineStatus: "started",
+      config: { ...currentConfig, plan, provider: "hetzner", authMode: currentConfig.authMode || "static_token" },
+    })
     .where(eq(instancesTable.id, id));
 
   return c.json({ id, message: "Scaled", plan });
@@ -424,7 +439,10 @@ instances.post("/:id/token", async (c) => {
   const row = await getAuthorizedInstance(id, orgId, userId);
   if (!row) return c.json({ error: "Instance not found" }, 404);
 
-  const token = await createInstanceToken(row.authSecret);
+  const token =
+    resolveAuthMode(row) === "static_token"
+      ? row.authSecret
+      : await createInstanceToken(row.authSecret);
   return c.json({ id, token });
 });
 
@@ -442,7 +460,10 @@ instances.get("/:id/embed", async (c) => {
   const row = await getAuthorizedInstance(id, orgId, userId);
   if (!row) return c.json({ error: "Instance not found" }, 404);
 
-  const token = await createInstanceToken(row.authSecret);
+  const token =
+    resolveAuthMode(row) === "static_token"
+      ? row.authSecret
+      : await createInstanceToken(row.authSecret);
   const isIpv4 = /^[0-9]{1,3}(?:\.[0-9]{1,3}){3}$/.test(row.hostname || "");
   const protocol = isIpv4 ? "http" : "https";
   const url = new URL(`${protocol}://${row.hostname}`);

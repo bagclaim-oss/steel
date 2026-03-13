@@ -123,7 +123,7 @@ describe("instances routes (hetzner)", () => {
       expect.objectContaining({
         providerMachineId: "srv-123",
         providerVolumeId: "vol-123",
-        config: { plan: "starter", provider: "hetzner" },
+        config: { plan: "starter", provider: "hetzner", authMode: "static_token" },
       }),
     );
   });

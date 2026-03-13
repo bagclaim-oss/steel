@@ -259,7 +259,7 @@ export function HomePage() {
 
     // Determine effective image
     const sandbox = sandboxes.find((s) => s.slug === selectedSandbox);
-    const effectiveImage = sandbox?.imageTag || "the-companion:latest";
+    const effectiveImage = "the-companion:latest";
 
     const checkAndPull = () => {
       api.getImageStatus(effectiveImage).then((state) => {
@@ -1207,9 +1207,6 @@ export function HomePage() {
                     }`}
                   >
                     <span className="truncate">{sb.name}</span>
-                    {sb.imageTag && (
-                      <span className="text-[10px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 ml-auto shrink-0">custom</span>
-                    )}
                   </button>
                 ))}
                 <div className="border-t border-cc-border mt-1 pt-1">

@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import * as sandboxManager from "../sandbox-manager.js";
-import { containerManager } from "../container-manager.js";
+import { containerManager, type ContainerConfig } from "../container-manager.js";
+import { imagePullManager } from "../image-pull-manager.js";
 
 export function registerSandboxRoutes(
   api: Hono,
@@ -23,7 +24,6 @@ export function registerSandboxRoutes(
     const body = await c.req.json().catch(() => ({}));
     try {
       const sandbox = sandboxManager.createSandbox(body.name, {
-        dockerfile: body.dockerfile,
         initScript: body.initScript,
       });
       return c.json(sandbox, 201);
@@ -38,9 +38,7 @@ export function registerSandboxRoutes(
     try {
       const sandbox = sandboxManager.updateSandbox(slug, {
         name: body.name,
-        dockerfile: body.dockerfile,
         initScript: body.initScript,
-        imageTag: body.imageTag,
       });
       if (!sandbox) return c.json({ error: "Sandbox not found" }, 404);
       return c.json(sandbox);
@@ -59,40 +57,57 @@ export function registerSandboxRoutes(
     }
   });
 
-  api.post("/sandboxes/:slug/build", async (c) => {
+  // Test the init script of a sandbox in an ephemeral container
+  api.post("/sandboxes/:slug/test-init", async (c) => {
     const slug = c.req.param("slug");
+    const body = await c.req.json().catch(() => ({}));
+    const cwd = body.cwd;
+
     const sandbox = sandboxManager.getSandbox(slug);
     if (!sandbox) return c.json({ error: "Sandbox not found" }, 404);
-    if (!sandbox.dockerfile) return c.json({ error: "No Dockerfile configured for this sandbox" }, 400);
+
+    const initScript = sandbox.initScript?.trim();
+    if (!initScript) return c.json({ error: "No init script configured for this sandbox" }, 400);
+    if (!cwd) return c.json({ error: "Working directory (cwd) is required" }, 400);
     if (!containerManager.checkDocker()) return c.json({ error: "Docker is not available" }, 503);
 
-    const tag = `companion-sandbox-${slug}:latest`;
-    sandboxManager.updateBuildStatus(slug, "building");
+    const effectiveImage = "the-companion:latest";
+    if (!imagePullManager.isReady(effectiveImage)) {
+      return c.json({ error: `Docker image ${effectiveImage} is not available. Pull it first.` }, 503);
+    }
+
+    const tempId = `test-${crypto.randomUUID().slice(0, 8)}`;
+    let containerId: string | undefined;
 
     try {
-      const result = await containerManager.buildImageStreaming(sandbox.dockerfile, tag);
-      if (result.success) {
-        sandboxManager.updateBuildStatus(slug, "success", { imageTag: tag });
-        return c.json({ success: true, imageTag: tag, log: result.log });
-      } else {
-        sandboxManager.updateBuildStatus(slug, "error", { error: result.log.slice(-500) });
-        return c.json({ success: false, log: result.log }, 500);
-      }
+      const config: ContainerConfig = {
+        image: effectiveImage,
+        ports: [],
+      };
+      const containerInfo = containerManager.createContainer(tempId, cwd, config);
+      containerId = containerInfo.containerId;
+
+      await containerManager.copyWorkspaceToContainer(containerId, cwd);
+
+      const initTimeout = Number(process.env.COMPANION_INIT_SCRIPT_TIMEOUT) || 120_000;
+      const result = await containerManager.execInContainerAsync(
+        containerId,
+        ["sh", "-lc", initScript],
+        { timeout: initTimeout },
+      );
+
+      return c.json({
+        success: result.exitCode === 0,
+        exitCode: result.exitCode,
+        output: result.output,
+      });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      sandboxManager.updateBuildStatus(slug, "error", { error: msg });
-      return c.json({ success: false, error: msg }, 500);
+      return c.json({ success: false, exitCode: -1, output: msg }, 500);
+    } finally {
+      if (containerId) {
+        try { containerManager.removeContainer(tempId); } catch { /* best effort cleanup */ }
+      }
     }
-  });
-
-  api.get("/sandboxes/:slug/build-status", (c) => {
-    const sandbox = sandboxManager.getSandbox(c.req.param("slug"));
-    if (!sandbox) return c.json({ error: "Sandbox not found" }, 404);
-    return c.json({
-      buildStatus: sandbox.buildStatus || "idle",
-      buildError: sandbox.buildError,
-      lastBuiltAt: sandbox.lastBuiltAt,
-      imageTag: sandbox.imageTag,
-    });
   });
 }

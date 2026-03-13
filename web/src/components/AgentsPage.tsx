@@ -5,6 +5,13 @@ import { FolderPicker } from "./FolderPicker.js";
 import { timeAgo } from "../utils/time-ago.js";
 import { useStore } from "../store.js";
 import { PublicUrlBanner } from "./PublicUrlBanner.js";
+import { WizardStepIndicator } from "./wizard/WizardStepIndicator.js";
+import { WizardStepIntro } from "./wizard/WizardStepIntro.js";
+import { WizardStepCredentials } from "./wizard/WizardStepCredentials.js";
+import { WizardStepInstall } from "./wizard/WizardStepInstall.js";
+import { WizardStepAgent } from "./wizard/WizardStepAgent.js";
+import { WizardStepDone } from "./wizard/WizardStepDone.js";
+import { LinearLogo } from "./LinearLogo.js";
 import type { Route } from "../utils/routing.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -197,7 +204,7 @@ export function AgentsPage({ route }: Props) {
   const publicUrl = useStore((s) => s.publicUrl);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"list" | "edit">("list");
+  const [view, setView] = useState<"list" | "edit" | "setup-linear">("list");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<AgentFormData>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -208,9 +215,39 @@ export function AgentsPage({ route }: Props) {
   const [linearOAuthConfigured, setLinearOAuthConfigured] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Linear wizard state ──
+  type WizardStep = 1 | 2 | 3 | 4 | 5;
+  const WIZARD_STEPS = [
+    { label: "Intro" },
+    { label: "Credentials" },
+    { label: "Install" },
+    { label: "Agent" },
+    { label: "Done" },
+  ];
+  const WIZARD_STORAGE_KEY = "companion_linear_wizard_state";
+
+  const [wizardStep, setWizardStep] = useState<WizardStep>(1);
+  const [wizardCredentialsSaved, setWizardCredentialsSaved] = useState(false);
+  const [wizardOauthConnected, setWizardOauthConnected] = useState(false);
+  const [wizardOauthError, setWizardOauthError] = useState("");
+  const [wizardAgentName, setWizardAgentName] = useState("");
+  const [wizardCreatedAgentId, setWizardCreatedAgentId] = useState<string | null>(null);
+  const [wizardLoading, setWizardLoading] = useState(false);
+
   // Check if Linear OAuth is configured (for Agent SDK trigger visibility)
   useEffect(() => {
     api.getLinearOAuthStatus().then((s) => setLinearOAuthConfigured(s.configured)).catch(() => {});
+  }, []);
+
+  // Check hash for wizard entry params (OAuth return or IntegrationsPage link)
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes("oauth_success=true") || hash.includes("oauth_error=") || hash.includes("setup=linear")) {
+      startLinearSetup();
+      // Clean hash params after reading
+      window.location.hash = "#/agents";
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load agents
@@ -286,6 +323,122 @@ export function AgentsPage({ route }: Props) {
     setError("");
     window.location.hash = "#/agents";
   }
+
+  // ── Linear wizard helpers ──
+
+  function startLinearSetup() {
+    setWizardLoading(true);
+    setView("setup-linear");
+
+    // Read hash params before they're cleaned
+    const hash = window.location.hash;
+    let oauthSuccess = false;
+    let oauthErr = "";
+    if (hash.includes("oauth_success=true")) {
+      oauthSuccess = true;
+    } else if (hash.includes("oauth_error=")) {
+      const match = hash.match(/oauth_error=([^&]*)/);
+      try {
+        oauthErr = decodeURIComponent(match?.[1] || "OAuth failed");
+      } catch {
+        oauthErr = match?.[1] || "OAuth failed";
+      }
+    }
+
+    // Check server OAuth status + determine starting step
+    api.getLinearOAuthStatus().then((serverStatus) => {
+      const isConnected = oauthSuccess || serverStatus.hasAccessToken;
+      const hasCreds = serverStatus.configured || (serverStatus.hasClientId && serverStatus.hasClientSecret);
+
+      setWizardOauthConnected(isConnected);
+      setWizardCredentialsSaved(hasCreds);
+      if (oauthErr) setWizardOauthError(oauthErr);
+      if (isConnected) setLinearOAuthConfigured(true);
+
+      // Restore persisted state from sessionStorage (for OAuth redirect return)
+      let persisted: { step: WizardStep; agentName: string; createdAgentId: string | null } | null = null;
+      try {
+        const raw = sessionStorage.getItem(WIZARD_STORAGE_KEY);
+        if (raw) persisted = JSON.parse(raw);
+      } catch { /* ignore */ }
+
+      if (persisted) {
+        if (isConnected && persisted.step <= 3) {
+          setWizardStep(4);
+        } else {
+          setWizardStep(persisted.step);
+        }
+        if (persisted.agentName) setWizardAgentName(persisted.agentName);
+        if (persisted.createdAgentId) setWizardCreatedAgentId(persisted.createdAgentId);
+        try { sessionStorage.removeItem(WIZARD_STORAGE_KEY); } catch { /* ignore */ }
+      } else {
+        if (isConnected) {
+          setWizardStep(4);
+        } else if (hasCreds) {
+          setWizardStep(3);
+        } else {
+          setWizardStep(1);
+        }
+      }
+
+      setWizardLoading(false);
+    }).catch(() => {
+      setWizardLoading(false);
+    });
+  }
+
+  function cancelLinearSetup() {
+    setView("list");
+    setWizardStep(1);
+    setWizardCredentialsSaved(false);
+    setWizardOauthConnected(false);
+    setWizardOauthError("");
+    setWizardAgentName("");
+    setWizardCreatedAgentId(null);
+    try { sessionStorage.removeItem(WIZARD_STORAGE_KEY); } catch { /* ignore */ }
+  }
+
+  const wizardCompletedSteps = new Set<number>();
+  if (wizardCredentialsSaved || wizardOauthConnected) {
+    wizardCompletedSteps.add(1);
+    wizardCompletedSteps.add(2);
+  }
+  if (wizardOauthConnected) {
+    wizardCompletedSteps.add(3);
+  }
+  if (wizardCreatedAgentId) {
+    wizardCompletedSteps.add(4);
+  }
+
+  const handleWizardBeforeRedirect = useCallback(() => {
+    try {
+      sessionStorage.setItem(WIZARD_STORAGE_KEY, JSON.stringify({
+        step: 3,
+        credentialsSaved: wizardCredentialsSaved,
+        oauthConnected: wizardOauthConnected,
+        agentName: wizardAgentName,
+        createdAgentId: wizardCreatedAgentId,
+      }));
+    } catch { /* ignore */ }
+  }, [wizardCredentialsSaved, wizardOauthConnected, wizardAgentName, wizardCreatedAgentId]);
+
+  const handleWizardAgentCreated = useCallback((id: string, name: string) => {
+    setWizardCreatedAgentId(id);
+    setWizardAgentName(name);
+    setWizardStep(5);
+  }, []);
+
+  const handleWizardFinish = useCallback(() => {
+    try { sessionStorage.removeItem(WIZARD_STORAGE_KEY); } catch { /* ignore */ }
+    setView("list");
+    setWizardStep(1);
+    setWizardCredentialsSaved(false);
+    setWizardOauthConnected(false);
+    setWizardOauthError("");
+    setWizardAgentName("");
+    setWizardCreatedAgentId(null);
+    loadAgents();
+  }, [loadAgents]);
 
   async function handleSave() {
     setSaving(true);
@@ -448,6 +601,79 @@ export function AgentsPage({ route }: Props) {
     />;
   }
 
+  if (view === "setup-linear") {
+    if (wizardLoading) {
+      return (
+        <div className="h-full flex items-center justify-center bg-cc-bg">
+          <div className="text-sm text-cc-muted">Loading...</div>
+        </div>
+      );
+    }
+
+    return (
+      <main className="h-full overflow-y-auto bg-cc-bg">
+        <div className="max-w-3xl mx-auto px-4 sm:px-8 py-6 sm:py-10">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <LinearLogo className="w-6 h-6 text-cc-fg" />
+              <h1 className="text-xl font-semibold text-cc-fg">Linear Agent Setup</h1>
+            </div>
+            <button
+              onClick={cancelLinearSetup}
+              className="px-3 py-2 rounded-lg text-sm text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+
+          {/* Step indicator */}
+          <WizardStepIndicator
+            steps={WIZARD_STEPS}
+            currentStep={wizardStep}
+            completedSteps={wizardCompletedSteps}
+          />
+
+          {/* Step content */}
+          <div className="bg-cc-card border border-cc-border rounded-xl p-5 sm:p-7">
+            {wizardStep === 1 && (
+              <WizardStepIntro onNext={() => setWizardStep(2)} />
+            )}
+            {wizardStep === 2 && (
+              <WizardStepCredentials
+                onNext={() => setWizardStep(3)}
+                onBack={() => setWizardStep(1)}
+                credentialsSaved={wizardCredentialsSaved}
+                onCredentialsSaved={() => setWizardCredentialsSaved(true)}
+              />
+            )}
+            {wizardStep === 3 && (
+              <WizardStepInstall
+                onNext={() => setWizardStep(4)}
+                onBack={() => setWizardStep(2)}
+                oauthConnected={wizardOauthConnected}
+                oauthError={wizardOauthError}
+                onBeforeRedirect={handleWizardBeforeRedirect}
+              />
+            )}
+            {wizardStep === 4 && (
+              <WizardStepAgent
+                onNext={handleWizardAgentCreated}
+                onBack={() => setWizardStep(3)}
+              />
+            )}
+            {wizardStep === 5 && (
+              <WizardStepDone
+                agentName={wizardAgentName}
+                onFinish={handleWizardFinish}
+              />
+            )}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <div className="h-full overflow-y-auto bg-cc-bg">
       <div className="max-w-4xl mx-auto p-6">
@@ -465,6 +691,13 @@ export function AgentsPage({ route }: Props) {
               onChange={handleImport}
               className="hidden"
             />
+            <button
+              onClick={startLinearSetup}
+              className="px-3 py-1.5 text-xs rounded-lg border border-cc-border text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <LinearLogo className="w-3 h-3" />
+              Setup Linear Agent
+            </button>
             <button
               onClick={() => fileInputRef.current?.click()}
               className="px-3 py-1.5 text-xs rounded-lg border border-cc-border text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
@@ -1223,7 +1456,7 @@ function AgentEditor({
             {form.linearEnabled && (
               <p className="text-[10px] text-cc-muted mt-2">
                 This agent will respond to @mentions in Linear via the Agent Interaction SDK. Configure the OAuth app via the{" "}
-                <a href="#/setup/linear-agent" className="text-cc-primary underline">Linear Agent setup wizard</a>.
+                <a href="#/agents?setup=linear" className="text-cc-primary underline">Linear Agent setup wizard</a>.
               </p>
             )}
 

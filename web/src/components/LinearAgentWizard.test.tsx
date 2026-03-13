@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /**
- * Tests for the LinearAgentWizard component.
+ * Tests for the Linear Agent setup wizard integrated into AgentsPage.
  *
  * Validates:
+ * - Wizard entry via "Setup Linear Agent" button
  * - Rendering with step indicator across all wizard steps
  * - Accessibility (axe scan)
  * - Step navigation (Next/Back buttons)
@@ -12,39 +13,56 @@
  * - Agent creation with correct payload (Linear trigger enabled)
  * - sessionStorage persistence across OAuth redirect
  * - Error handling for API failures
+ * - Cancel returns to agent list
+ * - Finish refreshes agent list
  */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
 // ─── Mock state ──────────────────────────────────────────────────────────────
 
-interface MockStoreState {
-  publicUrl: string;
-}
-
-let mockState: MockStoreState;
+let mockPublicUrl = "";
 
 const mockApi = {
+  listAgents: vi.fn(),
+  createAgent: vi.fn(),
+  updateAgent: vi.fn(),
+  deleteAgent: vi.fn(),
+  toggleAgent: vi.fn(),
+  runAgent: vi.fn(),
+  exportAgent: vi.fn(),
+  importAgent: vi.fn(),
+  regenerateAgentWebhookSecret: vi.fn(),
+  listSkills: vi.fn(),
+  listEnvs: vi.fn(),
   getLinearOAuthStatus: vi.fn(),
   getLinearOAuthAuthorizeUrl: vi.fn(),
   updateSettings: vi.fn(),
-  createAgent: vi.fn(),
 };
 
 vi.mock("../api.js", () => ({
   api: {
+    listAgents: (...args: unknown[]) => mockApi.listAgents(...args),
+    createAgent: (...args: unknown[]) => mockApi.createAgent(...args),
+    updateAgent: (...args: unknown[]) => mockApi.updateAgent(...args),
+    deleteAgent: (...args: unknown[]) => mockApi.deleteAgent(...args),
+    toggleAgent: (...args: unknown[]) => mockApi.toggleAgent(...args),
+    runAgent: (...args: unknown[]) => mockApi.runAgent(...args),
+    exportAgent: (...args: unknown[]) => mockApi.exportAgent(...args),
+    importAgent: (...args: unknown[]) => mockApi.importAgent(...args),
+    regenerateAgentWebhookSecret: (...args: unknown[]) => mockApi.regenerateAgentWebhookSecret(...args),
+    listSkills: (...args: unknown[]) => mockApi.listSkills(...args),
+    listEnvs: (...args: unknown[]) => mockApi.listEnvs(...args),
     getLinearOAuthStatus: (...args: unknown[]) => mockApi.getLinearOAuthStatus(...args),
     getLinearOAuthAuthorizeUrl: (...args: unknown[]) => mockApi.getLinearOAuthAuthorizeUrl(...args),
     updateSettings: (...args: unknown[]) => mockApi.updateSettings(...args),
-    createAgent: (...args: unknown[]) => mockApi.createAgent(...args),
   },
 }));
 
-vi.mock("../store.js", () => {
-  const useStoreFn = (selector: (state: MockStoreState) => unknown) => selector(mockState);
-  useStoreFn.getState = () => mockState;
-  return { useStore: useStoreFn };
-});
+vi.mock("../store.js", () => ({
+  useStore: (selector: (state: { publicUrl: string }) => unknown) =>
+    selector({ publicUrl: mockPublicUrl }),
+}));
 
 // Mock FolderPicker to avoid file-system API calls in tests
 vi.mock("./FolderPicker.js", () => ({
@@ -62,7 +80,7 @@ vi.mock("./LinearLogo.js", () => ({
   ),
 }));
 
-import { LinearAgentWizard } from "./LinearAgentWizard.js";
+import { AgentsPage } from "./AgentsPage.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -74,9 +92,30 @@ const defaultOAuthStatus = {
   hasAccessToken: false,
 };
 
+/** Render AgentsPage and enter the wizard via the "Setup Linear Agent" button */
+async function renderAndEnterWizard() {
+  render(<AgentsPage route={{ page: "agents" }} />);
+
+  // Wait for agents page to load
+  await waitFor(() => {
+    expect(screen.getByText("Setup Linear Agent")).toBeInTheDocument();
+  });
+
+  // Click the "Setup Linear Agent" button
+  fireEvent.click(screen.getByText("Setup Linear Agent"));
+
+  // Wait for wizard to load (OAuth status check)
+  await waitFor(() => {
+    expect(screen.getByText("Linear Agent Setup")).toBeInTheDocument();
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
-  mockState = { publicUrl: "https://companion.example.com" };
+  mockPublicUrl = "https://companion.example.com";
+  mockApi.listAgents.mockResolvedValue([]);
+  mockApi.listSkills.mockResolvedValue([]);
+  mockApi.listEnvs.mockResolvedValue([]);
   mockApi.getLinearOAuthStatus.mockResolvedValue(defaultOAuthStatus);
   mockApi.updateSettings.mockResolvedValue({});
   mockApi.createAgent.mockResolvedValue({
@@ -85,7 +124,7 @@ beforeEach(() => {
     triggers: { linear: { enabled: true } },
   });
   sessionStorage.clear();
-  window.location.hash = "#/setup/linear-agent";
+  window.location.hash = "#/agents";
 });
 
 afterEach(() => {
@@ -93,17 +132,12 @@ afterEach(() => {
 });
 
 // =============================================================================
-// Render Tests
+// Tests
 // =============================================================================
 
-describe("LinearAgentWizard", () => {
-  it("renders the wizard with step indicator and header", async () => {
-    render(<LinearAgentWizard />);
-
-    // Wait for loading to finish (OAuth status check)
-    await waitFor(() => {
-      expect(screen.getByText("Linear Agent Setup")).toBeInTheDocument();
-    });
+describe("Linear Agent Wizard in AgentsPage", () => {
+  it("renders the wizard with step indicator when Setup Linear Agent is clicked", async () => {
+    await renderAndEnterWizard();
 
     // Step indicator should be visible
     expect(screen.getByLabelText(/Step 1/)).toBeInTheDocument();
@@ -114,19 +148,14 @@ describe("LinearAgentWizard", () => {
   });
 
   it("shows Step 1 by default when OAuth is not configured", async () => {
-    render(<LinearAgentWizard />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Set up the Linear Agent")).toBeInTheDocument();
-    });
+    await renderAndEnterWizard();
 
     // Step 1 content: prerequisites
+    expect(screen.getByText("Set up the Linear Agent")).toBeInTheDocument();
     expect(screen.getByText("Prerequisites")).toBeInTheDocument();
-    expect(screen.getByText("Create a Linear OAuth app")).toBeInTheDocument();
   });
 
   it("shows Step 3 when credentials are saved but not installed", async () => {
-    // configured=false because it requires accessToken, but hasClientId=true means creds were saved
     mockApi.getLinearOAuthStatus.mockResolvedValue({
       ...defaultOAuthStatus,
       configured: false,
@@ -136,7 +165,7 @@ describe("LinearAgentWizard", () => {
       hasAccessToken: false,
     });
 
-    render(<LinearAgentWizard />);
+    await renderAndEnterWizard();
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Install to Workspace" })).toBeInTheDocument();
@@ -152,7 +181,7 @@ describe("LinearAgentWizard", () => {
       hasAccessToken: true,
     });
 
-    render(<LinearAgentWizard />);
+    await renderAndEnterWizard();
 
     await waitFor(() => {
       expect(screen.getByText("Configure Your Agent")).toBeInTheDocument();
@@ -163,24 +192,16 @@ describe("LinearAgentWizard", () => {
 
   it("passes axe accessibility checks on Step 1", async () => {
     const { axe } = await import("vitest-axe");
-    const { container } = render(<LinearAgentWizard />);
+    await renderAndEnterWizard();
 
-    await waitFor(() => {
-      expect(screen.getByText("Set up the Linear Agent")).toBeInTheDocument();
-    });
-
-    const results = await axe(container);
+    const results = await axe(document.body);
     expect(results).toHaveNoViolations();
   });
 
   // ─── Step Navigation ──────────────────────────────────────────────────────
 
   it("navigates from Step 1 to Step 2 when Next is clicked", async () => {
-    render(<LinearAgentWizard />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Set up the Linear Agent")).toBeInTheDocument();
-    });
+    await renderAndEnterWizard();
 
     fireEvent.click(screen.getByText("Next"));
 
@@ -190,11 +211,7 @@ describe("LinearAgentWizard", () => {
   });
 
   it("navigates back from Step 2 to Step 1", async () => {
-    render(<LinearAgentWizard />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Set up the Linear Agent")).toBeInTheDocument();
-    });
+    await renderAndEnterWizard();
 
     // Go to step 2
     fireEvent.click(screen.getByText("Next"));
@@ -212,14 +229,10 @@ describe("LinearAgentWizard", () => {
   // ─── Step 2: Credentials ──────────────────────────────────────────────────
 
   it("saves credentials and advances to Step 3", async () => {
-    render(<LinearAgentWizard />);
+    await renderAndEnterWizard();
 
     // Navigate to step 2
-    await waitFor(() => {
-      expect(screen.getByText("Set up the Linear Agent")).toBeInTheDocument();
-    });
     fireEvent.click(screen.getByText("Next"));
-
     await waitFor(() => {
       expect(screen.getByText("Enter OAuth Credentials")).toBeInTheDocument();
     });
@@ -255,14 +268,10 @@ describe("LinearAgentWizard", () => {
   it("shows error when credentials save fails", async () => {
     mockApi.updateSettings.mockRejectedValue(new Error("Network error"));
 
-    render(<LinearAgentWizard />);
+    await renderAndEnterWizard();
 
     // Navigate to step 2
-    await waitFor(() => {
-      expect(screen.getByText("Set up the Linear Agent")).toBeInTheDocument();
-    });
     fireEvent.click(screen.getByText("Next"));
-
     await waitFor(() => {
       expect(screen.getByText("Enter OAuth Credentials")).toBeInTheDocument();
     });
@@ -282,7 +291,7 @@ describe("LinearAgentWizard", () => {
 
   it("detects oauth_success in hash and advances to Step 4", async () => {
     // Simulate returning from OAuth redirect with success
-    window.location.hash = "#/setup/linear-agent?oauth_success=true";
+    window.location.hash = "#/agents?oauth_success=true";
 
     mockApi.getLinearOAuthStatus.mockResolvedValue({
       ...defaultOAuthStatus,
@@ -291,9 +300,9 @@ describe("LinearAgentWizard", () => {
       hasAccessToken: true,
     });
 
-    render(<LinearAgentWizard />);
+    render(<AgentsPage route={{ page: "agents" }} />);
 
-    // Should advance to step 4 (agent configuration)
+    // Should auto-enter wizard and advance to step 4 (agent configuration)
     await waitFor(() => {
       expect(screen.getByText("Configure Your Agent")).toBeInTheDocument();
     });
@@ -309,7 +318,7 @@ describe("LinearAgentWizard", () => {
       createdAgentId: null,
     }));
 
-    window.location.hash = "#/setup/linear-agent?oauth_error=access_denied";
+    window.location.hash = "#/agents?oauth_error=access_denied";
 
     mockApi.getLinearOAuthStatus.mockResolvedValue({
       ...defaultOAuthStatus,
@@ -318,7 +327,7 @@ describe("LinearAgentWizard", () => {
       hasAccessToken: false,
     });
 
-    render(<LinearAgentWizard />);
+    render(<AgentsPage route={{ page: "agents" }} />);
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Install to Workspace" })).toBeInTheDocument();
@@ -337,7 +346,7 @@ describe("LinearAgentWizard", () => {
       hasAccessToken: true,
     });
 
-    render(<LinearAgentWizard />);
+    await renderAndEnterWizard();
 
     await waitFor(() => {
       expect(screen.getByText("Configure Your Agent")).toBeInTheDocument();
@@ -376,7 +385,7 @@ describe("LinearAgentWizard", () => {
     });
     mockApi.createAgent.mockRejectedValue(new Error("Agent name already exists"));
 
-    render(<LinearAgentWizard />);
+    await renderAndEnterWizard();
 
     await waitFor(() => {
       expect(screen.getByText("Configure Your Agent")).toBeInTheDocument();
@@ -394,15 +403,14 @@ describe("LinearAgentWizard", () => {
 
   // ─── Step 5: Done ─────────────────────────────────────────────────────────
 
-  it("navigates to agents page when Finish is clicked", async () => {
-    // Start at step 4 with OAuth connected
+  it("returns to agent list when Go to Agents is clicked", async () => {
     mockApi.getLinearOAuthStatus.mockResolvedValue({
       ...defaultOAuthStatus,
       configured: true,
       hasAccessToken: true,
     });
 
-    render(<LinearAgentWizard />);
+    await renderAndEnterWizard();
 
     await waitFor(() => {
       expect(screen.getByText("Configure Your Agent")).toBeInTheDocument();
@@ -415,9 +423,13 @@ describe("LinearAgentWizard", () => {
       expect(screen.getByText("Setup Complete")).toBeInTheDocument();
     });
 
+    // Click finish — should return to agent list view
     fireEvent.click(screen.getByText("Go to Agents"));
 
-    expect(window.location.hash).toBe("#/agents");
+    await waitFor(() => {
+      // Should be back on the agents list (header visible)
+      expect(screen.getByText("Agents")).toBeInTheDocument();
+    });
   });
 
   // ─── sessionStorage Persistence ────────────────────────────────────────────
@@ -433,14 +445,14 @@ describe("LinearAgentWizard", () => {
     }));
 
     // Simulate successful OAuth return
-    window.location.hash = "#/setup/linear-agent?oauth_success=true";
+    window.location.hash = "#/agents?oauth_success=true";
     mockApi.getLinearOAuthStatus.mockResolvedValue({
       ...defaultOAuthStatus,
       configured: true,
       hasAccessToken: true,
     });
 
-    render(<LinearAgentWizard />);
+    render(<AgentsPage route={{ page: "agents" }} />);
 
     // Should skip to step 4 since OAuth is now connected
     await waitFor(() => {
@@ -453,40 +465,44 @@ describe("LinearAgentWizard", () => {
 
   // ─── Cancel ────────────────────────────────────────────────────────────────
 
-  it("navigates to integrations page when Cancel is clicked", async () => {
-    render(<LinearAgentWizard />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Linear Agent Setup")).toBeInTheDocument();
-    });
+  it("returns to agent list when Cancel is clicked", async () => {
+    await renderAndEnterWizard();
 
     fireEvent.click(screen.getByText("Cancel"));
 
-    expect(window.location.hash).toBe("#/integrations");
+    // Should be back on the agents list
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { level: 1, name: "Agents" })).toBeInTheDocument();
+    });
   });
 
   // ─── Public URL warning ────────────────────────────────────────────────────
 
   it("shows warning when public URL is not configured", async () => {
-    mockState = { publicUrl: "" };
+    mockPublicUrl = "";
 
-    render(<LinearAgentWizard />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Set up the Linear Agent")).toBeInTheDocument();
-    });
+    await renderAndEnterWizard();
 
     // Should show warning about missing public URL
     expect(screen.getByText(/No public URL set/)).toBeInTheDocument();
   });
 
   it("shows green checkmark when public URL is configured", async () => {
-    render(<LinearAgentWizard />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Set up the Linear Agent")).toBeInTheDocument();
-    });
+    await renderAndEnterWizard();
 
     expect(screen.getByText("Public URL configured")).toBeInTheDocument();
+  });
+
+  // ─── Entry from IntegrationsPage (hash param) ─────────────────────────────
+
+  it("auto-enters wizard when ?setup=linear is in hash", async () => {
+    window.location.hash = "#/agents?setup=linear";
+
+    render(<AgentsPage route={{ page: "agents" }} />);
+
+    // Should auto-enter the wizard
+    await waitFor(() => {
+      expect(screen.getByText("Linear Agent Setup")).toBeInTheDocument();
+    });
   });
 });

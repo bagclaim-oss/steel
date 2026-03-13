@@ -115,7 +115,7 @@ describe("WizardStepInstall", () => {
       });
 
       await waitFor(() => {
-        expect(mockApi.getLinearOAuthAuthorizeUrl).toHaveBeenCalledWith("/#/setup/linear-agent");
+        expect(mockApi.getLinearOAuthAuthorizeUrl).toHaveBeenCalledWith("/#/agents");
       });
 
       await waitFor(() => {

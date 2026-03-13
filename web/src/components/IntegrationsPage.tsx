@@ -112,7 +112,7 @@ export function IntegrationsPage({ embedded = false }: IntegrationsPageProps) {
               <button
                 type="button"
                 onClick={() => {
-                  window.location.hash = "#/setup/linear-agent";
+                  window.location.hash = "#/agents?setup=linear";
                 }}
                 aria-label="Set up Linear Agent"
                 title="Set up Linear Agent"

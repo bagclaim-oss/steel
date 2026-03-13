@@ -19,7 +19,7 @@ export function WizardStepInstall({ onNext, onBack, oauthConnected, oauthError, 
     setError("");
     try {
       onBeforeRedirect();
-      const result = await api.getLinearOAuthAuthorizeUrl("/#/setup/linear-agent");
+      const result = await api.getLinearOAuthAuthorizeUrl("/#/agents");
       window.open(result.url, "_self");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));

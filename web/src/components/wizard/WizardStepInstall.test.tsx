@@ -98,30 +98,32 @@ describe("WizardStepInstall", () => {
 
   it("calls onBeforeRedirect and fetches OAuth URL on install click", async () => {
     const onBeforeRedirect = vi.fn();
-    // Mock window.open to prevent actual navigation
+    // Mock window.open to prevent actual navigation; restore in finally to avoid test pollution
     const originalOpen = window.open;
     window.open = vi.fn();
 
-    render(<WizardStepInstall {...defaultProps} onBeforeRedirect={onBeforeRedirect} />);
+    try {
+      render(<WizardStepInstall {...defaultProps} onBeforeRedirect={onBeforeRedirect} />);
 
-    fireEvent.click(screen.getByText("Install to Workspace", { selector: "button" }));
+      fireEvent.click(screen.getByText("Install to Workspace", { selector: "button" }));
 
-    // Should show loading state
-    expect(screen.getByText("Redirecting...")).toBeInTheDocument();
+      // Should show loading state
+      expect(screen.getByText("Redirecting...")).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(onBeforeRedirect).toHaveBeenCalledOnce();
-    });
+      await waitFor(() => {
+        expect(onBeforeRedirect).toHaveBeenCalledOnce();
+      });
 
-    await waitFor(() => {
-      expect(mockApi.getLinearOAuthAuthorizeUrl).toHaveBeenCalledWith("/#/setup/linear-agent");
-    });
+      await waitFor(() => {
+        expect(mockApi.getLinearOAuthAuthorizeUrl).toHaveBeenCalledWith("/#/setup/linear-agent");
+      });
 
-    await waitFor(() => {
-      expect(window.open).toHaveBeenCalledWith("https://linear.app/oauth/authorize?...", "_self");
-    });
-
-    window.open = originalOpen;
+      await waitFor(() => {
+        expect(window.open).toHaveBeenCalledWith("https://linear.app/oauth/authorize?...", "_self");
+      });
+    } finally {
+      window.open = originalOpen;
+    }
   });
 
   it("shows error when OAuth URL fetch fails", async () => {

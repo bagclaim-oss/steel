@@ -34,6 +34,12 @@ interface ProvisionerConfig {
   hetznerServerTypes?: Partial<Record<Plan, string>>;
 }
 
+const DEFAULT_SERVER_TYPE_CANDIDATES: Record<Plan, string[]> = {
+  starter: ["cx22", "cpx11"],
+  pro: ["cx32", "cpx21"],
+  enterprise: ["cx42", "cpx31"],
+};
+
 function makeVolumeName(hostname: string, suffixSeed: string): string {
   const safe = hostname
     .toLowerCase()
@@ -69,10 +75,17 @@ export class Provisioner {
     this.companionImage = config.companionImage;
     this.hetznerSshKeyId = config.hetznerSshKeyId;
     this.hetznerServerTypes = {
-      starter: config.hetznerServerTypes?.starter || "cpx11",
-      pro: config.hetznerServerTypes?.pro || "cpx21",
-      enterprise: config.hetznerServerTypes?.enterprise || "cpx31",
+      starter: config.hetznerServerTypes?.starter || DEFAULT_SERVER_TYPE_CANDIDATES.starter[0],
+      pro: config.hetznerServerTypes?.pro || DEFAULT_SERVER_TYPE_CANDIDATES.pro[0],
+      enterprise: config.hetznerServerTypes?.enterprise || DEFAULT_SERVER_TYPE_CANDIDATES.enterprise[0],
     };
+  }
+
+  private getServerTypeCandidates(plan: Plan): string[] {
+    const configured = this.hetznerServerTypes[plan];
+    return [configured, ...DEFAULT_SERVER_TYPE_CANDIDATES[plan]].filter(
+      (value, index, arr): value is string => Boolean(value) && arr.indexOf(value) === index,
+    );
   }
 
   private mapRegionToHetznerLocation(region: string): string[] {
@@ -178,12 +191,14 @@ ${env}
     const authSecret = randomBytes(32).toString("hex");
     const progress = input.onProgress ?? (() => {});
     const candidateLocations = this.mapRegionToHetznerLocation(input.region);
+    const candidateServerTypes = this.getServerTypeCandidates(input.plan);
     const resourceSuffix = randomBytes(4).toString("hex");
     const volumeName = makeVolumeName(input.hostname || `${input.organizationId}-${Date.now()}`, resourceSuffix);
     const machineName = makeMachineName(input.hostname || `${input.organizationId}-${Date.now()}`, resourceSuffix);
     let lastError: unknown = null;
 
-    for (const location of candidateLocations) {
+    for (const serverType of candidateServerTypes) {
+      for (const location of candidateLocations) {
       progress("creating_volume", "Creating storage volume", "in_progress");
       let volume: Awaited<ReturnType<HetznerCloudClient["createVolume"]>> | null = null;
       try {
@@ -210,7 +225,7 @@ ${env}
       try {
         const response = await this.hetzner.createServer({
           name: machineName,
-          server_type: this.hetznerServerTypes[input.plan],
+          server_type: serverType,
           location,
           image: "ubuntu-24.04",
           volumes: [volume.id],
@@ -248,6 +263,7 @@ ${env}
         }
         throw err;
       }
+    }
     }
 
     throw lastError ?? new Error("Failed to provision instance in available Hetzner locations");

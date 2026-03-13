@@ -319,6 +319,72 @@ describe("Provisioner (hetzner)", () => {
     expect(createdServerBodies[1].location).toBe("hil");
   });
 
+  it("falls back to another server type within the selected geography", async () => {
+    fetchMock.mockImplementation((url: string, opts: RequestInit) => {
+      const method = opts.method ?? "GET";
+      if (url === `${HETZNER_BASE}/volumes` && method === "POST") {
+        return Promise.resolve(okResponse({ volume: { id: 901, name: "companion_test_a", size: 10 } }));
+      }
+      if (url === `${HETZNER_BASE}/servers` && method === "POST") {
+        const body = JSON.parse(String(opts.body));
+        if (body.server_type === "cpx11") {
+          return Promise.resolve({
+            ok: false,
+            status: 422,
+            text: () =>
+              Promise.resolve(
+                `{"error":{"code":"invalid_input","message":"unsupported location for server type"}}`,
+              ),
+          } as unknown as Response);
+        }
+        return Promise.resolve(okResponse({
+          server: { id: 801, status: "starting", public_net: { ipv4: { ip: "1.2.3.4" } } },
+          action: { id: 701, status: "running", command: "create_server" },
+        }));
+      }
+      if (url === `${HETZNER_BASE}/actions/701` && method === "GET") {
+        return Promise.resolve(okResponse({ action: { id: 701, status: "success", command: "create_server" } }));
+      }
+      if (url === `${HETZNER_BASE}/servers/801` && method === "GET") {
+        return Promise.resolve(okResponse({
+          server: { id: 801, status: "running", public_net: { ipv4: { ip: "1.2.3.4" } } },
+        }));
+      }
+      if (url === `${HETZNER_BASE}/volumes/901` && method === "DELETE") {
+        return Promise.resolve(okResponse({}));
+      }
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        text: () => Promise.resolve(`Unexpected fetch: ${method} ${url}`),
+      } as unknown as Response);
+    });
+
+    const provisioner = new Provisioner({
+      hetznerToken: "hcloud-token",
+      companionImage: "docker.io/stangirard/the-companion-server:latest",
+      hetznerServerTypes: {
+        starter: "cpx11",
+      },
+    });
+
+    await provisioner.provision({
+      organizationId: "org-1",
+      plan: "starter",
+      region: "cdg",
+      hostname: "demo",
+      loginUrl: "",
+    });
+
+    const createdServerBodies = fetchMock.mock.calls
+      .filter((c: any[]) => c[0] === `${HETZNER_BASE}/servers` && c[1].method === "POST")
+      .map((c: any[]) => JSON.parse(c[1].body));
+
+    expect(createdServerBodies.some((body: any) => body.server_type === "cpx11")).toBe(true);
+    expect(createdServerBodies.some((body: any) => body.server_type === "cx22")).toBe(true);
+    expect(createdServerBodies.every((body: any) => ["fsn1", "nbg1", "hel1"].includes(body.location))).toBe(true);
+  });
+
   it("does not cross from Europe selection into US locations", async () => {
     fetchMock.mockImplementation((url: string, opts: RequestInit) => {
       const method = opts.method ?? "GET";
@@ -354,7 +420,7 @@ describe("Provisioner (hetzner)", () => {
       .filter((c: any[]) => c[0] === `${HETZNER_BASE}/volumes` && c[1].method === "POST")
       .map((c: any[]) => JSON.parse(c[1].body));
     const attemptedLocations = createVolumeBodies.map((b: any) => b.location);
-    expect(attemptedLocations).toEqual(["fsn1", "nbg1", "hel1"]);
+    expect(new Set(attemptedLocations)).toEqual(new Set(["fsn1", "nbg1", "hel1"]));
     expect(attemptedLocations).not.toContain("ash");
   });
 });

@@ -157,7 +157,19 @@ export class LinearAgentBridge {
   /** Handle a follow-up prompt in an existing agent session. */
   private async handlePrompted(payload: AgentSessionEventPayload): Promise<void> {
     const linearSessionId = payload.agentSession?.id;
-    const message = (payload.agentActivity?.body ?? payload.promptContext ?? "").trim();
+
+    console.log(`[linear-agent-bridge] Prompted event payload:`, JSON.stringify(payload, null, 2));
+
+    // Extract follow-up message from multiple possible locations:
+    // 1. agentActivity.body — the activity/message from the user
+    // 2. agentSession.comment.body — the comment that triggered the follow-up
+    // 3. promptContext — the full XML context (last resort)
+    const message = (
+      payload.agentActivity?.body
+      || payload.agentSession?.comment?.body
+      || payload.promptContext
+      || ""
+    ).trim();
 
     if (!linearSessionId) {
       console.error("[linear-agent-bridge] No session ID found in prompted payload:", JSON.stringify(payload));

@@ -10,7 +10,7 @@ import { getDb } from "../db/index.js";
 import { instances as instancesTable } from "../db/schema.js";
 import { createInstanceToken } from "../lib/token.js";
 import { FlyAppsClient } from "../services/fly-apps.js";
-import { Provisioner, type Plan } from "../services/provisioner.js";
+import { Provisioner, type InstanceProvider, type Plan } from "../services/provisioner.js";
 
 /**
  * Instance management routes.
@@ -39,10 +39,40 @@ import { Provisioner, type Plan } from "../services/provisioner.js";
 const instances = new Hono<AuthEnv>();
 const VALID_PLANS: Plan[] = ["starter", "pro", "enterprise"];
 
-function getProvisioner(flyAppNameOverride?: string): Provisioner {
+function getProvider(): InstanceProvider {
+  const raw = process.env.INSTANCE_PROVIDER?.trim().toLowerCase();
+  if (raw === "hetzner") return "hetzner";
+  return "fly";
+}
+
+function getProvisioner(flyAppNameOverride?: string, providerOverride?: InstanceProvider): Provisioner {
+  const provider = providerOverride || getProvider();
+  const companionImage = process.env.COMPANION_IMAGE;
+
+  if (provider === "hetzner") {
+    const hetznerToken = process.env.HETZNER_API_TOKEN;
+    const missing = [
+      !hetznerToken && "HETZNER_API_TOKEN",
+      !companionImage && "COMPANION_IMAGE",
+    ].filter(Boolean);
+    if (missing.length > 0) {
+      throw new Error(`Missing required environment variables: ${missing.join(", ")}`);
+    }
+    return new Provisioner({
+      provider: "hetzner",
+      hetznerToken: hetznerToken!,
+      companionImage: companionImage!,
+      hetznerSshKeyId: process.env.HETZNER_SSH_KEY_ID,
+      hetznerServerTypes: {
+        starter: process.env.HETZNER_SERVER_TYPE_STARTER || undefined,
+        pro: process.env.HETZNER_SERVER_TYPE_PRO || undefined,
+        enterprise: process.env.HETZNER_SERVER_TYPE_ENTERPRISE || undefined,
+      },
+    });
+  }
+
   const flyToken = process.env.FLY_API_TOKEN;
   const flyAppName = flyAppNameOverride || process.env.FLY_APP_NAME;
-  const companionImage = process.env.COMPANION_IMAGE;
 
   const missing = [
     !flyToken && "FLY_API_TOKEN",
@@ -74,8 +104,9 @@ function normalizeHostname(input: string): string {
     .replace(/\/.*$/, "");
 }
 
-function makeHostname(flyAppName: string, requested?: string): string {
+function makeHostname(provider: InstanceProvider, flyAppName: string, requested?: string): string {
   if (requested?.trim()) return normalizeHostname(requested);
+  if (provider === "hetzner") return "";
   return `${flyAppName}.fly.dev`;
 }
 
@@ -125,6 +156,13 @@ function getFlyAppNameFromConfig(config: unknown): string | undefined {
   if (!config || typeof config !== "object") return undefined;
   const flyAppName = (config as Record<string, unknown>).flyAppName;
   return typeof flyAppName === "string" && flyAppName.trim() ? flyAppName : undefined;
+}
+
+function getProviderFromConfig(config: unknown): InstanceProvider | undefined {
+  if (!config || typeof config !== "object") return undefined;
+  const provider = (config as Record<string, unknown>).provider;
+  if (provider === "fly" || provider === "hetzner") return provider;
+  return undefined;
 }
 
 function isFlyNotFoundError(error: unknown): boolean {
@@ -203,6 +241,7 @@ instances.post("/", async (c) => {
   const ownerId = userId;
   const plan = (body.plan || "starter") as Plan;
   const region = body.region || "iad";
+  const provider = getProvider();
   const flyAppName = body.flyAppName?.trim() || makeFlyAppName(userId, orgId);
 
   if (!VALID_PLANS.includes(plan)) {
@@ -211,20 +250,22 @@ instances.post("/", async (c) => {
 
   let provisioner: Provisioner;
   try {
-    provisioner = getProvisioner(flyAppName);
+    provisioner = getProvisioner(flyAppName, provider);
   } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
 
-  try {
-    const apps = getAppsClient();
-    await apps.ensureAppExists(flyAppName);
-    await apps.ensurePublicIps(flyAppName);
-  } catch (error: any) {
-    return c.json({ error: error.message || "Failed to ensure Fly app exists" }, 502);
+  if (provider === "fly") {
+    try {
+      const apps = getAppsClient();
+      await apps.ensureAppExists(flyAppName);
+      await apps.ensurePublicIps(flyAppName);
+    } catch (error: any) {
+      return c.json({ error: error.message || "Failed to ensure Fly app exists" }, 502);
+    }
   }
 
-  const hostname = makeHostname(flyAppName, body.hostname);
+  const hostname = makeHostname(provider, flyAppName, body.hostname);
   const loginUrl = resolveLoginUrl(c);
 
   const provisioned = await provisioner.provision({
@@ -248,7 +289,7 @@ instances.post("/", async (c) => {
       hostname: provisioned.hostname,
       machineStatus: "started",
       authSecret: provisioned.authSecret,
-      config: { plan, flyAppName },
+      config: provider === "fly" ? { plan, flyAppName } : { plan, provider: "hetzner" },
     })
     .returning();
 
@@ -279,6 +320,7 @@ instances.post("/create-stream", async (c) => {
   const ownerId = userId;
   const plan = (body.plan || "starter") as Plan;
   const region = body.region || "iad";
+  const provider = getProvider();
   const flyAppName = body.flyAppName?.trim() || makeFlyAppName(userId, orgId);
 
   if (!VALID_PLANS.includes(plan)) {
@@ -287,7 +329,7 @@ instances.post("/create-stream", async (c) => {
 
   let provisioner: Provisioner;
   try {
-    provisioner = getProvisioner(flyAppName);
+    provisioner = getProvisioner(flyAppName, provider);
   } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
@@ -310,17 +352,19 @@ instances.post("/create-stream", async (c) => {
     let provisioned: Awaited<ReturnType<Provisioner["provision"]>> | null = null;
 
     try {
-      // Step 1: Ensure Fly app
-      activeStep = { step: "ensuring_app", label: "Ensuring Fly app exists" };
-      await emitProgress(stream, "ensuring_app", "Ensuring Fly app exists", "in_progress");
-      const apps = getAppsClient();
-      await apps.ensureAppExists(flyAppName);
-      await apps.ensurePublicIps(flyAppName);
-      await emitProgress(stream, "ensuring_app", "Ensuring Fly app exists", "done");
-      activeStep = null;
+      if (provider === "fly") {
+        // Step 1: Ensure Fly app
+        activeStep = { step: "ensuring_app", label: "Ensuring Fly app exists" };
+        await emitProgress(stream, "ensuring_app", "Ensuring Fly app exists", "in_progress");
+        const apps = getAppsClient();
+        await apps.ensureAppExists(flyAppName);
+        await apps.ensurePublicIps(flyAppName);
+        await emitProgress(stream, "ensuring_app", "Ensuring Fly app exists", "done");
+        activeStep = null;
+      }
 
       // Step 2-4: Provision (volume, machine, wait) — progress emitted by provisioner
-      const hostname = makeHostname(flyAppName, body.hostname);
+      const hostname = makeHostname(provider, flyAppName, body.hostname);
       const loginUrl = resolveLoginUrl(c);
 
       provisioned = await provisioner.provision({
@@ -352,7 +396,7 @@ instances.post("/create-stream", async (c) => {
           hostname: provisioned.hostname,
           machineStatus: "started",
           authSecret: provisioned.authSecret,
-          config: { plan, flyAppName },
+          config: provider === "fly" ? { plan, flyAppName } : { plan, provider: "hetzner" },
         })
         .returning();
       // DB save succeeded — clear provisioned so the catch block won't
@@ -409,9 +453,11 @@ instances.delete("/:id", async (c) => {
   const row = await getOwnedInstance(id, orgId, userId);
   if (!row) return c.json({ error: "Instance not found or not owned by user" }, 404);
 
+  const provider = getProviderFromConfig(row.config) || (getFlyAppNameFromConfig(row.config) ? "fly" : getProvider());
+
   if (row.flyMachineId && row.flyVolumeId) {
     const appNameFromConfig = getFlyAppNameFromConfig(row.config);
-    const provisioner = getProvisioner(appNameFromConfig);
+    const provisioner = getProvisioner(appNameFromConfig, provider);
     try {
       await provisioner.deprovision(row.flyMachineId, row.flyVolumeId);
     } catch (error) {
@@ -421,7 +467,7 @@ instances.delete("/:id", async (c) => {
   }
 
   const appNameFromConfig = getFlyAppNameFromConfig(row.config);
-  if (appNameFromConfig) {
+  if (provider === "fly" && appNameFromConfig) {
     const apps = getAppsClient();
     await apps.destroyAppIfExists(appNameFromConfig);
   }
@@ -438,10 +484,11 @@ instances.post("/:id/start", async (c) => {
 
   const row = await getAuthorizedInstance(id, orgId, userId);
   if (!row) return c.json({ error: "Instance not found" }, 404);
-  if (!row.flyMachineId) return c.json({ error: "Instance has no Fly machine" }, 409);
+  if (!row.flyMachineId) return c.json({ error: "Instance has no provisioned machine" }, 409);
 
   const appNameFromConfig = getFlyAppNameFromConfig(row.config);
-  const provisioner = getProvisioner(appNameFromConfig);
+  const provider = getProviderFromConfig(row.config) || (appNameFromConfig ? "fly" : getProvider());
+  const provisioner = getProvisioner(appNameFromConfig, provider);
   await provisioner.start(row.flyMachineId);
 
   const db = getDb();
@@ -460,10 +507,11 @@ instances.post("/:id/stop", async (c) => {
 
   const row = await getAuthorizedInstance(id, orgId, userId);
   if (!row) return c.json({ error: "Instance not found" }, 404);
-  if (!row.flyMachineId) return c.json({ error: "Instance has no Fly machine" }, 409);
+  if (!row.flyMachineId) return c.json({ error: "Instance has no provisioned machine" }, 409);
 
   const appNameFromConfig = getFlyAppNameFromConfig(row.config);
-  const provisioner = getProvisioner(appNameFromConfig);
+  const provider = getProviderFromConfig(row.config) || (appNameFromConfig ? "fly" : getProvider());
+  const provisioner = getProvisioner(appNameFromConfig, provider);
   await provisioner.stop(row.flyMachineId);
 
   const db = getDb();
@@ -482,10 +530,11 @@ instances.post("/:id/restart", async (c) => {
 
   const row = await getAuthorizedInstance(id, orgId, userId);
   if (!row) return c.json({ error: "Instance not found" }, 404);
-  if (!row.flyMachineId) return c.json({ error: "Instance has no Fly machine" }, 409);
+  if (!row.flyMachineId) return c.json({ error: "Instance has no provisioned machine" }, 409);
 
   const appNameFromConfig = getFlyAppNameFromConfig(row.config);
-  const provisioner = getProvisioner(appNameFromConfig);
+  const provider = getProviderFromConfig(row.config) || (appNameFromConfig ? "fly" : getProvider());
+  const provisioner = getProvisioner(appNameFromConfig, provider);
   await provisioner.stop(row.flyMachineId);
   await provisioner.start(row.flyMachineId);
 
@@ -496,6 +545,37 @@ instances.post("/:id/restart", async (c) => {
     .where(eq(instancesTable.id, id));
 
   return c.json({ id, message: "Restarted" });
+});
+
+instances.post("/:id/scale", async (c) => {
+  const id = c.req.param("id");
+  const orgId = c.get("organizationId");
+  const userId = c.get("auth").userId;
+  const body = await c.req.json<{ plan?: string }>();
+  const plan = body.plan as Plan;
+
+  if (!VALID_PLANS.includes(plan)) {
+    return c.json({ error: `Invalid plan: ${body.plan}` }, 400);
+  }
+
+  const row = await getAuthorizedInstance(id, orgId, userId);
+  if (!row) return c.json({ error: "Instance not found" }, 404);
+  if (!row.flyMachineId) return c.json({ error: "Instance has no provisioned machine" }, 409);
+
+  const appNameFromConfig = getFlyAppNameFromConfig(row.config);
+  const provider = getProviderFromConfig(row.config) || (appNameFromConfig ? "fly" : getProvider());
+  const provisioner = getProvisioner(appNameFromConfig, provider);
+  await provisioner.resize(row.flyMachineId, plan);
+  const currentConfig =
+    row.config && typeof row.config === "object" ? (row.config as Record<string, unknown>) : {};
+
+  const db = getDb();
+  await db
+    .update(instancesTable)
+    .set({ machineStatus: "started", config: { ...currentConfig, plan } })
+    .where(eq(instancesTable.id, id));
+
+  return c.json({ id, message: "Scaled", plan });
 });
 
 instances.post("/:id/token", async (c) => {
@@ -526,7 +606,9 @@ instances.get("/:id/embed", async (c) => {
   if (!row) return c.json({ error: "Instance not found" }, 404);
 
   const token = await createInstanceToken(row.authSecret);
-  const url = new URL(`https://${row.hostname}`);
+  const isIpv4 = /^[0-9]{1,3}(?:\.[0-9]{1,3}){3}$/.test(row.hostname || "");
+  const protocol = isIpv4 ? "http" : "https";
+  const url = new URL(`${protocol}://${row.hostname}`);
   url.searchParams.set("token", token);
   return c.redirect(url.toString());
 });

@@ -14,6 +14,7 @@ const provisionMock = vi.fn();
 const deprovisionMock = vi.fn();
 const startMock = vi.fn();
 const stopMock = vi.fn();
+const resizeMock = vi.fn();
 const createInstanceTokenMock = vi.fn();
 const provisionerCtorMock = vi.fn();
 const ensureAppExistsMock = vi.fn();
@@ -70,6 +71,7 @@ vi.mock("../services/provisioner.js", () => ({
     deprovision = deprovisionMock;
     start = startMock;
     stop = stopMock;
+    resize = resizeMock;
   },
 }));
 
@@ -97,6 +99,12 @@ describe("instances routes", () => {
     process.env.FLY_APP_NAME = "companion-app";
     process.env.FLY_ORG_SLUG = "org-slug";
     process.env.COMPANION_IMAGE = "registry.fly.io/companion:latest";
+    process.env.INSTANCE_PROVIDER = "fly";
+    delete process.env.HETZNER_API_TOKEN;
+    delete process.env.HETZNER_SSH_KEY_ID;
+    delete process.env.HETZNER_SERVER_TYPE_STARTER;
+    delete process.env.HETZNER_SERVER_TYPE_PRO;
+    delete process.env.HETZNER_SERVER_TYPE_ENTERPRISE;
     delete process.env.COMPANION_LOGIN_URL;
 
     findManyMock.mockResolvedValue([]);
@@ -306,6 +314,52 @@ describe("instances routes", () => {
       expect(res.status).toBe(400);
       expect(provisionMock).not.toHaveBeenCalled();
     });
+
+    it("uses hetzner provider without Fly app setup when INSTANCE_PROVIDER=hetzner", async () => {
+      process.env.INSTANCE_PROVIDER = "hetzner";
+      process.env.HETZNER_API_TOKEN = "hcloud-token";
+      provisionMock.mockResolvedValue({
+        flyMachineId: "srv-123",
+        flyVolumeId: "vol-123",
+        authSecret: "secret-123",
+        hostname: "example.instance.test",
+      });
+      insertReturningMock.mockResolvedValue([{ id: "inst-1" }]);
+
+      const res = await instances.request("/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: "starter", hostname: "example.instance.test" }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(ensureAppExistsMock).not.toHaveBeenCalled();
+      expect(ensurePublicIpsMock).not.toHaveBeenCalled();
+      expect(provisionerCtorMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: "hetzner",
+          hetznerToken: "hcloud-token",
+          companionImage: "registry.fly.io/companion:latest",
+        }),
+      );
+    });
+
+    it("returns 500 when hetzner provider is selected and HETZNER_API_TOKEN is missing", async () => {
+      process.env.INSTANCE_PROVIDER = "hetzner";
+      delete process.env.HETZNER_API_TOKEN;
+
+      const res = await instances.request("/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: "starter", hostname: "example.instance.test" }),
+      });
+
+      expect(res.status).toBe(500);
+      expect(provisionMock).not.toHaveBeenCalled();
+
+      const body = await res.json();
+      expect(body.error).toContain("HETZNER_API_TOKEN");
+    });
   });
 
   describe("POST /create-stream", () => {
@@ -458,6 +512,36 @@ describe("instances routes", () => {
       expect(res.status).toBe(200);
       expect(stopMock).toHaveBeenCalledWith("mach-1");
       expect(startMock).toHaveBeenCalledWith("mach-1");
+    });
+  });
+
+  describe("POST /:id/scale", () => {
+    it("resizes the instance to a new plan and updates local status", async () => {
+      findFirstMock.mockResolvedValue({ id: "inst-1", flyMachineId: "mach-1" });
+
+      const res = await instances.request("/inst-1/scale", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: "pro" }),
+      });
+      expect(res.status).toBe(200);
+      expect(resizeMock).toHaveBeenCalledWith("mach-1", "pro");
+      expect(updateSetMock).toHaveBeenCalledWith({
+        machineStatus: "started",
+        config: { plan: "pro" },
+      });
+    });
+
+    it("rejects unknown plans for scale", async () => {
+      findFirstMock.mockResolvedValue({ id: "inst-1", flyMachineId: "mach-1" });
+
+      const res = await instances.request("/inst-1/scale", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: "mega" }),
+      });
+      expect(res.status).toBe(400);
+      expect(resizeMock).not.toHaveBeenCalled();
     });
   });
 

@@ -102,6 +102,15 @@ export class FlyMachinesClient {
     await this.request<void>("DELETE", `/machines/${machineId}${query}`);
   }
 
+  async updateMachineGuest(
+    machineId: string,
+    guest: FlyMachineConfig["guest"],
+  ): Promise<FlyMachine> {
+    return this.request<FlyMachine>("POST", `/machines/${machineId}`, {
+      config: { guest },
+    });
+  }
+
   async waitForState(
     machineId: string,
     state: string,

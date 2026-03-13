@@ -308,4 +308,43 @@ describe("Provisioner (hetzner)", () => {
     expect(createdServerBodies[0].location).toBe("ash");
     expect(createdServerBodies[1].location).toBe("hil");
   });
+
+  it("does not cross from Europe selection into US locations", async () => {
+    fetchMock.mockImplementation((url: string, opts: RequestInit) => {
+      const method = opts.method ?? "GET";
+      if (url === `${HETZNER_BASE}/volumes` && method === "POST") {
+        return Promise.resolve({
+          ok: false,
+          status: 422,
+          text: () =>
+            Promise.resolve(
+              `{"error":{"code":"invalid_input","message":"invalid input in field 'location'"}}`,
+            ),
+        } as unknown as Response);
+      }
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        text: () => Promise.resolve(`Unexpected fetch: ${method} ${url}`),
+      } as unknown as Response);
+    });
+
+    const provisioner = makeProvisioner();
+    await expect(
+      provisioner.provision({
+        organizationId: "org-1",
+        plan: "starter",
+        region: "cdg",
+        hostname: "demo",
+        loginUrl: "",
+      }),
+    ).rejects.toThrow(/location/);
+
+    const createVolumeBodies = fetchMock.mock.calls
+      .filter((c: any[]) => c[0] === `${HETZNER_BASE}/volumes` && c[1].method === "POST")
+      .map((c: any[]) => JSON.parse(c[1].body));
+    const attemptedLocations = createVolumeBodies.map((b: any) => b.location);
+    expect(attemptedLocations).toEqual(["fsn1", "nbg1", "hel1"]);
+    expect(attemptedLocations).not.toContain("ash");
+  });
 });

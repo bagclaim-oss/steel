@@ -77,12 +77,12 @@ export class Provisioner {
 
   private mapRegionToHetznerLocation(region: string): string[] {
     const normalized = region.trim().toLowerCase();
-    // Ordered by preferred locality then broad fallback across generally available locations.
-    if (normalized === "iad") return ["ash", "hil", "fsn1", "nbg1", "hel1"];
-    if (normalized === "cdg") return ["fsn1", "nbg1", "hel1", "ash"];
-    if (normalized === "fra") return ["fsn1", "nbg1", "hel1", "ash"];
-    if (normalized === "ams") return ["nbg1", "fsn1", "hel1", "ash"];
-    return ["fsn1", "nbg1", "hel1", "ash"];
+    // Keep fallbacks inside the selected geography.
+    if (normalized === "iad") return ["ash", "hil"];
+    if (normalized === "cdg") return ["fsn1", "nbg1", "hel1"];
+    if (normalized === "fra") return ["fsn1", "nbg1", "hel1"];
+    if (normalized === "ams") return ["nbg1", "fsn1", "hel1"];
+    return ["fsn1", "nbg1", "hel1"];
   }
 
   private isInvalidLocationError(err: unknown): boolean {

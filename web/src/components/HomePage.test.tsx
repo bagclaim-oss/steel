@@ -1388,6 +1388,7 @@ describe("HomePage", () => {
       mockApi.getBackends.mockResolvedValue([
         { id: "codex", name: "Codex", available: true },
       ]);
+      mockApi.getBackendModels.mockResolvedValue([]);
       localStorage.setItem("cc-backend", "codex");
       localStorage.setItem("cc-sandbox-enabled", "true");
       localStorage.setItem("cc-selected-sandbox", "my-sandbox");

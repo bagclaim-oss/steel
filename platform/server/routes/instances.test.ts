@@ -543,6 +543,18 @@ describe("instances routes", () => {
       expect(res.status).toBe(400);
       expect(resizeMock).not.toHaveBeenCalled();
     });
+
+    it("does not allow scaling an instance owned by another user", async () => {
+      findFirstMock.mockResolvedValue(null);
+
+      const res = await instances.request("/inst-1/scale", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: "pro" }),
+      });
+      expect(res.status).toBe(404);
+      expect(resizeMock).not.toHaveBeenCalled();
+    });
   });
 
   describe("POST /:id/token", () => {

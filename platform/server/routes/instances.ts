@@ -439,7 +439,7 @@ instances.get("/:id", async (c) => {
   const orgId = c.get("organizationId");
   const userId = c.get("auth").userId;
 
-  const row = await getAuthorizedInstance(id, orgId, userId);
+  const row = await getOwnedInstance(id, orgId, userId);
   if (!row) return c.json({ error: "Instance not found" }, 404);
 
   return c.json(sanitizeInstance(row));

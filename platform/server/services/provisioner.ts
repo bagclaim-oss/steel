@@ -73,6 +73,10 @@ function makeMachineName(hostname: string): string {
   return `companion-${suffix}`;
 }
 
+function sanitizeCloudInitValue(value: string | undefined): string {
+  return String(value || "").replace(/[\r\n]/g, "").trim();
+}
+
 /**
  * Orchestrates end-to-end instance provisioning:
  * 1. Create Fly Volume for persistent storage
@@ -237,6 +241,8 @@ export class Provisioner {
   }
 
   private buildHetznerUserData(input: ProvisionInput, authSecret: string, volumeName: string): string {
+    const loginUrl = sanitizeCloudInitValue(input.loginUrl);
+    const tailscaleAuthKey = sanitizeCloudInitValue(input.tailscaleAuthKey);
     const env = [
       `NODE_ENV=production`,
       `HOST=0.0.0.0`,
@@ -244,11 +250,11 @@ export class Provisioner {
       `COMPANION_SESSION_DIR=/data/sessions`,
       `COMPANION_AUTH_ENABLED=1`,
       `COMPANION_AUTH_SECRET=${authSecret}`,
-      `COMPANION_LOGIN_URL=${input.loginUrl || ""}`,
-      input.tailscaleAuthKey ? `TAILSCALE_AUTH_KEY=${input.tailscaleAuthKey}` : "",
+      `COMPANION_LOGIN_URL=${loginUrl}`,
+      tailscaleAuthKey ? `TAILSCALE_AUTH_KEY=${tailscaleAuthKey}` : "",
     ]
       .filter(Boolean)
-      .map((line) => `  - ${line}`)
+      .map((line) => `      ${line}`)
       .join("\n");
 
     return `#cloud-config
@@ -438,9 +444,20 @@ ${env}
 
   async resize(machineId: string, plan: Plan): Promise<void> {
     if (this.provider === "hetzner") {
-      const action = await this.hetzner!.changeType(machineId, this.hetznerServerTypes[plan]);
-      if (action?.id) {
-        await this.hetzner!.waitForAction(action.id, 120_000);
+      const offAction = await this.hetzner!.powerOff(machineId);
+      if (offAction?.id) {
+        await this.hetzner!.waitForAction(offAction.id, 90_000);
+      }
+      await this.hetzner!.waitForServerStatus(machineId, "off", 90_000);
+
+      const changeAction = await this.hetzner!.changeType(machineId, this.hetznerServerTypes[plan]);
+      if (changeAction?.id) {
+        await this.hetzner!.waitForAction(changeAction.id, 120_000);
+      }
+
+      const onAction = await this.hetzner!.powerOn(machineId);
+      if (onAction?.id) {
+        await this.hetzner!.waitForAction(onAction.id, 90_000);
       }
       await this.hetzner!.waitForServerStatus(machineId, "running", 90_000);
       return;

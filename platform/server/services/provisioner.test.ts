@@ -418,7 +418,7 @@ describe("Provisioner", () => {
           return Promise.resolve(okResponse({ action: { id: 703, status: "success", command: "poweroff" } }));
         }
         if (url === `${HETZNER_BASE}/servers/801/actions/change_type` && method === "POST") {
-          serverStatus = "running";
+          serverStatus = "off";
           return Promise.resolve(okResponse({ action: { id: 704, status: "success", command: "change_type" } }));
         }
         if (url === `${HETZNER_BASE}/servers/801` && method === "DELETE") {
@@ -475,6 +475,10 @@ describe("Provisioner", () => {
       expect(changeTypeCall).toBeTruthy();
       const body = JSON.parse(changeTypeCall![1].body);
       expect(body.server_type).toBe("cx32");
+
+      const methods = fetchMock.mock.calls.map((c: any[]) => `${c[1].method} ${c[0]}`);
+      expect(methods).toContain(`POST ${HETZNER_BASE}/servers/801/actions/poweroff`);
+      expect(methods).toContain(`POST ${HETZNER_BASE}/servers/801/actions/poweron`);
     });
 
     it("deprovisions server and volume for hetzner", async () => {

@@ -240,4 +240,72 @@ describe("Provisioner (hetzner)", () => {
     const serverCall = fetchMock.mock.calls.find((c: any[]) => c[0] === `${HETZNER_BASE}/servers`);
     expect(JSON.parse(serverCall![1].body).location).toBe("hil");
   });
+
+  it("retries with another location when server type is unsupported in first location", async () => {
+    fetchMock.mockImplementation((url: string, opts: RequestInit) => {
+      const method = opts.method ?? "GET";
+      if (url === `${HETZNER_BASE}/volumes` && method === "POST") {
+        const body = JSON.parse(String(opts.body));
+        if (body.location === "ash") {
+          return Promise.resolve(okResponse({ volume: { id: 901, name: "companion_test_a", size: 10 } }));
+        }
+        return Promise.resolve(okResponse({ volume: { id: 902, name: "companion_test_b", size: 10 } }));
+      }
+      if (url === `${HETZNER_BASE}/servers` && method === "POST") {
+        const body = JSON.parse(String(opts.body));
+        if (body.location === "ash") {
+          return Promise.resolve({
+            ok: false,
+            status: 422,
+            text: () =>
+              Promise.resolve(
+                `{"error":{"code":"invalid_input","message":"unsupported location for server type"}}`,
+              ),
+          } as unknown as Response);
+        }
+        return Promise.resolve(okResponse({
+          server: { id: 801, status: "starting", public_net: { ipv4: { ip: "1.2.3.4" } } },
+          action: { id: 701, status: "running", command: "create_server" },
+        }));
+      }
+      if (url === `${HETZNER_BASE}/actions/701` && method === "GET") {
+        return Promise.resolve(okResponse({ action: { id: 701, status: "success", command: "create_server" } }));
+      }
+      if (url === `${HETZNER_BASE}/servers/801` && method === "GET") {
+        return Promise.resolve(okResponse({
+          server: { id: 801, status: "running", public_net: { ipv4: { ip: "1.2.3.4" } } },
+        }));
+      }
+      if (url === `${HETZNER_BASE}/volumes/901` && method === "DELETE") {
+        return Promise.resolve(okResponse({}));
+      }
+      if (url === `${HETZNER_BASE}/servers/801` && method === "DELETE") {
+        return Promise.resolve(okResponse({}));
+      }
+      if (url === `${HETZNER_BASE}/volumes/902` && method === "DELETE") {
+        return Promise.resolve(okResponse({}));
+      }
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        text: () => Promise.resolve(`Unexpected fetch: ${method} ${url}`),
+      } as unknown as Response);
+    });
+
+    const provisioner = makeProvisioner();
+    const result = await provisioner.provision({
+      organizationId: "org-1",
+      plan: "starter",
+      region: "iad",
+      hostname: "demo",
+      loginUrl: "",
+    });
+
+    expect(result.providerVolumeId).toBe("902");
+    const createdServerBodies = fetchMock.mock.calls
+      .filter((c: any[]) => c[0] === `${HETZNER_BASE}/servers` && c[1].method === "POST")
+      .map((c: any[]) => JSON.parse(c[1].body));
+    expect(createdServerBodies[0].location).toBe("ash");
+    expect(createdServerBodies[1].location).toBe("hil");
+  });
 });

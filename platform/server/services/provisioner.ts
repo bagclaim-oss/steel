@@ -90,6 +90,11 @@ export class Provisioner {
     return message.includes("field 'location'") || message.includes("invalid input in field 'location'");
   }
 
+  private isUnsupportedServerLocationError(err: unknown): boolean {
+    const message = String((err as any)?.message || "");
+    return message.includes("unsupported location for server type");
+  }
+
   private buildHetznerUserData(input: ProvisionInput, authSecret: string, volumeName: string): string {
     const loginUrl = sanitizeCloudInitValue(input.loginUrl);
     const tailscaleAuthKey = sanitizeCloudInitValue(input.tailscaleAuthKey);
@@ -160,12 +165,11 @@ ${env}
     const progress = input.onProgress ?? (() => {});
     const candidateLocations = this.mapRegionToHetznerLocation(input.region);
     const volumeName = makeVolumeName(input.hostname || `${input.organizationId}-${Date.now()}`);
+    let lastError: unknown = null;
 
-    progress("creating_volume", "Creating storage volume", "in_progress");
-    let volume: Awaited<ReturnType<HetznerCloudClient["createVolume"]>> | null = null;
-    let locationUsed = "";
-    let lastLocationError: unknown = null;
     for (const location of candidateLocations) {
+      progress("creating_volume", "Creating storage volume", "in_progress");
+      let volume: Awaited<ReturnType<HetznerCloudClient["createVolume"]>> | null = null;
       try {
         volume = await this.hetzner.createVolume({
           name: volumeName,
@@ -176,55 +180,61 @@ ${env}
             organization: input.organizationId,
           },
         });
-        locationUsed = location;
-        break;
+        progress("creating_volume", "Creating storage volume", "done");
       } catch (err) {
-        if (!this.isInvalidLocationError(err)) throw err;
-        lastLocationError = err;
+        if (this.isInvalidLocationError(err)) {
+          lastError = err;
+          continue;
+        }
+        throw err;
+      }
+
+      progress("creating_machine", "Creating server", "in_progress");
+      let serverId: number | null = null;
+      try {
+        const response = await this.hetzner.createServer({
+          name: makeMachineName(input.hostname || `${input.organizationId}-${Date.now()}`),
+          server_type: this.hetznerServerTypes[input.plan],
+          location,
+          image: "ubuntu-24.04",
+          volumes: [volume.id],
+          user_data: this.buildHetznerUserData(input, authSecret, volume.name),
+          ssh_keys: this.hetznerSshKeyId ? [this.hetznerSshKeyId] : undefined,
+          labels: {
+            app: "companion",
+            organization: input.organizationId,
+          },
+        });
+        serverId = response.server.id;
+        if (response.action?.id) {
+          await this.hetzner.waitForAction(response.action.id, 120_000);
+        }
+        progress("creating_machine", "Creating server", "done");
+
+        progress("waiting_start", "Waiting for server to start", "in_progress");
+        const server = await this.hetzner.waitForServerStatus(serverId, "running", 120_000);
+        progress("waiting_start", "Waiting for server to start", "done");
+
+        return {
+          providerMachineId: String(serverId),
+          providerVolumeId: String(volume.id),
+          authSecret,
+          hostname: input.hostname || server.public_net?.ipv4?.ip || "",
+        };
+      } catch (err) {
+        if (serverId !== null) {
+          try { await this.hetzner.deleteServer(serverId); } catch {}
+        }
+        try { await this.hetzner.deleteVolume(volume.id); } catch {}
+        if (this.isInvalidLocationError(err) || this.isUnsupportedServerLocationError(err)) {
+          lastError = err;
+          continue;
+        }
+        throw err;
       }
     }
-    if (!volume) throw lastLocationError ?? new Error("Failed to create volume: no usable Hetzner location");
-    progress("creating_volume", "Creating storage volume", "done");
 
-    progress("creating_machine", "Creating server", "in_progress");
-    let serverId: number | null = null;
-    try {
-      const response = await this.hetzner.createServer({
-        name: makeMachineName(input.hostname || `${input.organizationId}-${Date.now()}`),
-        server_type: this.hetznerServerTypes[input.plan],
-        location: locationUsed,
-        image: "ubuntu-24.04",
-        volumes: [volume.id],
-        user_data: this.buildHetznerUserData(input, authSecret, volume.name),
-        ssh_keys: this.hetznerSshKeyId ? [this.hetznerSshKeyId] : undefined,
-        labels: {
-          app: "companion",
-          organization: input.organizationId,
-        },
-      });
-      serverId = response.server.id;
-      if (response.action?.id) {
-        await this.hetzner.waitForAction(response.action.id, 120_000);
-      }
-      progress("creating_machine", "Creating server", "done");
-
-      progress("waiting_start", "Waiting for server to start", "in_progress");
-      const server = await this.hetzner.waitForServerStatus(serverId, "running", 120_000);
-      progress("waiting_start", "Waiting for server to start", "done");
-
-      return {
-        providerMachineId: String(serverId),
-        providerVolumeId: String(volume.id),
-        authSecret,
-        hostname: input.hostname || server.public_net?.ipv4?.ip || "",
-      };
-    } catch (err) {
-      if (serverId !== null) {
-        try { await this.hetzner.deleteServer(serverId); } catch {}
-      }
-      try { await this.hetzner.deleteVolume(volume.id); } catch {}
-      throw err;
-    }
+    throw lastError ?? new Error("Failed to provision instance in available Hetzner locations");
   }
 
   async deprovision(machineId: string, volumeId: string): Promise<void> {

@@ -3473,6 +3473,19 @@ describe("CodexAdapter with ICodexTransport", () => {
     expect(adapter.getThreadId()).toBe("thr_fresh_new");
     // No init errors should have been raised (fallback succeeded)
     expect(initErrors.length).toBe(0);
+
+    // Verify that options.threadId was updated: after resetForReconnect,
+    // the adapter should attempt thread/resume with the NEW thread ID,
+    // not the original stale one.
+    const mock2 = createMockTransport();
+    adapter.resetForReconnect(mock2.transport);
+    await new Promise((r) => setTimeout(r, 50));
+    mock2.resolveCall(1, { userAgent: "codex" });
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Should now try to resume "thr_fresh_new", not "thr_stale_rollout"
+    expect(mock2.calls[1]?.method).toBe("thread/resume");
+    expect(mock2.calls[1]?.params?.threadId).toBe("thr_fresh_new");
   });
 
   it("propagates thread/start failure even after resume fallback", async () => {

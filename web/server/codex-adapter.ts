@@ -797,6 +797,9 @@ export class CodexAdapter {
                 ...(this.options.systemPrompt ? { instructions: this.options.systemPrompt } : {}),
               }) as { thread: { id: string } };
               this.threadId = freshResult.thread.id;
+              // Update options.threadId so subsequent resetForReconnect calls
+              // attempt to resume this new thread, not the original stale one.
+              this.options.threadId = freshResult.thread.id;
             }
           } else {
             const threadResult = await this.transport.call("thread/start", {

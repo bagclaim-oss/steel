@@ -122,12 +122,14 @@ export function SandboxManager({ embedded = false }: Props) {
     testTokenRef.current = {};
     setEditingSlug(null);
     setTestResult(null);
+    setTestingSlug(null);
     setError("");
   }
 
   async function saveEdit() {
     if (!editingSlug) return;
     testTokenRef.current = {};
+    setTestingSlug(null);
     try {
       await api.updateSandbox(editingSlug, {
         name: editName.trim() || undefined,

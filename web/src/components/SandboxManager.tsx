@@ -31,6 +31,8 @@ export function SandboxManager({ embedded = false }: Props) {
   // Init script test state
   const [testingSlug, setTestingSlug] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ success: boolean; exitCode: number; output: string } | null>(null);
+  // Cancellation token to prevent stale test results from surfacing after save/cancel
+  const testTokenRef = useRef({});
 
   // Server cwd (for test-init)
   const [serverCwd, setServerCwd] = useState<string>("");
@@ -108,6 +110,7 @@ export function SandboxManager({ embedded = false }: Props) {
   }
 
   function startEdit(sandbox: CompanionSandbox) {
+    testTokenRef.current = {};
     setEditingSlug(sandbox.slug);
     setEditName(sandbox.name);
     setEditInitScript(sandbox.initScript || "");
@@ -116,6 +119,7 @@ export function SandboxManager({ embedded = false }: Props) {
   }
 
   function cancelEdit() {
+    testTokenRef.current = {};
     setEditingSlug(null);
     setTestResult(null);
     setError("");
@@ -123,6 +127,7 @@ export function SandboxManager({ embedded = false }: Props) {
 
   async function saveEdit() {
     if (!editingSlug) return;
+    testTokenRef.current = {};
     try {
       await api.updateSandbox(editingSlug, {
         name: editName.trim() || undefined,
@@ -149,21 +154,25 @@ export function SandboxManager({ embedded = false }: Props) {
 
   async function handleTestInitScript(slug: string) {
     if (!serverCwd) return;
+    const token = {};
+    testTokenRef.current = token;
     setTestingSlug(slug);
     setTestResult(null);
     try {
       // Send the current (possibly unsaved) init script content directly
       // to the test endpoint — no save needed, so Cancel still discards edits.
       const result = await api.testInitScript(slug, serverCwd, editInitScript);
+      if (testTokenRef.current !== token) return; // stale — form was saved/cancelled
       setTestResult(result);
     } catch (e: unknown) {
+      if (testTokenRef.current !== token) return;
       setTestResult({
         success: false,
         exitCode: -1,
         output: e instanceof Error ? e.message : String(e),
       });
     } finally {
-      setTestingSlug(null);
+      if (testTokenRef.current === token) setTestingSlug(null);
     }
   }
 

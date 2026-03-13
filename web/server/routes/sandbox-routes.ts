@@ -74,8 +74,9 @@ export function registerSandboxRoutes(
     if (!initScript) return c.json({ error: "No init script configured for this sandbox" }, 400);
     if (!rawCwd) return c.json({ error: "Working directory (cwd) is required" }, 400);
 
-    // Normalize path to collapse traversal sequences
+    // Normalize and validate path — must resolve to an absolute path
     const cwd = resolve(String(rawCwd));
+    if (!cwd.startsWith("/")) return c.json({ error: "Working directory must be an absolute path" }, 400);
 
     if (!containerManager.checkDocker()) return c.json({ error: "Docker is not available" }, 503);
 
@@ -104,10 +105,14 @@ export function registerSandboxRoutes(
         { timeout: initTimeout },
       );
 
+      const output = result.output.length > 2000
+        ? result.output.slice(0, 500) + "\n...[truncated]...\n" + result.output.slice(-1500)
+        : result.output;
+
       return c.json({
         success: result.exitCode === 0,
         exitCode: result.exitCode,
-        output: result.output,
+        output,
       });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);

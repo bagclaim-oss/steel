@@ -66,8 +66,8 @@ describe("instances table", () => {
     const config = getTableConfig(instances);
     const columnNames = config.columns.map((c) => c.name);
     expect(columnNames).toContain("id");
-    expect(columnNames).toContain("provider_machine_id");
-    expect(columnNames).toContain("provider_volume_id");
+    expect(columnNames).toContain("fly_machine_id");
+    expect(columnNames).toContain("fly_volume_id");
     expect(columnNames).toContain("region");
     expect(columnNames).toContain("hostname");
     expect(columnNames).toContain("custom_domain");

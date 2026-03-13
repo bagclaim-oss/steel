@@ -75,13 +75,19 @@ export class Provisioner {
     };
   }
 
-  private mapRegionToHetznerLocation(region: string): string {
+  private mapRegionToHetznerLocation(region: string): string[] {
     const normalized = region.trim().toLowerCase();
-    if (normalized === "iad") return "ash";
-    if (normalized === "cdg") return "fsn";
-    if (normalized === "fra") return "fsn";
-    if (normalized === "ams") return "nbg";
-    return "ash";
+    // Ordered by preferred locality then broad fallback across generally available locations.
+    if (normalized === "iad") return ["ash", "hil", "fsn1", "nbg1", "hel1"];
+    if (normalized === "cdg") return ["fsn1", "nbg1", "hel1", "ash"];
+    if (normalized === "fra") return ["fsn1", "nbg1", "hel1", "ash"];
+    if (normalized === "ams") return ["nbg1", "fsn1", "hel1", "ash"];
+    return ["fsn1", "nbg1", "hel1", "ash"];
+  }
+
+  private isInvalidLocationError(err: unknown): boolean {
+    const message = String((err as any)?.message || "");
+    return message.includes("field 'location'") || message.includes("invalid input in field 'location'");
   }
 
   private buildHetznerUserData(input: ProvisionInput, authSecret: string, volumeName: string): string {
@@ -152,19 +158,32 @@ ${env}
     const config = PLAN_CONFIGS[input.plan];
     const authSecret = randomBytes(32).toString("hex");
     const progress = input.onProgress ?? (() => {});
-    const location = this.mapRegionToHetznerLocation(input.region);
+    const candidateLocations = this.mapRegionToHetznerLocation(input.region);
     const volumeName = makeVolumeName(input.hostname || `${input.organizationId}-${Date.now()}`);
 
     progress("creating_volume", "Creating storage volume", "in_progress");
-    const volume = await this.hetzner.createVolume({
-      name: volumeName,
-      location,
-      size: config.storage_gb,
-      labels: {
-        app: "companion",
-        organization: input.organizationId,
-      },
-    });
+    let volume: Awaited<ReturnType<HetznerCloudClient["createVolume"]>> | null = null;
+    let locationUsed = "";
+    let lastLocationError: unknown = null;
+    for (const location of candidateLocations) {
+      try {
+        volume = await this.hetzner.createVolume({
+          name: volumeName,
+          location,
+          size: config.storage_gb,
+          labels: {
+            app: "companion",
+            organization: input.organizationId,
+          },
+        });
+        locationUsed = location;
+        break;
+      } catch (err) {
+        if (!this.isInvalidLocationError(err)) throw err;
+        lastLocationError = err;
+      }
+    }
+    if (!volume) throw lastLocationError ?? new Error("Failed to create volume: no usable Hetzner location");
     progress("creating_volume", "Creating storage volume", "done");
 
     progress("creating_machine", "Creating server", "in_progress");
@@ -173,7 +192,7 @@ ${env}
       const response = await this.hetzner.createServer({
         name: makeMachineName(input.hostname || `${input.organizationId}-${Date.now()}`),
         server_type: this.hetznerServerTypes[input.plan],
-        location,
+        location: locationUsed,
         image: "ubuntu-24.04",
         volumes: [volume.id],
         user_data: this.buildHetznerUserData(input, authSecret, volume.name),

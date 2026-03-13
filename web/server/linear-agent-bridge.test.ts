@@ -41,15 +41,18 @@ function createMockWsBridge() {
   } as unknown as import("./ws-bridge.js").WsBridge;
 }
 
-function makeCreatedEvent(overrides: Partial<AgentSessionEventPayload["data"]> = {}): AgentSessionEventPayload {
+function makeCreatedEvent(overrides: Partial<AgentSessionEventPayload> = {}): AgentSessionEventPayload {
   return {
     action: "created",
     type: "AgentSessionEvent",
-    data: {
+    agentSession: {
       id: "linear-session-1",
-      promptContext: "Fix the login bug on issue LIN-42",
-      ...overrides,
+      status: "pending",
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
     },
+    promptContext: "Fix the login bug on issue LIN-42",
+    ...overrides,
   };
 }
 
@@ -57,7 +60,12 @@ function makePromptedEvent(linearSessionId: string, message: string): AgentSessi
   return {
     action: "prompted",
     type: "AgentSessionEvent",
-    data: { id: linearSessionId },
+    agentSession: {
+      id: linearSessionId,
+      status: "inProgress",
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    },
     agentActivity: { body: message },
   };
 }
@@ -196,27 +204,34 @@ describe("LinearAgentBridge", () => {
       );
     });
 
-    it("handles top-level payload shape (no nested data object)", async () => {
-      // Some Linear SDK versions send id/promptContext at the top level instead of under data
+    it("extracts session ID from agentSession and promptContext from top level", async () => {
+      // Real Linear payload has agentSession.id for session ID and top-level promptContext
       vi.mocked(agentStore.listAgents).mockReturnValue([testAgent] as ReturnType<typeof agentStore.listAgents>);
       vi.mocked(executor.executeAgent).mockResolvedValue({ sessionId: "comp-sess-2" } as never);
 
       await bridge.handleEvent({
         action: "created",
         type: "AgentSessionEvent",
-        id: "linear-session-top",
-        promptContext: "Top-level prompt",
+        agentSession: {
+          id: "real-linear-session",
+          status: "pending",
+          createdAt: "2026-03-13T16:59:47.380Z",
+          updatedAt: "2026-03-13T16:59:47.380Z",
+          issue: { id: "issue-1", title: "Fix bug", identifier: "THE-42", url: "https://linear.app/..." },
+        },
+        promptContext: "<issue identifier=\"THE-42\"><title>Fix bug</title></issue>",
+        organizationId: "org-1",
       });
 
       expect(executor.executeAgent).toHaveBeenCalledWith(
         "agent-1",
-        "Top-level prompt",
+        "<issue identifier=\"THE-42\"><title>Fix bug</title></issue>",
         { force: true, triggerType: "linear" },
       );
     });
 
-    it("returns early when no session ID found in payload", async () => {
-      // Payload with neither data.id nor top-level id
+    it("returns early when agentSession is missing from payload", async () => {
+      // Malformed payload without agentSession
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
       await bridge.handleEvent({

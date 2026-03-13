@@ -52,10 +52,13 @@ function createApp() {
 const validPayload = {
   type: "AgentSessionEvent",
   action: "created",
-  data: {
+  agentSession: {
     id: "session-123",
-    promptContext: "Fix the bug",
+    status: "pending",
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
   },
+  promptContext: "Fix the bug",
 };
 
 // ─── Webhook endpoint tests ─────────────────────────────────────────────────

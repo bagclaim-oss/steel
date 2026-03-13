@@ -78,9 +78,8 @@ export class LinearAgentBridge {
 
   /** Handle a new agent session (user mentioned or assigned the agent). */
   private async handleCreated(payload: AgentSessionEventPayload): Promise<void> {
-    // Support both nested `data.id` and top-level `id` payload shapes
-    const linearSessionId = payload.data?.id ?? payload.id;
-    const promptContext = payload.data?.promptContext ?? payload.promptContext ?? "";
+    const linearSessionId = payload.agentSession?.id;
+    const promptContext = payload.promptContext ?? "";
 
     if (!linearSessionId) {
       console.error("[linear-agent-bridge] No session ID found in payload:", JSON.stringify(payload));
@@ -157,9 +156,8 @@ export class LinearAgentBridge {
 
   /** Handle a follow-up prompt in an existing agent session. */
   private async handlePrompted(payload: AgentSessionEventPayload): Promise<void> {
-    // Support both nested `data.id` and top-level `id` payload shapes
-    const linearSessionId = payload.data?.id ?? payload.id;
-    const message = (payload.agentActivity?.body || "").trim();
+    const linearSessionId = payload.agentSession?.id;
+    const message = (payload.agentActivity?.body ?? payload.promptContext ?? "").trim();
 
     if (!linearSessionId) {
       console.error("[linear-agent-bridge] No session ID found in prompted payload:", JSON.stringify(payload));
@@ -179,8 +177,7 @@ export class LinearAgentBridge {
       await this.handleCreated({
         ...payload,
         action: "created",
-        data: payload.data ? { ...payload.data, promptContext: message } : undefined,
-        promptContext: payload.data ? undefined : message,
+        promptContext: message,
       });
       return;
     }
@@ -199,8 +196,7 @@ export class LinearAgentBridge {
       await this.handleCreated({
         ...payload,
         action: "created",
-        data: payload.data ? { ...payload.data, promptContext: message } : undefined,
-        promptContext: payload.data ? undefined : message,
+        promptContext: message,
       });
       return;
     }

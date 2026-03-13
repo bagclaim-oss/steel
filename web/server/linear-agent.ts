@@ -85,29 +85,73 @@ export interface AgentPlanItem {
   status: "pending" | "inProgress" | "completed" | "canceled";
 }
 
+/** The agent session object nested inside the webhook payload. */
+export interface AgentSessionData {
+  id: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  creatorId?: string;
+  issueId?: string;
+  commentId?: string;
+  url?: string;
+  externalUrls?: Array<{ label: string; url: string }>;
+  summary?: string | null;
+  plan?: unknown;
+  context?: unknown[];
+  creator?: {
+    id: string;
+    name: string;
+    email?: string;
+    url?: string;
+  };
+  comment?: {
+    id: string;
+    body: string;
+    userId: string;
+    issueId: string;
+  };
+  issue?: {
+    id: string;
+    title: string;
+    identifier: string;
+    url: string;
+    description?: string;
+    teamId?: string;
+    team?: {
+      id: string;
+      key: string;
+      name: string;
+    };
+  };
+}
+
 export interface AgentSessionEventPayload {
   action: "created" | "prompted";
   type: "AgentSessionEvent";
-  /** Session data — may be nested under `data` or at the top level depending on SDK version */
-  data?: {
-    id: string;
-    issueId?: string;
-    agentId?: string;
-    promptContext?: string;
-  };
-  /** Top-level session ID (when not nested under `data`) */
-  id?: string;
-  issueId?: string;
-  agentId?: string;
+  createdAt?: string;
+  organizationId?: string;
+  oauthClientId?: string;
+  appUserId?: string;
+  /** The agent session — contains id, issue, comment, creator, etc. */
+  agentSession?: AgentSessionData;
+  /** Rich XML prompt context provided by Linear */
   promptContext?: string;
-  /** Present on "prompted" events — the user's follow-up message */
+  /** Previous comments in the thread */
+  previousComments?: Array<{
+    id: string;
+    body: string;
+    userId: string;
+    issueId: string;
+  }>;
+  /** Agent guidance configured in Linear */
+  guidance?: string | null;
+  /** Present on "prompted" events — the user's follow-up activity */
   agentActivity?: {
     body?: string;
   };
   webhookTimestamp?: number;
-  organizationId?: string;
-  url?: string;
-  createdAt?: string;
+  webhookId?: string;
 }
 
 // ─── GraphQL helper ─────────────────────────────────────────────────────────

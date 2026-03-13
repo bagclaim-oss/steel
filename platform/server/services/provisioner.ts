@@ -35,9 +35,15 @@ interface ProvisionerConfig {
 }
 
 const DEFAULT_SERVER_TYPE_CANDIDATES: Record<Plan, string[]> = {
-  starter: ["cx22", "cpx11"],
-  pro: ["cx32", "cpx21"],
-  enterprise: ["cx42", "cpx31"],
+  starter: ["cpx11", "cpx22", "cx23"],
+  pro: ["cpx21", "cpx32", "cx33"],
+  enterprise: ["cpx31", "cpx42", "cx43"],
+};
+
+const EUROPE_SERVER_TYPE_CANDIDATES: Record<Plan, string[]> = {
+  starter: ["cpx22", "cx23", "cpx11"],
+  pro: ["cpx32", "cx33", "cpx21"],
+  enterprise: ["cpx42", "cx43", "cpx31"],
 };
 
 function makeVolumeName(hostname: string, suffixSeed: string): string {
@@ -81,9 +87,15 @@ export class Provisioner {
     };
   }
 
-  private getServerTypeCandidates(plan: Plan): string[] {
+  private getServerTypeCandidates(plan: Plan, region: string): string[] {
     const configured = this.hetznerServerTypes[plan];
-    return [configured, ...DEFAULT_SERVER_TYPE_CANDIDATES[plan]].filter(
+    const normalizedRegion = region.trim().toLowerCase();
+    const regionDefaults =
+      normalizedRegion === "iad"
+        ? [DEFAULT_SERVER_TYPE_CANDIDATES[plan][0]]
+        : EUROPE_SERVER_TYPE_CANDIDATES[plan];
+
+    return [configured, ...regionDefaults, ...DEFAULT_SERVER_TYPE_CANDIDATES[plan]].filter(
       (value, index, arr): value is string => Boolean(value) && arr.indexOf(value) === index,
     );
   }
@@ -92,10 +104,10 @@ export class Provisioner {
     const normalized = region.trim().toLowerCase();
     // Keep fallbacks inside the selected geography.
     if (normalized === "iad") return ["ash", "hil"];
-    if (normalized === "cdg") return ["fsn1", "nbg1", "hel1"];
-    if (normalized === "fra") return ["fsn1", "nbg1", "hel1"];
-    if (normalized === "ams") return ["nbg1", "fsn1", "hel1"];
-    return ["fsn1", "nbg1", "hel1"];
+    if (normalized === "cdg") return ["nbg1", "hel1", "fsn1"];
+    if (normalized === "fra") return ["nbg1", "hel1", "fsn1"];
+    if (normalized === "ams") return ["nbg1", "hel1", "fsn1"];
+    return ["nbg1", "hel1", "fsn1"];
   }
 
   private isInvalidLocationError(err: unknown): boolean {
@@ -106,6 +118,16 @@ export class Provisioner {
   private isUnsupportedServerLocationError(err: unknown): boolean {
     const message = String((err as any)?.message || "");
     return message.includes("unsupported location for server type");
+  }
+
+  private isDeprecatedServerTypeError(err: unknown): boolean {
+    const message = String((err as any)?.message || "");
+    return message.includes("server type") && message.includes("deprecated");
+  }
+
+  private isServerLocationDisabledError(err: unknown): boolean {
+    const message = String((err as any)?.message || "");
+    return message.includes("server location disabled");
   }
 
   private isNotFoundError(err: unknown): boolean {
@@ -191,7 +213,7 @@ ${env}
     const authSecret = randomBytes(32).toString("hex");
     const progress = input.onProgress ?? (() => {});
     const candidateLocations = this.mapRegionToHetznerLocation(input.region);
-    const candidateServerTypes = this.getServerTypeCandidates(input.plan);
+    const candidateServerTypes = this.getServerTypeCandidates(input.plan, input.region);
     const resourceSuffix = randomBytes(4).toString("hex");
     const volumeName = makeVolumeName(input.hostname || `${input.organizationId}-${Date.now()}`, resourceSuffix);
     const machineName = makeMachineName(input.hostname || `${input.organizationId}-${Date.now()}`, resourceSuffix);
@@ -257,7 +279,12 @@ ${env}
           try { await this.hetzner.deleteServer(serverId); } catch {}
         }
         try { await this.hetzner.deleteVolume(volume.id); } catch {}
-        if (this.isInvalidLocationError(err) || this.isUnsupportedServerLocationError(err)) {
+        if (
+          this.isInvalidLocationError(err) ||
+          this.isUnsupportedServerLocationError(err) ||
+          this.isDeprecatedServerTypeError(err) ||
+          this.isServerLocationDisabledError(err)
+        ) {
           lastError = err;
           continue;
         }

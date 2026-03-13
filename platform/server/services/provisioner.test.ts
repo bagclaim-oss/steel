@@ -90,9 +90,9 @@ describe("Provisioner (hetzner)", () => {
       hetznerToken: "hcloud-token",
       companionImage: "docker.io/stangirard/the-companion-server:latest",
       hetznerServerTypes: {
-        starter: "cx22",
-        pro: "cx32",
-        enterprise: "cx42",
+        starter: "cpx11",
+        pro: "cpx21",
+        enterprise: "cpx31",
       },
     });
   }
@@ -128,7 +128,7 @@ describe("Provisioner (hetzner)", () => {
 
     const serverCall = fetchMock.mock.calls.find((c: any[]) => c[0] === `${HETZNER_BASE}/servers`);
     const body = JSON.parse(serverCall![1].body);
-    expect(body.server_type).toBe("cx22");
+    expect(body.server_type).toBe("cpx11");
     expect(body.user_data).toContain("COMPANION_AUTH_TOKEN=");
     expect(body.user_data).toContain("COMPANION_AUTH_ENABLED=0");
 
@@ -169,7 +169,7 @@ describe("Provisioner (hetzner)", () => {
     const changeTypeCall = fetchMock.mock.calls.find(
       (c: any[]) => c[0] === `${HETZNER_BASE}/servers/801/actions/change_type`,
     );
-    expect(JSON.parse(changeTypeCall![1].body).server_type).toBe("cx32");
+    expect(JSON.parse(changeTypeCall![1].body).server_type).toBe("cpx21");
   });
 
   it("sanitizes loginUrl/tailscale values before embedding cloud-init", async () => {
@@ -381,8 +381,143 @@ describe("Provisioner (hetzner)", () => {
       .map((c: any[]) => JSON.parse(c[1].body));
 
     expect(createdServerBodies.some((body: any) => body.server_type === "cpx11")).toBe(true);
-    expect(createdServerBodies.some((body: any) => body.server_type === "cx22")).toBe(true);
+    expect(createdServerBodies.some((body: any) => body.server_type === "cpx22")).toBe(true);
     expect(createdServerBodies.every((body: any) => ["fsn1", "nbg1", "hel1"].includes(body.location))).toBe(true);
+  });
+
+  it("retries with a fallback when the configured server type is deprecated", async () => {
+    fetchMock.mockImplementation((url: string, opts: RequestInit) => {
+      const method = opts.method ?? "GET";
+      if (url === `${HETZNER_BASE}/volumes` && method === "POST") {
+        return Promise.resolve(okResponse({ volume: { id: 901, name: "companion_test_a", size: 10 } }));
+      }
+      if (url === `${HETZNER_BASE}/servers` && method === "POST") {
+        const body = JSON.parse(String(opts.body));
+        if (body.server_type === "104") {
+          return Promise.resolve({
+            ok: false,
+            status: 422,
+            text: () =>
+              Promise.resolve(
+                `{"error":{"code":"invalid_input","message":"server type 104 is deprecated"}}`,
+              ),
+          } as unknown as Response);
+        }
+        return Promise.resolve(okResponse({
+          server: { id: 801, status: "starting", public_net: { ipv4: { ip: "1.2.3.4" } } },
+          action: { id: 701, status: "running", command: "create_server" },
+        }));
+      }
+      if (url === `${HETZNER_BASE}/actions/701` && method === "GET") {
+        return Promise.resolve(okResponse({ action: { id: 701, status: "success", command: "create_server" } }));
+      }
+      if (url === `${HETZNER_BASE}/servers/801` && method === "GET") {
+        return Promise.resolve(okResponse({
+          server: { id: 801, status: "running", public_net: { ipv4: { ip: "1.2.3.4" } } },
+        }));
+      }
+      if (url === `${HETZNER_BASE}/volumes/901` && method === "DELETE") {
+        return Promise.resolve(okResponse({}));
+      }
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        text: () => Promise.resolve(`Unexpected fetch: ${method} ${url}`),
+      } as unknown as Response);
+    });
+
+    const provisioner = new Provisioner({
+      hetznerToken: "hcloud-token",
+      companionImage: "docker.io/stangirard/the-companion-server:latest",
+      hetznerServerTypes: {
+        starter: "104",
+      },
+    });
+
+    await provisioner.provision({
+      organizationId: "org-1",
+      plan: "starter",
+      region: "cdg",
+      hostname: "demo",
+      loginUrl: "",
+    });
+
+    const createdServerBodies = fetchMock.mock.calls
+      .filter((c: any[]) => c[0] === `${HETZNER_BASE}/servers` && c[1].method === "POST")
+      .map((c: any[]) => JSON.parse(c[1].body));
+    expect(createdServerBodies[0].server_type).toBe("104");
+    expect(createdServerBodies.some((body: any) => body.server_type === "cpx11" || body.server_type === "cpx22")).toBe(true);
+  });
+
+  it("retries the next European location when a server location is disabled", async () => {
+    fetchMock.mockImplementation((url: string, opts: RequestInit) => {
+      const method = opts.method ?? "GET";
+      if (url === `${HETZNER_BASE}/volumes` && method === "POST") {
+        const body = JSON.parse(String(opts.body));
+        if (body.location === "nbg1") {
+          return Promise.resolve(okResponse({ volume: { id: 901, name: "companion_test_a", size: 10 } }));
+        }
+        return Promise.resolve(okResponse({ volume: { id: 902, name: "companion_test_b", size: 10 } }));
+      }
+      if (url === `${HETZNER_BASE}/servers` && method === "POST") {
+        const body = JSON.parse(String(opts.body));
+        if (body.location === "nbg1") {
+          return Promise.resolve({
+            ok: false,
+            status: 412,
+            text: () =>
+              Promise.resolve(
+                `{"error":{"code":"resource_unavailable","message":"server location disabled"}}`,
+              ),
+          } as unknown as Response);
+        }
+        return Promise.resolve(okResponse({
+          server: { id: 801, status: "starting", public_net: { ipv4: { ip: "1.2.3.4" } } },
+          action: { id: 701, status: "running", command: "create_server" },
+        }));
+      }
+      if (url === `${HETZNER_BASE}/actions/701` && method === "GET") {
+        return Promise.resolve(okResponse({ action: { id: 701, status: "success", command: "create_server" } }));
+      }
+      if (url === `${HETZNER_BASE}/servers/801` && method === "GET") {
+        return Promise.resolve(okResponse({
+          server: { id: 801, status: "running", public_net: { ipv4: { ip: "1.2.3.4" } } },
+        }));
+      }
+      if (url === `${HETZNER_BASE}/volumes/901` && method === "DELETE") {
+        return Promise.resolve(okResponse({}));
+      }
+      if (url === `${HETZNER_BASE}/volumes/902` && method === "DELETE") {
+        return Promise.resolve(okResponse({}));
+      }
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        text: () => Promise.resolve(`Unexpected fetch: ${method} ${url}`),
+      } as unknown as Response);
+    });
+
+    const provisioner = new Provisioner({
+      hetznerToken: "hcloud-token",
+      companionImage: "docker.io/stangirard/the-companion-server:latest",
+      hetznerServerTypes: {
+        starter: "cpx22",
+      },
+    });
+
+    await provisioner.provision({
+      organizationId: "org-1",
+      plan: "starter",
+      region: "cdg",
+      hostname: "demo",
+      loginUrl: "",
+    });
+
+    const createdServerBodies = fetchMock.mock.calls
+      .filter((c: any[]) => c[0] === `${HETZNER_BASE}/servers` && c[1].method === "POST")
+      .map((c: any[]) => JSON.parse(c[1].body));
+    expect(createdServerBodies[0].location).toBe("nbg1");
+    expect(createdServerBodies[1].location).toBe("hel1");
   });
 
   it("does not cross from Europe selection into US locations", async () => {

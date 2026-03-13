@@ -106,7 +106,9 @@ export function registerLinearAgentProtectedRoutes(api: Hono): void {
     const baseUrl = settings.publicUrl || `http://localhost:${process.env.PORT || 3456}`;
     const redirectUri = `${baseUrl}/api/linear/oauth/callback`;
     const returnTo = c.req.query("returnTo");
-    const result = linearAgent.getOAuthAuthorizeUrl(redirectUri, returnTo || undefined);
+    // Validate returnTo is a safe relative hash-router path to prevent open redirects
+    const safeReturnTo = returnTo && /^\/?#\//.test(returnTo) ? returnTo : undefined;
+    const result = linearAgent.getOAuthAuthorizeUrl(redirectUri, safeReturnTo);
 
     if (!result) {
       return c.json({ error: "OAuth client ID not configured" }, 400);

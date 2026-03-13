@@ -49,7 +49,9 @@ export function parseHash(hash: string): Route {
   if (hash === "#/agents") return { page: "agents" };
   if (hash === "#/runs") return { page: "runs" };
   if (hash === "#/playground") return { page: "playground" };
-  if (hash.startsWith("#/setup/linear-agent")) return { page: "setup-linear-agent" };
+  // Strip query params from hash for matching (OAuth callback appends ?oauth_success=true)
+  const hashPath = hash.split("?")[0];
+  if (hashPath === "#/setup/linear-agent") return { page: "setup-linear-agent" };
 
   if (hash.startsWith(AGENT_PREFIX)) {
     const agentId = hash.slice(AGENT_PREFIX.length);

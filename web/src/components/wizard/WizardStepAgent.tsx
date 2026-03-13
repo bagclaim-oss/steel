@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../../api.js";
+import { getDefaultModel } from "../../utils/backends.js";
 import { FolderPicker } from "../FolderPicker.js";
 
 interface WizardStepAgentProps {
@@ -46,7 +47,7 @@ export function WizardStepAgent({ onNext, onBack }: WizardStepAgentProps) {
         name: name.trim(),
         description: "Linear Agent created via setup wizard",
         backendType: backend,
-        model: model || (backend === "claude" ? "claude-sonnet-4-6" : ""),
+        model: model || getDefaultModel(backend),
         permissionMode: "bypassPermissions",
         cwd: cwd || "",
         prompt: prompt.trim(),
@@ -97,7 +98,7 @@ export function WizardStepAgent({ onNext, onBack }: WizardStepAgentProps) {
           <label className="block text-sm font-medium text-cc-fg mb-1.5">Backend</label>
           <div className="flex gap-2">
             <button
-              onClick={() => setBackend("claude")}
+              onClick={() => { setBackend("claude"); setModel(""); }}
               className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors cursor-pointer ${
                 backend === "claude"
                   ? "border-cc-primary bg-cc-primary/10 text-cc-primary"
@@ -107,7 +108,7 @@ export function WizardStepAgent({ onNext, onBack }: WizardStepAgentProps) {
               Claude Code
             </button>
             <button
-              onClick={() => setBackend("codex")}
+              onClick={() => { setBackend("codex"); setModel(""); }}
               className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors cursor-pointer ${
                 backend === "codex"
                   ? "border-cc-primary bg-cc-primary/10 text-cc-primary"

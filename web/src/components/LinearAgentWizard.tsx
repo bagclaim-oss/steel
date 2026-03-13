@@ -79,7 +79,11 @@ export function LinearAgentWizard() {
         window.location.hash = "#/setup/linear-agent";
       } else if (hash.includes("oauth_error=")) {
         const match = hash.match(/oauth_error=([^&]*)/);
-        oauthErr = decodeURIComponent(match?.[1] || "OAuth failed");
+        try {
+          oauthErr = decodeURIComponent(match?.[1] || "OAuth failed");
+        } catch {
+          oauthErr = match?.[1] || "OAuth failed";
+        }
         window.location.hash = "#/setup/linear-agent";
       }
 
@@ -94,7 +98,7 @@ export function LinearAgentWizard() {
       if (cancelled) return;
 
       const isConnected = oauthSuccess || serverStatus.hasAccessToken;
-      const hasCreds = serverStatus.configured || serverStatus.hasClientId;
+      const hasCreds = serverStatus.configured || (serverStatus.hasClientId && serverStatus.hasClientSecret);
 
       setOauthConnected(isConnected);
       setCredentialsSaved(hasCreds);

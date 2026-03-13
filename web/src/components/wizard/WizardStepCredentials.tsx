@@ -125,9 +125,9 @@ export function WizardStepCredentials({ onNext, onBack, credentialsSaved, onCred
           {!saved && (
             <button
               onClick={handleSave}
-              disabled={saving || (!clientId.trim() && !clientSecret.trim() && !webhookSecret.trim())}
+              disabled={saving || !clientId.trim() || !clientSecret.trim() || !webhookSecret.trim()}
               className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                saving || (!clientId.trim() && !clientSecret.trim() && !webhookSecret.trim())
+                saving || !clientId.trim() || !clientSecret.trim() || !webhookSecret.trim()
                   ? "bg-cc-hover text-cc-muted cursor-not-allowed"
                   : "bg-cc-primary hover:bg-cc-primary-hover text-white cursor-pointer"
               }`}

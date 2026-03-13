@@ -144,6 +144,23 @@ export class Provisioner {
     await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  private async waitForCompanionHealth(hostname: string, timeoutMs = 240_000): Promise<void> {
+    const url = `http://${hostname}/health`;
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      try {
+        const res = await fetch(url);
+        if (res.ok) return;
+      } catch {
+        // Instance bootstrap is still in progress.
+      }
+      await this.wait(5_000);
+    }
+
+    throw new Error(`Companion instance at ${hostname} did not become healthy within ${timeoutMs}ms`);
+  }
+
   private buildHetznerUserData(input: ProvisionInput, authSecret: string, volumeName: string): string {
     const loginUrl = sanitizeCloudInitValue(input.loginUrl);
     const tailscaleAuthKey = sanitizeCloudInitValue(input.tailscaleAuthKey);
@@ -268,11 +285,17 @@ ${env}
         const server = await this.hetzner.waitForServerStatus(serverId, "running", 120_000);
         progress("waiting_start", "Waiting for server to start", "done");
 
+        const serverIpv4 = server.public_net?.ipv4?.ip || "";
+        const resolvedHostname = input.hostname || serverIpv4;
+        progress("waiting_health", "Waiting for Companion to become reachable", "in_progress");
+        await this.waitForCompanionHealth(serverIpv4 || resolvedHostname, 240_000);
+        progress("waiting_health", "Waiting for Companion to become reachable", "done");
+
         return {
           providerMachineId: String(serverId),
           providerVolumeId: String(volume.id),
           authSecret,
-          hostname: input.hostname || server.public_net?.ipv4?.ip || "",
+          hostname: resolvedHostname,
         };
       } catch (err) {
         if (serverId !== null) {
@@ -298,10 +321,15 @@ ${env}
 
   async deprovision(machineId: string, volumeId: string): Promise<void> {
     try {
-      await this.hetzner.powerOff(machineId);
+      const action = await this.hetzner.powerOff(machineId);
+      if (action?.id) {
+        await this.hetzner.waitForAction(action.id, 90_000);
+      }
+      await this.hetzner.waitForServerStatus(machineId, "off", 90_000);
     } catch (err) {
       if (!this.isNotFoundError(err)) {
         // Instance may already be stopped or removed.
+        throw err;
       }
     }
     try {

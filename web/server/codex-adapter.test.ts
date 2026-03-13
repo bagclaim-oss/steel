@@ -3486,6 +3486,12 @@ describe("CodexAdapter with ICodexTransport", () => {
     // Should now try to resume "thr_fresh_new", not "thr_stale_rollout"
     expect(mock2.calls[1]?.method).toBe("thread/resume");
     expect(mock2.calls[1]?.params?.threadId).toBe("thr_fresh_new");
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        type: "error",
+        message: expect.stringContaining("context was reset"),
+      }),
+    );
   });
 
   it("propagates thread/start failure even after resume fallback", async () => {

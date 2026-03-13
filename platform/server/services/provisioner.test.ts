@@ -27,10 +27,17 @@ describe("Provisioner (hetzner)", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   let savedFetch: typeof global.fetch;
   let serverStatus = "running";
+  let healthAttempts = 0;
+  let waitSpy: ReturnType<typeof vi.spyOn>;
 
   function setupBaseFetch() {
     fetchMock.mockImplementation((url: string, opts: RequestInit) => {
-      const method = opts.method ?? "GET";
+      const method = opts?.method ?? "GET";
+
+      if (url === "http://1.2.3.4/health" && method === "GET") {
+        healthAttempts += 1;
+        return Promise.resolve(okResponse({ ok: true }));
+      }
 
       if (url === `${HETZNER_BASE}/volumes` && method === "POST") {
         return Promise.resolve(okResponse({ volume: { id: 901, name: "companion_test", size: 10 } }));
@@ -102,11 +109,14 @@ describe("Provisioner (hetzner)", () => {
     fetchMock = vi.fn();
     global.fetch = fetchMock as unknown as typeof fetch;
     serverStatus = "running";
+    healthAttempts = 0;
+    waitSpy = vi.spyOn(Provisioner.prototype as any, "wait").mockResolvedValue(undefined);
     setupBaseFetch();
   });
 
   afterEach(() => {
     global.fetch = savedFetch;
+    waitSpy.mockRestore();
   });
 
   it("provisions volume+server and returns IDs", async () => {
@@ -135,6 +145,7 @@ describe("Provisioner (hetzner)", () => {
     const volumeCall = fetchMock.mock.calls.find((c: any[]) => c[0] === `${HETZNER_BASE}/volumes`);
     expect(JSON.parse(volumeCall![1].body).name).toBe("companion_demo_feedbeef");
     expect(body.name).toBe("companion-demo-feedbeef");
+    expect(healthAttempts).toBe(1);
   });
 
   it("falls back to server ipv4 hostname when hostname is empty", async () => {
@@ -155,6 +166,53 @@ describe("Provisioner (hetzner)", () => {
     await expect(provisioner.stop("801")).resolves.toBeUndefined();
     await expect(provisioner.getStatus("801")).resolves.toBe("off");
     await expect(provisioner.deprovision("801", "901")).resolves.toBeUndefined();
+
+    const methods = fetchMock.mock.calls.map((c: any[]) => `${c[1]?.method ?? "GET"} ${c[0]}`);
+    expect(methods).toContain(`GET ${HETZNER_BASE}/actions/703`);
+  });
+
+  it("waits for the instance health endpoint before succeeding", async () => {
+    fetchMock.mockImplementation((url: string, opts: RequestInit) => {
+      const method = opts?.method ?? "GET";
+      if (url === `${HETZNER_BASE}/volumes` && method === "POST") {
+        return Promise.resolve(okResponse({ volume: { id: 901, name: "companion_test", size: 10 } }));
+      }
+      if (url === `${HETZNER_BASE}/servers` && method === "POST") {
+        return Promise.resolve(okResponse({
+          server: { id: 801, status: "starting", public_net: { ipv4: { ip: "1.2.3.4" } } },
+          action: { id: 701, status: "running", command: "create_server" },
+        }));
+      }
+      if (url === `${HETZNER_BASE}/actions/701` && method === "GET") {
+        return Promise.resolve(okResponse({ action: { id: 701, status: "success", command: "create_server" } }));
+      }
+      if (url === `${HETZNER_BASE}/servers/801` && method === "GET") {
+        return Promise.resolve(okResponse({
+          server: { id: 801, status: "running", public_net: { ipv4: { ip: "1.2.3.4" } } },
+        }));
+      }
+      if (url === "http://1.2.3.4/health" && method === "GET") {
+        healthAttempts += 1;
+        if (healthAttempts < 3) return Promise.reject(new Error("connect ECONNREFUSED"));
+        return Promise.resolve(okResponse({ ok: true }));
+      }
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        text: () => Promise.resolve(`Unexpected fetch: ${method} ${url}`),
+      } as unknown as Response);
+    });
+
+    const provisioner = makeProvisioner();
+    await expect(provisioner.provision({
+      organizationId: "org-1",
+      plan: "starter",
+      region: "iad",
+      hostname: "",
+      loginUrl: "",
+    })).resolves.toEqual(expect.objectContaining({ hostname: "1.2.3.4" }));
+
+    expect(healthAttempts).toBe(3);
   });
 
   it("resizes with required stop/change/start lifecycle", async () => {
@@ -191,6 +249,9 @@ describe("Provisioner (hetzner)", () => {
   it("falls back to next location when primary location is unavailable", async () => {
     fetchMock.mockImplementation((url: string, opts: RequestInit) => {
       const method = opts.method ?? "GET";
+      if (url === "http://1.2.3.4/health" && method === "GET") {
+        return Promise.resolve(okResponse({ ok: true }));
+      }
       if (url === `${HETZNER_BASE}/volumes` && method === "POST") {
         const body = JSON.parse(String(opts.body));
         if (body.location === "ash") {
@@ -254,6 +315,9 @@ describe("Provisioner (hetzner)", () => {
   it("retries with another location when server type is unsupported in first location", async () => {
     fetchMock.mockImplementation((url: string, opts: RequestInit) => {
       const method = opts.method ?? "GET";
+      if (url === "http://1.2.3.4/health" && method === "GET") {
+        return Promise.resolve(okResponse({ ok: true }));
+      }
       if (url === `${HETZNER_BASE}/volumes` && method === "POST") {
         const body = JSON.parse(String(opts.body));
         if (body.location === "ash") {
@@ -322,6 +386,9 @@ describe("Provisioner (hetzner)", () => {
   it("falls back to another server type within the selected geography", async () => {
     fetchMock.mockImplementation((url: string, opts: RequestInit) => {
       const method = opts.method ?? "GET";
+      if (url === "http://1.2.3.4/health" && method === "GET") {
+        return Promise.resolve(okResponse({ ok: true }));
+      }
       if (url === `${HETZNER_BASE}/volumes` && method === "POST") {
         return Promise.resolve(okResponse({ volume: { id: 901, name: "companion_test_a", size: 10 } }));
       }
@@ -388,6 +455,9 @@ describe("Provisioner (hetzner)", () => {
   it("retries with a fallback when the configured server type is deprecated", async () => {
     fetchMock.mockImplementation((url: string, opts: RequestInit) => {
       const method = opts.method ?? "GET";
+      if (url === "http://1.2.3.4/health" && method === "GET") {
+        return Promise.resolve(okResponse({ ok: true }));
+      }
       if (url === `${HETZNER_BASE}/volumes` && method === "POST") {
         return Promise.resolve(okResponse({ volume: { id: 901, name: "companion_test_a", size: 10 } }));
       }
@@ -452,6 +522,9 @@ describe("Provisioner (hetzner)", () => {
   it("retries the next European location when a server location is disabled", async () => {
     fetchMock.mockImplementation((url: string, opts: RequestInit) => {
       const method = opts.method ?? "GET";
+      if (url === "http://1.2.3.4/health" && method === "GET") {
+        return Promise.resolve(okResponse({ ok: true }));
+      }
       if (url === `${HETZNER_BASE}/volumes` && method === "POST") {
         const body = JSON.parse(String(opts.body));
         if (body.location === "nbg1") {

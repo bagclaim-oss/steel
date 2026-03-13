@@ -196,6 +196,12 @@ describe("instances routes (hetzner)", () => {
 
     expect(res.status).toBe(200);
     expect(resizeMock).toHaveBeenCalledWith("srv-1", "pro");
+    expect(updateSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        machineStatus: "started",
+        config: expect.objectContaining({ plan: "pro", provider: "hetzner", authMode: "static_token" }),
+      }),
+    );
   });
 
   it("issues instance token", async () => {
@@ -204,5 +210,38 @@ describe("instances routes (hetzner)", () => {
     const res = await instances.request("/inst-1/token", { method: "POST" });
     expect(res.status).toBe(200);
     expect(createInstanceTokenMock).toHaveBeenCalledWith("secret-1");
+  });
+
+  it("returns static token directly when authMode is static_token", async () => {
+    findFirstMock.mockResolvedValue({
+      id: "inst-1",
+      authSecret: "secret-1",
+      config: { authMode: "static_token" },
+    });
+
+    const res = await instances.request("/inst-1/token", { method: "POST" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ id: "inst-1", token: "secret-1" });
+    expect(createInstanceTokenMock).not.toHaveBeenCalled();
+  });
+
+  it("redirects embed requests with static token for ipv4 hosts", async () => {
+    findFirstMock.mockResolvedValue({
+      id: "11111111-1111-1111-1111-111111111111",
+      authSecret: "secret-1",
+      hostname: "1.2.3.4",
+      config: { authMode: "static_token" },
+    });
+
+    const res = await instances.request("/11111111-1111-1111-1111-111111111111/embed", { redirect: "manual" });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("http://1.2.3.4/?token=secret-1");
+    expect(createInstanceTokenMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid embed ids before loading the instance", async () => {
+    const res = await instances.request("/not-a-uuid/embed", { redirect: "manual" });
+    expect(res.status).toBe(400);
+    expect(findFirstMock).not.toHaveBeenCalled();
   });
 });

@@ -800,6 +800,10 @@ export class CodexAdapter {
               // Update options.threadId so subsequent resetForReconnect calls
               // attempt to resume this new thread, not the original stale one.
               this.options.threadId = freshResult.thread.id;
+              this.browserMessageCb?.({
+                type: "error",
+                message: "Codex session context was reset after resume failed. A new thread was started.",
+              });
             }
           } else {
             const threadResult = await this.transport.call("thread/start", {

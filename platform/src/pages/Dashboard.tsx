@@ -5,6 +5,7 @@ import { DashboardSidebar, type DashboardPage } from "@/components/DashboardSide
 import { InstanceCard } from "@/components/InstanceCard";
 import { EmptyState } from "@/components/EmptyState";
 import { CreateInstanceButton } from "@/components/CreateInstanceButton";
+import { useInstancePolling } from "@/hooks/useInstancePolling";
 
 /**
  * Dashboard page with sidebar navigation and instance management.
@@ -34,6 +35,9 @@ export function Dashboard() {
     loadInstances();
   }, [loadInstances]);
 
+  // Poll for status updates when instances are in transitional states
+  useInstancePolling(instances, loadInstances);
+
   return (
     <div className="h-screen flex bg-cc-bg text-cc-fg">
       {/* Mobile overlay */}
@@ -59,6 +63,7 @@ export function Dashboard() {
             <button
               onClick={() => setSidebarOpen(true)}
               className="lg:hidden text-cc-muted hover:text-cc-fg"
+              aria-label="Open sidebar"
             >
               <Menu size={20} />
             </button>

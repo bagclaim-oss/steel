@@ -34,24 +34,24 @@ interface ProvisionerConfig {
   hetznerServerTypes?: Partial<Record<Plan, string>>;
 }
 
-function makeVolumeName(hostname: string): string {
+function makeVolumeName(hostname: string, suffixSeed: string): string {
   const safe = hostname
     .toLowerCase()
     .replace(/[^a-z0-9_]/g, "_")
     .replace(/_+/g, "_")
     .replace(/^_+|_+$/g, "");
   const suffix = (safe || "instance").slice(0, 20);
-  return `companion_${suffix}`;
+  return `companion_${suffix}_${suffixSeed}`;
 }
 
-function makeMachineName(hostname: string): string {
+function makeMachineName(hostname: string, suffixSeed: string): string {
   const safe = hostname
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "");
-  const suffix = (safe || "instance").slice(0, 40);
-  return `companion-${suffix}`;
+  const suffix = (safe || "instance").slice(0, 32);
+  return `companion-${suffix}-${suffixSeed}`;
 }
 
 function sanitizeCloudInitValue(value: string | undefined): string {
@@ -95,6 +95,20 @@ export class Provisioner {
     return message.includes("unsupported location for server type");
   }
 
+  private isNotFoundError(err: unknown): boolean {
+    const message = String((err as any)?.message || "");
+    return message.includes("failed (404)") || message.includes(`"code": "not_found"`) || message.includes(`"code":"not_found"`);
+  }
+
+  private isVolumeStillAttachedError(err: unknown): boolean {
+    const message = String((err as any)?.message || "");
+    return message.includes("volume with ID") && message.includes("is still attached to a server");
+  }
+
+  private async wait(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   private buildHetznerUserData(input: ProvisionInput, authSecret: string, volumeName: string): string {
     const loginUrl = sanitizeCloudInitValue(input.loginUrl);
     const tailscaleAuthKey = sanitizeCloudInitValue(input.tailscaleAuthKey);
@@ -103,8 +117,8 @@ export class Provisioner {
       `HOST=0.0.0.0`,
       `COMPANION_HOME=/data/companion`,
       `COMPANION_SESSION_DIR=/data/sessions`,
-      `COMPANION_AUTH_ENABLED=1`,
-      `COMPANION_AUTH_SECRET=${authSecret}`,
+      `COMPANION_AUTH_ENABLED=0`,
+      `COMPANION_AUTH_TOKEN=${authSecret}`,
       `COMPANION_LOGIN_URL=${loginUrl}`,
       tailscaleAuthKey ? `TAILSCALE_AUTH_KEY=${tailscaleAuthKey}` : "",
     ]
@@ -164,7 +178,9 @@ ${env}
     const authSecret = randomBytes(32).toString("hex");
     const progress = input.onProgress ?? (() => {});
     const candidateLocations = this.mapRegionToHetznerLocation(input.region);
-    const volumeName = makeVolumeName(input.hostname || `${input.organizationId}-${Date.now()}`);
+    const resourceSuffix = randomBytes(4).toString("hex");
+    const volumeName = makeVolumeName(input.hostname || `${input.organizationId}-${Date.now()}`, resourceSuffix);
+    const machineName = makeMachineName(input.hostname || `${input.organizationId}-${Date.now()}`, resourceSuffix);
     let lastError: unknown = null;
 
     for (const location of candidateLocations) {
@@ -193,7 +209,7 @@ ${env}
       let serverId: number | null = null;
       try {
         const response = await this.hetzner.createServer({
-          name: makeMachineName(input.hostname || `${input.organizationId}-${Date.now()}`),
+          name: machineName,
           server_type: this.hetznerServerTypes[input.plan],
           location,
           image: "ubuntu-24.04",
@@ -240,11 +256,31 @@ ${env}
   async deprovision(machineId: string, volumeId: string): Promise<void> {
     try {
       await this.hetzner.powerOff(machineId);
-    } catch {
-      // Instance may already be stopped or removed.
+    } catch (err) {
+      if (!this.isNotFoundError(err)) {
+        // Instance may already be stopped or removed.
+      }
     }
-    await this.hetzner.deleteServer(machineId);
-    await this.hetzner.deleteVolume(volumeId);
+    try {
+      await this.hetzner.deleteServer(machineId);
+    } catch (err) {
+      if (!this.isNotFoundError(err)) throw err;
+    }
+
+    let lastVolumeError: unknown;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        await this.hetzner.deleteVolume(volumeId);
+        return;
+      } catch (err) {
+        if (this.isNotFoundError(err)) return;
+        if (!this.isVolumeStillAttachedError(err) || attempt === 4) throw err;
+        lastVolumeError = err;
+        await this.wait(2_000);
+      }
+    }
+
+    if (lastVolumeError) throw lastVolumeError;
   }
 
   async start(machineId: string): Promise<void> {
@@ -256,11 +292,22 @@ ${env}
   }
 
   async stop(machineId: string): Promise<void> {
-    const action = await this.hetzner.powerOff(machineId);
+    let action: Awaited<ReturnType<HetznerCloudClient["powerOff"]>> | undefined;
+    try {
+      action = await this.hetzner.powerOff(machineId);
+    } catch (err) {
+      if (this.isNotFoundError(err)) return;
+      throw err;
+    }
     if (action?.id) {
       await this.hetzner.waitForAction(action.id, 90_000);
     }
-    await this.hetzner.waitForServerStatus(machineId, "off", 90_000);
+    try {
+      await this.hetzner.waitForServerStatus(machineId, "off", 90_000);
+    } catch (err) {
+      if (this.isNotFoundError(err)) return;
+      throw err;
+    }
   }
 
   async getStatus(machineId: string): Promise<string> {

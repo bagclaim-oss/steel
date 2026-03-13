@@ -3,8 +3,13 @@ import { Provisioner } from "./provisioner";
 
 const FAKE_AUTH_SECRET = "ab".repeat(32);
 vi.mock("node:crypto", () => ({
-  randomBytes: vi.fn(() => ({
-    toString: (encoding: string) => (encoding === "hex" ? FAKE_AUTH_SECRET : "mock"),
+  randomBytes: vi.fn((size?: number) => ({
+    toString: (encoding: string) => {
+      if (encoding !== "hex") return "mock";
+      if (size === 32) return FAKE_AUTH_SECRET;
+      if (size === 4) return "feedbeef";
+      return "cd".repeat(size ?? 1);
+    },
   })),
 }));
 
@@ -124,7 +129,12 @@ describe("Provisioner (hetzner)", () => {
     const serverCall = fetchMock.mock.calls.find((c: any[]) => c[0] === `${HETZNER_BASE}/servers`);
     const body = JSON.parse(serverCall![1].body);
     expect(body.server_type).toBe("cx22");
-    expect(body.user_data).toContain("COMPANION_AUTH_SECRET=");
+    expect(body.user_data).toContain("COMPANION_AUTH_TOKEN=");
+    expect(body.user_data).toContain("COMPANION_AUTH_ENABLED=0");
+
+    const volumeCall = fetchMock.mock.calls.find((c: any[]) => c[0] === `${HETZNER_BASE}/volumes`);
+    expect(JSON.parse(volumeCall![1].body).name).toBe("companion_demo_feedbeef");
+    expect(body.name).toBe("companion-demo-feedbeef");
   });
 
   it("falls back to server ipv4 hostname when hostname is empty", async () => {

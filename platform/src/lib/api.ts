@@ -6,6 +6,21 @@ import type { ProvisioningStep } from "./types";
 
 const BASE = "/api";
 
+export interface ProvisioningRegion {
+  value: string;
+  label: string;
+}
+
+export interface ControlPlaneStatus {
+  service: string;
+  version: string;
+  status: string;
+  provisioning?: {
+    provider?: "hetzner";
+    regions?: ProvisioningRegion[];
+  };
+}
+
 async function request<T>(
   method: string,
   path: string,
@@ -127,5 +142,5 @@ export const api = {
   getUsage: () => request("GET", "/dashboard/usage"),
 
   // Status
-  getStatus: () => request("GET", "/status"),
+  getStatus: () => request<ControlPlaneStatus>("GET", "/status"),
 };

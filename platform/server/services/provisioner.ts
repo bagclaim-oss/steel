@@ -1,20 +1,13 @@
 import { randomBytes } from "node:crypto";
-import { FlyMachinesClient } from "./fly-machines.js";
-import { FlyVolumesClient } from "./fly-volumes.js";
 import { HetznerCloudClient } from "./hetzner-cloud.js";
 
-/**
- * Plan-based resource configuration.
- */
 const PLAN_CONFIGS = {
-  starter: { cpus: 2, memory_mb: 2048, cpu_kind: "shared" as const, storage_gb: 10 },
-  pro: { cpus: 4, memory_mb: 4096, cpu_kind: "shared" as const, storage_gb: 50 },
-  enterprise: { cpus: 4, memory_mb: 8192, cpu_kind: "performance" as const, storage_gb: 100 },
+  starter: { storage_gb: 10 },
+  pro: { storage_gb: 50 },
+  enterprise: { storage_gb: 100 },
 } as const;
 
 export type Plan = keyof typeof PLAN_CONFIGS;
-export type InstanceProvider = "fly" | "hetzner";
-
 export type ProvisionProgressFn = (step: string, label: string, status: "in_progress" | "done" | "error") => void;
 
 interface ProvisionInput {
@@ -28,31 +21,20 @@ interface ProvisionInput {
 }
 
 interface ProvisionResult {
-  flyMachineId: string;
-  flyVolumeId: string;
+  providerMachineId: string;
+  providerVolumeId: string;
   authSecret: string;
   hostname: string;
 }
 
-interface ProvisionerFlyConfig {
-  provider: "fly";
-  flyToken: string;
-  flyAppName: string;
-  companionImage: string;
-}
-
-interface ProvisionerHetznerConfig {
-  provider: "hetzner";
+interface ProvisionerConfig {
   hetznerToken: string;
   companionImage: string;
   hetznerSshKeyId?: string;
   hetznerServerTypes?: Partial<Record<Plan, string>>;
 }
 
-type ProvisionerConfig = ProvisionerFlyConfig | ProvisionerHetznerConfig;
-
 function makeVolumeName(hostname: string): string {
-  // Fly volume names allow lowercase alphanumeric and underscores, max 30 chars.
   const safe = hostname
     .toLowerCase()
     .replace(/[^a-z0-9_]/g, "_")
@@ -63,7 +45,6 @@ function makeVolumeName(hostname: string): string {
 }
 
 function makeMachineName(hostname: string): string {
-  // Fly machine names are best kept to lowercase alphanumeric + dashes.
   const safe = hostname
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, "-")
@@ -77,157 +58,20 @@ function sanitizeCloudInitValue(value: string | undefined): string {
   return String(value || "").replace(/[\r\n]/g, "").trim();
 }
 
-/**
- * Orchestrates end-to-end instance provisioning:
- * 1. Create Fly Volume for persistent storage
- * 2. Create Fly Machine with the Companion image
- * 3. Wait for machine to start
- * 4. Return provisioned instance metadata
- */
 export class Provisioner {
-  private provider: InstanceProvider;
-  private machines?: FlyMachinesClient;
-  private volumes?: FlyVolumesClient;
-  private hetzner?: HetznerCloudClient;
+  private hetzner: HetznerCloudClient;
   private companionImage: string;
   private hetznerSshKeyId?: string;
   private hetznerServerTypes: Record<Plan, string>;
 
-  constructor(flyToken: string, flyAppName: string, companionImage: string);
-  constructor(config: ProvisionerConfig);
-  constructor(
-    flyTokenOrConfig: string | ProvisionerConfig,
-    flyAppName?: string,
-    companionImage?: string,
-  ) {
-    if (typeof flyTokenOrConfig === "string") {
-      this.provider = "fly";
-      this.machines = new FlyMachinesClient(flyTokenOrConfig, flyAppName!);
-      this.volumes = new FlyVolumesClient(flyTokenOrConfig, flyAppName!);
-      this.companionImage = companionImage!;
-      this.hetznerServerTypes = {
-        starter: "cpx11",
-        pro: "cpx21",
-        enterprise: "cpx31",
-      };
-      return;
-    }
-
-    this.provider = flyTokenOrConfig.provider;
-    this.companionImage = flyTokenOrConfig.companionImage;
+  constructor(config: ProvisionerConfig) {
+    this.hetzner = new HetznerCloudClient(config.hetznerToken);
+    this.companionImage = config.companionImage;
+    this.hetznerSshKeyId = config.hetznerSshKeyId;
     this.hetznerServerTypes = {
-      starter: "cpx11",
-      pro: "cpx21",
-      enterprise: "cpx31",
-    };
-
-    if (flyTokenOrConfig.provider === "fly") {
-      this.machines = new FlyMachinesClient(flyTokenOrConfig.flyToken, flyTokenOrConfig.flyAppName);
-      this.volumes = new FlyVolumesClient(flyTokenOrConfig.flyToken, flyTokenOrConfig.flyAppName);
-      return;
-    }
-
-    this.hetznerServerTypes = {
-      starter: flyTokenOrConfig.hetznerServerTypes?.starter || "cpx11",
-      pro: flyTokenOrConfig.hetznerServerTypes?.pro || "cpx21",
-      enterprise: flyTokenOrConfig.hetznerServerTypes?.enterprise || "cpx31",
-    };
-    this.hetzner = new HetznerCloudClient(flyTokenOrConfig.hetznerToken);
-    this.hetznerSshKeyId = flyTokenOrConfig.hetznerSshKeyId;
-  }
-
-  async provision(input: ProvisionInput): Promise<ProvisionResult> {
-    if (this.provider === "hetzner") {
-      return this.provisionHetzner(input);
-    }
-
-    const config = PLAN_CONFIGS[input.plan];
-    const authSecret = randomBytes(32).toString("hex");
-    const progress = input.onProgress ?? (() => {});
-
-    // Step 1: Create volume
-    progress("creating_volume", "Creating storage volume", "in_progress");
-    const volume = await this.volumes!.createVolume({
-      name: makeVolumeName(input.hostname),
-      region: input.region,
-      size_gb: config.storage_gb,
-    });
-    progress("creating_volume", "Creating storage volume", "done");
-
-    // Step 2: Create machine
-    const env: Record<string, string> = {
-      NODE_ENV: "production",
-      HOST: "0.0.0.0",
-      COMPANION_HOME: "/data/companion",
-      COMPANION_SESSION_DIR: "/data/sessions",
-      COMPANION_AUTH_ENABLED: "1",
-      COMPANION_AUTH_SECRET: authSecret,
-      COMPANION_LOGIN_URL: input.loginUrl,
-    };
-
-    if (input.tailscaleAuthKey) {
-      env.TAILSCALE_AUTH_KEY = input.tailscaleAuthKey;
-    }
-
-    progress("creating_machine", "Creating machine", "in_progress");
-    let machine;
-    try {
-      machine = await this.machines!.createMachine({
-        name: makeMachineName(input.hostname),
-        region: input.region,
-        config: {
-          image: this.companionImage,
-          guest: {
-            cpus: config.cpus,
-            memory_mb: config.memory_mb,
-            cpu_kind: config.cpu_kind,
-          },
-          env,
-          services: [
-            {
-              ports: [
-                { port: 443, handlers: ["tls", "http"] },
-                { port: 80, handlers: ["http"] },
-              ],
-              internal_port: 3456,
-              protocol: "tcp",
-              min_machines_running: 1,
-            },
-          ],
-          mounts: [
-            {
-              volume: volume.id,
-              path: "/data",
-            },
-          ],
-          auto_stop: "off",
-          auto_start: true,
-        },
-      });
-      progress("creating_machine", "Creating machine", "done");
-
-      // Step 3: Wait for machine to be running
-      progress("waiting_start", "Waiting for machine to start", "in_progress");
-      await this.machines!.waitForState(machine.id, "started", 90_000);
-      progress("waiting_start", "Waiting for machine to start", "done");
-    } catch (err) {
-      // Clean up resources if machine creation/startup fails
-      if (machine) {
-        try { await this.machines!.destroyMachine(machine.id, true); } catch {}
-      }
-      try { await this.volumes!.deleteVolume(volume.id); } catch {}
-      throw err;
-    }
-
-    // TODO: Persist authSecret to the instances table in the database so the
-    // control plane can reissue tokens later (e.g. for the /token endpoint).
-    // Currently only returned to the caller.
-
-    return {
-      flyMachineId: machine.id,
-      flyVolumeId: volume.id,
-      authSecret,
-      hostname: input.hostname,
+      starter: config.hetznerServerTypes?.starter || "cpx11",
+      pro: config.hetznerServerTypes?.pro || "cpx21",
+      enterprise: config.hetznerServerTypes?.enterprise || "cpx31",
     };
   }
 
@@ -301,23 +145,10 @@ ${env}
 
       [Install]
       WantedBy=multi-user.target
-  - path: /usr/local/bin/companion-rerun.sh
-    permissions: "0755"
-    content: |
-      #!/usr/bin/env bash
-      set -euo pipefail
-      systemctl daemon-reload
-      systemctl enable companion.service
-      systemctl restart companion.service
-  - path: /var/lib/cloud/scripts/per-boot/99-companion-rerun.sh
-    permissions: "0755"
-    content: |
-      #!/usr/bin/env bash
-      /usr/local/bin/companion-rerun.sh
 `;
   }
 
-  private async provisionHetzner(input: ProvisionInput): Promise<ProvisionResult> {
+  async provision(input: ProvisionInput): Promise<ProvisionResult> {
     const config = PLAN_CONFIGS[input.plan];
     const authSecret = randomBytes(32).toString("hex");
     const progress = input.onProgress ?? (() => {});
@@ -325,7 +156,7 @@ ${env}
     const volumeName = makeVolumeName(input.hostname || `${input.organizationId}-${Date.now()}`);
 
     progress("creating_volume", "Creating storage volume", "in_progress");
-    const volume = await this.hetzner!.createVolume({
+    const volume = await this.hetzner.createVolume({
       name: volumeName,
       location,
       size: config.storage_gb,
@@ -339,7 +170,7 @@ ${env}
     progress("creating_machine", "Creating server", "in_progress");
     let serverId: number | null = null;
     try {
-      const response = await this.hetzner!.createServer({
+      const response = await this.hetzner.createServer({
         name: makeMachineName(input.hostname || `${input.organizationId}-${Date.now()}`),
         server_type: this.hetznerServerTypes[input.plan],
         location,
@@ -354,119 +185,76 @@ ${env}
       });
       serverId = response.server.id;
       if (response.action?.id) {
-        await this.hetzner!.waitForAction(response.action.id, 120_000);
+        await this.hetzner.waitForAction(response.action.id, 120_000);
       }
       progress("creating_machine", "Creating server", "done");
 
       progress("waiting_start", "Waiting for server to start", "in_progress");
-      const server = await this.hetzner!.waitForServerStatus(serverId, "running", 120_000);
+      const server = await this.hetzner.waitForServerStatus(serverId, "running", 120_000);
       progress("waiting_start", "Waiting for server to start", "done");
 
       return {
-        flyMachineId: String(serverId),
-        flyVolumeId: String(volume.id),
+        providerMachineId: String(serverId),
+        providerVolumeId: String(volume.id),
         authSecret,
         hostname: input.hostname || server.public_net?.ipv4?.ip || "",
       };
     } catch (err) {
       if (serverId !== null) {
-        try { await this.hetzner!.deleteServer(serverId); } catch {}
+        try { await this.hetzner.deleteServer(serverId); } catch {}
       }
-      try { await this.hetzner!.deleteVolume(volume.id); } catch {}
+      try { await this.hetzner.deleteVolume(volume.id); } catch {}
       throw err;
     }
   }
 
   async deprovision(machineId: string, volumeId: string): Promise<void> {
-    if (this.provider === "hetzner") {
-      try {
-        await this.hetzner!.powerOff(machineId);
-      } catch {
-        // Instance may already be stopped or removed.
-      }
-      await this.hetzner!.deleteServer(machineId);
-      await this.hetzner!.deleteVolume(volumeId);
-      return;
-    }
-
-    // Stop machine first
     try {
-      await this.machines!.stopMachine(machineId);
-      await this.machines!.waitForState(machineId, "stopped", 30_000);
+      await this.hetzner.powerOff(machineId);
     } catch {
-      // Machine may already be stopped
+      // Instance may already be stopped or removed.
     }
-
-    // Destroy machine
-    await this.machines!.destroyMachine(machineId, true);
-
-    // Delete volume
-    await this.volumes!.deleteVolume(volumeId);
+    await this.hetzner.deleteServer(machineId);
+    await this.hetzner.deleteVolume(volumeId);
   }
 
   async start(machineId: string): Promise<void> {
-    if (this.provider === "hetzner") {
-      const action = await this.hetzner!.powerOn(machineId);
-      if (action?.id) {
-        await this.hetzner!.waitForAction(action.id, 90_000);
-      }
-      await this.hetzner!.waitForServerStatus(machineId, "running", 90_000);
-      return;
+    const action = await this.hetzner.powerOn(machineId);
+    if (action?.id) {
+      await this.hetzner.waitForAction(action.id, 90_000);
     }
-
-    await this.machines!.startMachine(machineId);
-    await this.machines!.waitForState(machineId, "started", 60_000);
+    await this.hetzner.waitForServerStatus(machineId, "running", 90_000);
   }
 
   async stop(machineId: string): Promise<void> {
-    if (this.provider === "hetzner") {
-      const action = await this.hetzner!.powerOff(machineId);
-      if (action?.id) {
-        await this.hetzner!.waitForAction(action.id, 90_000);
-      }
-      await this.hetzner!.waitForServerStatus(machineId, "off", 90_000);
-      return;
+    const action = await this.hetzner.powerOff(machineId);
+    if (action?.id) {
+      await this.hetzner.waitForAction(action.id, 90_000);
     }
-
-    await this.machines!.stopMachine(machineId);
-    await this.machines!.waitForState(machineId, "stopped", 30_000);
+    await this.hetzner.waitForServerStatus(machineId, "off", 90_000);
   }
 
   async getStatus(machineId: string): Promise<string> {
-    if (this.provider === "hetzner") {
-      const server = await this.hetzner!.getServer(machineId);
-      return server.status;
-    }
-
-    const machine = await this.machines!.getMachine(machineId);
-    return machine.state;
+    const server = await this.hetzner.getServer(machineId);
+    return server.status;
   }
 
   async resize(machineId: string, plan: Plan): Promise<void> {
-    if (this.provider === "hetzner") {
-      const offAction = await this.hetzner!.powerOff(machineId);
-      if (offAction?.id) {
-        await this.hetzner!.waitForAction(offAction.id, 90_000);
-      }
-      await this.hetzner!.waitForServerStatus(machineId, "off", 90_000);
+    const offAction = await this.hetzner.powerOff(machineId);
+    if (offAction?.id) {
+      await this.hetzner.waitForAction(offAction.id, 90_000);
+    }
+    await this.hetzner.waitForServerStatus(machineId, "off", 90_000);
 
-      const changeAction = await this.hetzner!.changeType(machineId, this.hetznerServerTypes[plan]);
-      if (changeAction?.id) {
-        await this.hetzner!.waitForAction(changeAction.id, 120_000);
-      }
-
-      const onAction = await this.hetzner!.powerOn(machineId);
-      if (onAction?.id) {
-        await this.hetzner!.waitForAction(onAction.id, 90_000);
-      }
-      await this.hetzner!.waitForServerStatus(machineId, "running", 90_000);
-      return;
+    const changeAction = await this.hetzner.changeType(machineId, this.hetznerServerTypes[plan]);
+    if (changeAction?.id) {
+      await this.hetzner.waitForAction(changeAction.id, 120_000);
     }
 
-    await this.machines!.updateMachineGuest(machineId, {
-      cpus: PLAN_CONFIGS[plan].cpus,
-      memory_mb: PLAN_CONFIGS[plan].memory_mb,
-      cpu_kind: PLAN_CONFIGS[plan].cpu_kind,
-    });
+    const onAction = await this.hetzner.powerOn(machineId);
+    if (onAction?.id) {
+      await this.hetzner.waitForAction(onAction.id, 90_000);
+    }
+    await this.hetzner.waitForServerStatus(machineId, "running", 90_000);
   }
 }

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock settings-manager before importing the module under test
 vi.mock("./settings-manager.js", () => ({
-  DEFAULT_ANTHROPIC_MODEL: "claude-sonnet-4.6",
+  DEFAULT_ANTHROPIC_MODEL: "claude-sonnet-4-6",
   getSettings: vi.fn(),
 }));
 
@@ -62,6 +62,9 @@ function createMockSession(overrides = {}): Session {
     lastAckSeq: 0,
     processedClientMessageIds: [],
     processedClientMessageIdSet: new Set(),
+    recentCLIMessageHashes: [],
+    recentCLIMessageHashSet: new Set(),
+    lastCliActivityTs: Date.now(),
     ...overrides,
   } as Session;
 }
@@ -115,7 +118,7 @@ describe("attachCodexAdapterHandlers", () => {
     // Default: AI validation disabled — existing tests should not be affected
     vi.mocked(settingsManager.getSettings).mockReturnValue({
       anthropicApiKey: "",
-      anthropicModel: "claude-sonnet-4.6",
+      anthropicModel: "claude-sonnet-4-6",
       linearApiKey: "",
       linearAutoTransition: false,
       linearAutoTransitionStateId: "",
@@ -131,9 +134,10 @@ describe("attachCodexAdapterHandlers", () => {
       editorTabEnabled: false,
       aiValidationEnabled: false,
       aiValidationAutoApprove: true,
-      aiValidationAutoDeny: true,
+      aiValidationAutoDeny: false,
       publicUrl: "",
       updateChannel: "stable",
+      dockerAutoUpdate: false,
       updatedAt: 0,
     });
   });
@@ -1045,7 +1049,7 @@ describe("attachCodexAdapterHandlers", () => {
     function enableAiValidation() {
       vi.mocked(settingsManager.getSettings).mockReturnValue({
         anthropicApiKey: "test-api-key",
-        anthropicModel: "claude-sonnet-4.6",
+        anthropicModel: "claude-sonnet-4-6",
         linearApiKey: "",
         linearAutoTransition: false,
         linearAutoTransitionStateId: "",
@@ -1064,6 +1068,7 @@ describe("attachCodexAdapterHandlers", () => {
         aiValidationAutoDeny: true,
         publicUrl: "",
         updateChannel: "stable",
+        dockerAutoUpdate: false,
         updatedAt: 0,
       });
     }
@@ -1218,7 +1223,7 @@ describe("attachCodexAdapterHandlers", () => {
       // without calling validatePermission at all.
       vi.mocked(settingsManager.getSettings).mockReturnValue({
         anthropicApiKey: "test-api-key",
-        anthropicModel: "claude-sonnet-4.6",
+        anthropicModel: "claude-sonnet-4-6",
         linearApiKey: "",
         linearAutoTransition: false,
         linearAutoTransitionStateId: "",
@@ -1237,6 +1242,7 @@ describe("attachCodexAdapterHandlers", () => {
         aiValidationAutoDeny: true,
         publicUrl: "",
         updateChannel: "stable",
+        dockerAutoUpdate: false,
         updatedAt: 0,
       });
 
@@ -1261,7 +1267,7 @@ describe("attachCodexAdapterHandlers", () => {
       // the AI — fall through to normal manual flow.
       vi.mocked(settingsManager.getSettings).mockReturnValue({
         anthropicApiKey: "",  // empty
-        anthropicModel: "claude-sonnet-4.6",
+        anthropicModel: "claude-sonnet-4-6",
         linearApiKey: "",
         linearAutoTransition: false,
         linearAutoTransitionStateId: "",
@@ -1280,6 +1286,7 @@ describe("attachCodexAdapterHandlers", () => {
         aiValidationAutoDeny: true,
         publicUrl: "",
         updateChannel: "stable",
+        dockerAutoUpdate: false,
         updatedAt: 0,
       });
 
@@ -1369,7 +1376,7 @@ describe("attachCodexAdapterHandlers", () => {
       // should fall through to manual review instead of auto-approving.
       vi.mocked(settingsManager.getSettings).mockReturnValue({
         anthropicApiKey: "test-api-key",
-        anthropicModel: "claude-sonnet-4.6",
+        anthropicModel: "claude-sonnet-4-6",
         linearApiKey: "",
         linearAutoTransition: false,
         linearAutoTransitionStateId: "",
@@ -1388,6 +1395,7 @@ describe("attachCodexAdapterHandlers", () => {
         aiValidationAutoDeny: true,
         publicUrl: "",
         updateChannel: "stable",
+        dockerAutoUpdate: false,
         updatedAt: 0,
       });
 
@@ -1496,7 +1504,7 @@ describe("attachCodexAdapterHandlers", () => {
       // should fall through to manual review instead of auto-denying.
       vi.mocked(settingsManager.getSettings).mockReturnValue({
         anthropicApiKey: "test-api-key",
-        anthropicModel: "claude-sonnet-4.6",
+        anthropicModel: "claude-sonnet-4-6",
         linearApiKey: "",
         linearAutoTransition: false,
         linearAutoTransitionStateId: "",
@@ -1515,6 +1523,7 @@ describe("attachCodexAdapterHandlers", () => {
         aiValidationAutoDeny: false,  // disabled
         publicUrl: "",
         updateChannel: "stable",
+        dockerAutoUpdate: false,
         updatedAt: 0,
       });
 

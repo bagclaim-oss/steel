@@ -22,7 +22,7 @@ vi.stubGlobal("fetch", mockFetch);
 function makeSettings(overrides: Partial<CompanionSettings> = {}): CompanionSettings {
   return {
     anthropicApiKey: "",
-    anthropicModel: "claude-sonnet-4.6",
+    anthropicModel: "claude-sonnet-4-6",
     linearApiKey: "",
     linearAutoTransition: false,
     linearAutoTransitionStateId: "",
@@ -38,9 +38,10 @@ function makeSettings(overrides: Partial<CompanionSettings> = {}): CompanionSett
     editorTabEnabled: false,
     aiValidationEnabled: false,
     aiValidationAutoApprove: true,
-    aiValidationAutoDeny: true,
+    aiValidationAutoDeny: false,
     publicUrl: "",
     updateChannel: "stable",
+    dockerAutoUpdate: false,
     updatedAt: 0,
     ...overrides,
   };

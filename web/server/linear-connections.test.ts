@@ -57,9 +57,10 @@ beforeEach(() => {
     editorTabEnabled: false,
     aiValidationEnabled: false,
     aiValidationAutoApprove: true,
-    aiValidationAutoDeny: true,
+    aiValidationAutoDeny: false,
     publicUrl: "",
     updateChannel: "stable",
+    dockerAutoUpdate: false,
     updatedAt: 0,
   });
 });
@@ -185,9 +186,10 @@ describe("linear-connections", () => {
       editorTabEnabled: false,
       aiValidationEnabled: false,
       aiValidationAutoApprove: true,
-      aiValidationAutoDeny: true,
+      aiValidationAutoDeny: false,
       publicUrl: "",
       updateChannel: "stable",
+      dockerAutoUpdate: false,
       updatedAt: 0,
     });
     // Need to reset so migration runs with updated mock
@@ -223,9 +225,10 @@ describe("linear-connections", () => {
       editorTabEnabled: false,
       aiValidationEnabled: false,
       aiValidationAutoApprove: true,
-      aiValidationAutoDeny: true,
+      aiValidationAutoDeny: false,
       publicUrl: "",
       updateChannel: "stable",
+      dockerAutoUpdate: false,
       updatedAt: 0,
     });
     _resetForTest(join(tempDir, "linear-connections-migrate.json"));
@@ -280,9 +283,10 @@ describe("linear-connections", () => {
       editorTabEnabled: false,
       aiValidationEnabled: false,
       aiValidationAutoApprove: true,
-      aiValidationAutoDeny: true,
+      aiValidationAutoDeny: false,
       publicUrl: "",
       updateChannel: "stable",
+      dockerAutoUpdate: false,
       updatedAt: 0,
     });
 

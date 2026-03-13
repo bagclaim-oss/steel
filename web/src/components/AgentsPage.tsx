@@ -1222,8 +1222,8 @@ function AgentEditor({
             {/* Linear Agent helper */}
             {form.linearEnabled && (
               <p className="text-[10px] text-cc-muted mt-2">
-                This agent will respond to @mentions in Linear via the Agent Interaction SDK. Configure the OAuth app in{" "}
-                <a href="#/settings/linear" className="text-cc-primary underline">Linear Settings</a>.
+                This agent will respond to @mentions in Linear via the Agent Interaction SDK. Configure the OAuth app via the{" "}
+                <a href="#/setup/linear-agent" className="text-cc-primary underline">Linear Agent setup wizard</a>.
               </p>
             )}
 

@@ -16,7 +16,8 @@ export type Route =
   | { page: "agents" }
   | { page: "agent-detail"; agentId: string }
   | { page: "runs" }
-  | { page: "playground" };
+  | { page: "playground" }
+  | { page: "setup-linear-agent" };
 
 const SESSION_PREFIX = "#/session/";
 const AGENT_PREFIX = "#/agents/";
@@ -48,6 +49,7 @@ export function parseHash(hash: string): Route {
   if (hash === "#/agents") return { page: "agents" };
   if (hash === "#/runs") return { page: "runs" };
   if (hash === "#/playground") return { page: "playground" };
+  if (hash.startsWith("#/setup/linear-agent")) return { page: "setup-linear-agent" };
 
   if (hash.startsWith(AGENT_PREFIX)) {
     const agentId = hash.slice(AGENT_PREFIX.length);

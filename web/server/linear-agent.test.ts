@@ -161,18 +161,30 @@ describe("OAuth state nonce (CSRF protection)", () => {
 
   it("validates a generated state nonce (single use)", () => {
     const state = linearAgent.generateOAuthState();
-    expect(linearAgent.validateOAuthState(state)).toBe(true);
+    expect(linearAgent.validateOAuthState(state)).toEqual({ valid: true });
     // Second use should fail — consumed
-    expect(linearAgent.validateOAuthState(state)).toBe(false);
+    expect(linearAgent.validateOAuthState(state)).toEqual({ valid: false });
   });
 
   it("rejects unknown state nonces", () => {
-    expect(linearAgent.validateOAuthState("unknown-nonce")).toBe(false);
+    expect(linearAgent.validateOAuthState("unknown-nonce")).toEqual({ valid: false });
   });
 
   it("rejects null/undefined state", () => {
-    expect(linearAgent.validateOAuthState(null)).toBe(false);
-    expect(linearAgent.validateOAuthState(undefined)).toBe(false);
+    expect(linearAgent.validateOAuthState(null)).toEqual({ valid: false });
+    expect(linearAgent.validateOAuthState(undefined)).toEqual({ valid: false });
+  });
+
+  it("preserves returnTo path in state", () => {
+    const state = linearAgent.generateOAuthState("/#/setup/linear-agent");
+    const result = linearAgent.validateOAuthState(state);
+    expect(result).toEqual({ valid: true, returnTo: "/#/setup/linear-agent" });
+  });
+
+  it("works without returnTo", () => {
+    const state = linearAgent.generateOAuthState();
+    const result = linearAgent.validateOAuthState(state);
+    expect(result).toEqual({ valid: true });
   });
 });
 

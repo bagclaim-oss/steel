@@ -66,9 +66,13 @@ export function registerLinearAgentWebhookRoute(
     }
 
     // Validate the state nonce to prevent CSRF
-    if (!linearAgent.validateOAuthState(state)) {
+    const stateResult = linearAgent.validateOAuthState(state);
+    if (!stateResult.valid) {
       return c.redirect("/#/settings/linear?oauth_error=invalid_state");
     }
+
+    // Determine redirect target — use returnTo from state if provided, otherwise default
+    const redirectBase = stateResult.returnTo || "/#/settings/linear";
 
     // Build redirect URI (must match what was sent in the authorize request)
     const settings = getSettings();
@@ -77,7 +81,7 @@ export function registerLinearAgentWebhookRoute(
 
     const tokens = await linearAgent.exchangeCodeForTokens(code, redirectUri);
     if (!tokens) {
-      return c.redirect("/#/settings/linear?oauth_error=token_exchange_failed");
+      return c.redirect(`${redirectBase}?oauth_error=token_exchange_failed`);
     }
 
     // Persist tokens
@@ -87,7 +91,7 @@ export function registerLinearAgentWebhookRoute(
     });
 
     console.log("[linear-agent-routes] OAuth tokens obtained successfully");
-    return c.redirect("/#/settings/linear?oauth_success=true");
+    return c.redirect(`${redirectBase}?oauth_success=true`);
   });
 }
 
@@ -101,7 +105,8 @@ export function registerLinearAgentProtectedRoutes(api: Hono): void {
     const settings = getSettings();
     const baseUrl = settings.publicUrl || `http://localhost:${process.env.PORT || 3456}`;
     const redirectUri = `${baseUrl}/api/linear/oauth/callback`;
-    const result = linearAgent.getOAuthAuthorizeUrl(redirectUri);
+    const returnTo = c.req.query("returnTo");
+    const result = linearAgent.getOAuthAuthorizeUrl(redirectUri, returnTo || undefined);
 
     if (!result) {
       return c.json({ error: "OAuth client ID not configured" }, 400);

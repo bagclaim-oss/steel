@@ -174,6 +174,7 @@ describe("GET /linear/oauth/callback", () => {
   });
 
   it("redirects with error when state is missing (CSRF protection)", async () => {
+    vi.mocked(linearAgent.validateOAuthState).mockReturnValue({ valid: false });
     const res = await app.request("/linear/oauth/callback?code=auth-code-123");
 
     expect(res.status).toBe(302);
@@ -182,7 +183,7 @@ describe("GET /linear/oauth/callback", () => {
   });
 
   it("redirects with error when state is invalid (CSRF protection)", async () => {
-    vi.mocked(linearAgent.validateOAuthState).mockReturnValue(false);
+    vi.mocked(linearAgent.validateOAuthState).mockReturnValue({ valid: false });
 
     const res = await app.request("/linear/oauth/callback?code=auth-code-123&state=bad-state");
 
@@ -192,7 +193,7 @@ describe("GET /linear/oauth/callback", () => {
   });
 
   it("exchanges code for tokens and redirects on success", async () => {
-    vi.mocked(linearAgent.validateOAuthState).mockReturnValue(true);
+    vi.mocked(linearAgent.validateOAuthState).mockReturnValue({ valid: true });
     vi.mocked(linearAgent.exchangeCodeForTokens).mockResolvedValue({
       accessToken: "new-access",
       refreshToken: "new-refresh",
@@ -212,7 +213,7 @@ describe("GET /linear/oauth/callback", () => {
   });
 
   it("redirects with error when token exchange fails", async () => {
-    vi.mocked(linearAgent.validateOAuthState).mockReturnValue(true);
+    vi.mocked(linearAgent.validateOAuthState).mockReturnValue({ valid: true });
     vi.mocked(linearAgent.exchangeCodeForTokens).mockResolvedValue(null);
 
     const res = await app.request("/linear/oauth/callback?code=bad-code&state=valid-state");

@@ -13,25 +13,31 @@ import { getSettings, updateSettings } from "./settings-manager.js";
 const oauthStateNonces = new Map<string, number>();
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
-/** Generate a random state nonce for OAuth CSRF protection. */
-export function generateOAuthState(): string {
+/** Generate a random state nonce for OAuth CSRF protection.
+ *  Optionally encodes a `returnTo` path so the OAuth callback can redirect
+ *  back to the originating page (e.g. the setup wizard). */
+export function generateOAuthState(returnTo?: string): string {
   // Prune expired nonces
   const now = Date.now();
   for (const [nonce, expiresAt] of oauthStateNonces) {
     if (expiresAt < now) oauthStateNonces.delete(nonce);
   }
-  const state = randomBytes(24).toString("hex");
-  oauthStateNonces.set(state, now + OAUTH_STATE_TTL_MS);
-  return state;
+  const nonce = randomBytes(24).toString("hex");
+  oauthStateNonces.set(nonce, now + OAUTH_STATE_TTL_MS);
+  return returnTo ? `${nonce}:${encodeURIComponent(returnTo)}` : nonce;
 }
 
-/** Validate and consume an OAuth state nonce. Returns true if valid. */
-export function validateOAuthState(state: string | null | undefined): boolean {
-  if (!state) return false;
-  const expiresAt = oauthStateNonces.get(state);
-  if (!expiresAt) return false;
-  oauthStateNonces.delete(state); // consume — single use
-  return Date.now() < expiresAt;
+/** Validate and consume an OAuth state nonce.
+ *  Returns validity and an optional `returnTo` path encoded in the state. */
+export function validateOAuthState(state: string | null | undefined): { valid: boolean; returnTo?: string } {
+  if (!state) return { valid: false };
+  const colonIdx = state.indexOf(":");
+  const nonce = colonIdx >= 0 ? state.slice(0, colonIdx) : state;
+  const returnTo = colonIdx >= 0 ? decodeURIComponent(state.slice(colonIdx + 1)) : undefined;
+  const expiresAt = oauthStateNonces.get(nonce);
+  if (!expiresAt) return { valid: false };
+  oauthStateNonces.delete(nonce); // consume — single use
+  return Date.now() < expiresAt ? { valid: true, returnTo } : { valid: false };
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -326,12 +332,13 @@ export function isLinearOAuthConfigured(): boolean {
   return !!(s.linearOAuthClientId.trim() && s.linearOAuthClientSecret.trim() && s.linearOAuthAccessToken.trim());
 }
 
-/** Get the OAuth authorization URL for installing the app with actor=app. */
-export function getOAuthAuthorizeUrl(redirectUri: string): { url: string; state: string } | null {
+/** Get the OAuth authorization URL for installing the app with actor=app.
+ *  Pass `returnTo` to redirect back to a specific page after the OAuth callback. */
+export function getOAuthAuthorizeUrl(redirectUri: string, returnTo?: string): { url: string; state: string } | null {
   const settings = getSettings();
   if (!settings.linearOAuthClientId) return null;
 
-  const state = generateOAuthState();
+  const state = generateOAuthState(returnTo);
   const params = new URLSearchParams({
     client_id: settings.linearOAuthClientId,
     redirect_uri: redirectUri,

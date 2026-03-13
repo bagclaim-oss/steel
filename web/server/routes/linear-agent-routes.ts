@@ -41,6 +41,8 @@ export function registerLinearAgentWebhookRoute(
       return c.json({ ok: true, ignored: true });
     }
 
+    console.log("[linear-agent-routes] Received AgentSessionEvent:", JSON.stringify(payload, null, 2));
+
     // Dispatch asynchronously — must return 200 within 5s
     bridge.handleEvent(payload).catch((err) => {
       console.error("[linear-agent-routes] Error handling event:", err);

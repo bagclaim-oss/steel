@@ -88,18 +88,26 @@ export interface AgentPlanItem {
 export interface AgentSessionEventPayload {
   action: "created" | "prompted";
   type: "AgentSessionEvent";
-  data: {
+  /** Session data — may be nested under `data` or at the top level depending on SDK version */
+  data?: {
     id: string;
     issueId?: string;
     agentId?: string;
     promptContext?: string;
   };
+  /** Top-level session ID (when not nested under `data`) */
+  id?: string;
+  issueId?: string;
+  agentId?: string;
+  promptContext?: string;
   /** Present on "prompted" events — the user's follow-up message */
   agentActivity?: {
     body?: string;
   };
   webhookTimestamp?: number;
   organizationId?: string;
+  url?: string;
+  createdAt?: string;
 }
 
 // ─── GraphQL helper ─────────────────────────────────────────────────────────

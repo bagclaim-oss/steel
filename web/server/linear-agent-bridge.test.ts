@@ -196,6 +196,42 @@ describe("LinearAgentBridge", () => {
       );
     });
 
+    it("handles top-level payload shape (no nested data object)", async () => {
+      // Some Linear SDK versions send id/promptContext at the top level instead of under data
+      vi.mocked(agentStore.listAgents).mockReturnValue([testAgent] as ReturnType<typeof agentStore.listAgents>);
+      vi.mocked(executor.executeAgent).mockResolvedValue({ sessionId: "comp-sess-2" } as never);
+
+      await bridge.handleEvent({
+        action: "created",
+        type: "AgentSessionEvent",
+        id: "linear-session-top",
+        promptContext: "Top-level prompt",
+      });
+
+      expect(executor.executeAgent).toHaveBeenCalledWith(
+        "agent-1",
+        "Top-level prompt",
+        { force: true, triggerType: "linear" },
+      );
+    });
+
+    it("returns early when no session ID found in payload", async () => {
+      // Payload with neither data.id nor top-level id
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      await bridge.handleEvent({
+        action: "created",
+        type: "AgentSessionEvent",
+      } as AgentSessionEventPayload);
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining("No session ID found"),
+        expect.any(String),
+      );
+      expect(executor.executeAgent).not.toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
     it("skips disabled agents when finding Linear agent", async () => {
       const disabledAgent = { ...testAgent, enabled: false };
       vi.mocked(agentStore.listAgents).mockReturnValue([disabledAgent] as ReturnType<typeof agentStore.listAgents>);

@@ -78,8 +78,14 @@ export class LinearAgentBridge {
 
   /** Handle a new agent session (user mentioned or assigned the agent). */
   private async handleCreated(payload: AgentSessionEventPayload): Promise<void> {
-    const linearSessionId = payload.data.id;
-    const promptContext = payload.data.promptContext || "";
+    // Support both nested `data.id` and top-level `id` payload shapes
+    const linearSessionId = payload.data?.id ?? payload.id;
+    const promptContext = payload.data?.promptContext ?? payload.promptContext ?? "";
+
+    if (!linearSessionId) {
+      console.error("[linear-agent-bridge] No session ID found in payload:", JSON.stringify(payload));
+      return;
+    }
 
     console.log(`[linear-agent-bridge] New agent session: ${linearSessionId}`);
 
@@ -151,8 +157,14 @@ export class LinearAgentBridge {
 
   /** Handle a follow-up prompt in an existing agent session. */
   private async handlePrompted(payload: AgentSessionEventPayload): Promise<void> {
-    const linearSessionId = payload.data.id;
+    // Support both nested `data.id` and top-level `id` payload shapes
+    const linearSessionId = payload.data?.id ?? payload.id;
     const message = (payload.agentActivity?.body || "").trim();
+
+    if (!linearSessionId) {
+      console.error("[linear-agent-bridge] No session ID found in prompted payload:", JSON.stringify(payload));
+      return;
+    }
 
     // Skip empty follow-ups — no point injecting a blank message
     if (!message) {
@@ -167,7 +179,8 @@ export class LinearAgentBridge {
       await this.handleCreated({
         ...payload,
         action: "created",
-        data: { ...payload.data, promptContext: message },
+        data: payload.data ? { ...payload.data, promptContext: message } : undefined,
+        promptContext: payload.data ? undefined : message,
       });
       return;
     }
@@ -186,7 +199,8 @@ export class LinearAgentBridge {
       await this.handleCreated({
         ...payload,
         action: "created",
-        data: { ...payload.data, promptContext: message },
+        data: payload.data ? { ...payload.data, promptContext: message } : undefined,
+        promptContext: payload.data ? undefined : message,
       });
       return;
     }

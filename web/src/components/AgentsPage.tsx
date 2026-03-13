@@ -244,8 +244,8 @@ export function AgentsPage({ route }: Props) {
     const hash = window.location.hash;
     if (hash.includes("oauth_success=true") || hash.includes("oauth_error=") || hash.includes("setup=linear")) {
       startLinearSetup();
-      // Clean hash params after reading
-      window.location.hash = "#/agents";
+      // Clean hash params without triggering a hashchange (which would remount and lose wizard state)
+      history.replaceState(null, "", "#/agents");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

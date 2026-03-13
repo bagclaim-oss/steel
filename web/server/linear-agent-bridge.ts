@@ -435,7 +435,11 @@ export class LinearAgentBridge {
   /** Find the first enabled agent with a Linear trigger. */
   private findLinearAgent() {
     const agents = agentStore.listAgents();
-    return agents.find((a) => a.enabled && a.triggers?.linear?.enabled) || null;
+    const enabledAgents = agents.filter((a) => a.enabled && a.triggers?.linear?.enabled);
+    if (enabledAgents.length > 1) {
+      console.log(`[linear-agent-bridge] ${enabledAgents.length} Linear agents found, using "${enabledAgents[0].name}"`);
+    }
+    return enabledAgents[0] || null;
   }
 
   /** Clean up all session mappings and listeners. */

@@ -1,9 +1,10 @@
 interface WizardStepDoneProps {
   agentName: string;
   onFinish: () => void;
+  onAddAnother?: () => void;
 }
 
-export function WizardStepDone({ agentName, onFinish }: WizardStepDoneProps) {
+export function WizardStepDone({ agentName, onFinish, onAddAnother }: WizardStepDoneProps) {
   return (
     <div className="space-y-6">
       <div>
@@ -50,10 +51,18 @@ export function WizardStepDone({ agentName, onFinish }: WizardStepDoneProps) {
         </ul>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-between">
+        {onAddAnother && (
+          <button
+            onClick={onAddAnother}
+            className="px-4 py-2.5 rounded-lg text-sm font-medium text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
+          >
+            + Create Another
+          </button>
+        )}
         <button
           onClick={onFinish}
-          className="px-4 py-2.5 rounded-lg text-sm font-medium bg-cc-primary hover:bg-cc-primary-hover text-white transition-colors cursor-pointer"
+          className="px-4 py-2.5 rounded-lg text-sm font-medium bg-cc-primary hover:bg-cc-primary-hover text-white transition-colors cursor-pointer ml-auto"
         >
           Go to Agents
         </button>

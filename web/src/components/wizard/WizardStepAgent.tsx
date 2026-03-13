@@ -6,6 +6,15 @@ import { FolderPicker } from "../FolderPicker.js";
 interface WizardStepAgentProps {
   onNext: (agentId: string, agentName: string) => void;
   onBack: () => void;
+  /** When set, the wizard edits an existing agent instead of creating one */
+  existingAgent?: {
+    id: string;
+    name: string;
+    prompt: string;
+    backendType: "claude" | "codex";
+    model: string;
+    cwd: string;
+  };
 }
 
 const DEFAULT_PROMPT = `You are an AI agent responding to a Linear issue. The issue context will be provided when you are @mentioned.
@@ -14,12 +23,14 @@ Read the issue details carefully, then complete the requested task. When done, s
 
 {{input}}`;
 
-export function WizardStepAgent({ onNext, onBack }: WizardStepAgentProps) {
-  const [name, setName] = useState("Linear Agent");
-  const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
-  const [backend, setBackend] = useState<"claude" | "codex">("claude");
-  const [model, setModel] = useState("");
-  const [cwd, setCwd] = useState("");
+export function WizardStepAgent({ onNext, onBack, existingAgent }: WizardStepAgentProps) {
+  const isEditing = !!existingAgent;
+
+  const [name, setName] = useState(existingAgent?.name ?? "Linear Agent");
+  const [prompt, setPrompt] = useState(existingAgent?.prompt ?? DEFAULT_PROMPT);
+  const [backend, setBackend] = useState<"claude" | "codex">(existingAgent?.backendType ?? "claude");
+  const [model, setModel] = useState(existingAgent?.model ?? "");
+  const [cwd, setCwd] = useState(existingAgent?.cwd ?? "");
   const [showFolderPicker, setShowFolderPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -42,13 +53,13 @@ export function WizardStepAgent({ onNext, onBack }: WizardStepAgentProps) {
     setError("");
 
     try {
-      const agent = await api.createAgent({
-        version: 1,
+      const data = {
+        version: 1 as const,
         name: name.trim(),
         description: "Linear Agent created via setup wizard",
         backendType: backend,
         model: model || getDefaultModel(backend),
-        permissionMode: "bypassPermissions",
+        permissionMode: "bypassPermissions" as const,
         cwd: cwd || "",
         prompt: prompt.trim(),
         triggers: {
@@ -57,8 +68,15 @@ export function WizardStepAgent({ onNext, onBack }: WizardStepAgentProps) {
           linear: { enabled: true },
         },
         enabled: true,
-      });
-      onNext(agent.id, agent.name);
+      };
+
+      if (isEditing) {
+        await api.updateAgent(existingAgent.id, data);
+        onNext(existingAgent.id, name.trim());
+      } else {
+        const agent = await api.createAgent(data);
+        onNext(agent.id, agent.name);
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -71,9 +89,13 @@ export function WizardStepAgent({ onNext, onBack }: WizardStepAgentProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-cc-fg">Configure Your Agent</h2>
+        <h2 className="text-lg font-semibold text-cc-fg">
+          {isEditing ? "Edit Linear Agent" : "Configure Your Agent"}
+        </h2>
         <p className="mt-1 text-sm text-cc-muted">
-          Set up the agent that will respond to @mentions in Linear. You can customize it further in the Agents page later.
+          {isEditing
+            ? "Update the agent settings. These can be customized further in the Agents page."
+            : "Set up the agent that will respond to @mentions in Linear. You can customize it further in the Agents page later."}
         </p>
       </div>
 
@@ -211,7 +233,9 @@ export function WizardStepAgent({ onNext, onBack }: WizardStepAgentProps) {
               : "bg-cc-primary hover:bg-cc-primary-hover text-white cursor-pointer"
           }`}
         >
-          {saving ? "Creating..." : "Create Agent"}
+          {saving
+            ? (isEditing ? "Saving..." : "Creating...")
+            : (isEditing ? "Save Agent" : "Create Agent")}
         </button>
       </div>
 

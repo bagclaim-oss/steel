@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type TailscaleStatus } from "../api.js";
+import { api, type TailscaleStatus, type AgentInfo } from "../api.js";
 import { navigateHome, navigateToSession } from "../utils/routing.js";
 import { useStore } from "../store.js";
 import { LinearLogo } from "./LinearLogo.js";
@@ -15,6 +15,7 @@ export function IntegrationsPage({ embedded = false }: IntegrationsPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [tailscaleStatus, setTailscaleStatus] = useState<TailscaleStatus | null>(null);
+  const [linearAgents, setLinearAgents] = useState<AgentInfo[]>([]);
 
   useEffect(() => {
     // Load Tailscale status (non-blocking)
@@ -37,6 +38,13 @@ export function IntegrationsPage({ embedded = false }: IntegrationsPageProps) {
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
+
+    // Load Linear agents
+    api.listAgents()
+      .then((agents) => {
+        setLinearAgents(agents.filter(a => a.triggers?.linear?.enabled));
+      })
+      .catch(() => {});
   }, []);
 
   const linearStatus = loading
@@ -107,6 +115,28 @@ export function IntegrationsPage({ embedded = false }: IntegrationsPageProps) {
               <div className="mt-4 inline-flex max-w-full items-center rounded-lg border border-cc-border/80 bg-black/10 px-3 py-1.5 text-xs text-cc-muted/95">
                 <span className="truncate">{linearViewerLabel || "No workspace linked yet"}</span>
               </div>
+              {/* Linear agents summary */}
+              {linearAgents.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs text-cc-muted mb-1.5">
+                    {linearAgents.length} agent{linearAgents.length !== 1 ? "s" : ""} configured
+                  </p>
+                  <div className="space-y-1">
+                    {linearAgents.slice(0, 3).map((agent, i) => (
+                      <div key={agent.id} className="flex items-center gap-2 text-xs text-cc-muted">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cc-success/60 flex-shrink-0" />
+                        <span className="truncate">{agent.name}</span>
+                        {i === 0 && <span className="text-[10px] text-cc-primary/80">Primary</span>}
+                      </div>
+                    ))}
+                    {linearAgents.length > 3 && (
+                      <p className="text-[10px] text-cc-muted ml-3.5">
+                        +{linearAgents.length - 3} more
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="absolute bottom-0 right-0 sm:bottom-0 sm:right-0 flex items-center gap-2">
               <button

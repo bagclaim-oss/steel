@@ -133,4 +133,6 @@ export function handlePermissionResponse(
     });
     sendToCLI(session, ndjson);
   }
+
+  session.stateMachine.transition("streaming", "permission_resolved");
 }

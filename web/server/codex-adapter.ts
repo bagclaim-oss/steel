@@ -597,8 +597,13 @@ export class CodexAdapter {
     // Reset so the next turn/start re-sends collaborationMode (the server
     // sees a fresh connection and won't have the previously-set mode).
     this.lastSentCollaborationModeKind = null;
-    // Reset retry counter so future messages get fresh retry budget
-    this.reconnectRetryCount = 0;
+    // NOTE: Do NOT reset reconnectRetryCount here. The rejection microtask
+    // from StdioTransport.dispatch() hasn't fired yet — resetting the counter
+    // would defeat the MAX_RECONNECT_RETRIES guard. The counter is reset on
+    // successful turn/start instead.
+    // Clear pending outgoing messages to prevent duplicate sends — each
+    // reconnect cycle would otherwise accumulate another copy of the message.
+    this.pendingOutgoing.length = 0;
 
     // If initialization was in progress or had previously failed, re-attempt.
     // A WS reconnect means the transport is healthy again — a prior transient

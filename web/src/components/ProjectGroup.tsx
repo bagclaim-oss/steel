@@ -92,7 +92,7 @@ export function ProjectGroup({
 
       {/* Collapsed preview */}
       {isCollapsed && collapsedPreview && (
-        <div className="text-[10px] text-cc-muted/70 truncate pl-5.5 pb-0.5">
+        <div className="text-[10px] text-cc-muted/70 truncate pl-5 pb-0.5">
           {collapsedPreview}
         </div>
       )}

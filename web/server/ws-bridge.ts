@@ -536,6 +536,22 @@ export class WsBridge {
       this.broadcastToBrowsers(session, { type: "error", message: error });
     });
 
+    // Flush pending messages for non-Claude backends (Codex uses stdio, not
+    // a CLI WebSocket, so handleCLIOpen never runs to flush the queue).
+    // For Claude backends, handleCLIOpen handles this after attachWebSocket.
+    if (!(adapter instanceof ClaudeAdapter) && session.pendingMessages.length > 0) {
+      console.log(`[ws-bridge] Flushing ${session.pendingMessages.length} queued message(s) on adapter attach for session ${sessionId}`);
+      const queued = session.pendingMessages.splice(0);
+      for (const raw of queued) {
+        try {
+          const queuedMsg = JSON.parse(raw) as BrowserOutgoingMessage;
+          adapter.send(queuedMsg);
+        } catch {
+          console.warn(`[ws-bridge] Failed to parse queued message for ${session.backendType}: ${raw.substring(0, 100)}`);
+        }
+      }
+    }
+
     // Broadcast cli_connected
     this.broadcastToBrowsers(session, { type: "cli_connected" });
     console.log(`[ws-bridge] Backend adapter attached for session ${sessionId} (type: ${session.backendType})`);
@@ -572,6 +588,7 @@ export class WsBridge {
         type: "permission_response",
         request_id: perm.request_id,
         behavior: "allow",
+        updated_input: perm.input,
       });
       return;
     }
@@ -674,7 +691,11 @@ export class WsBridge {
 
     // Delegate raw NDJSON parsing, dedup, and routing to the ClaudeAdapter
     // (recording is done inside the adapter's handleRawMessage)
-    (session.backendAdapter as ClaudeAdapter).handleRawMessage(data);
+    if (!(session.backendAdapter instanceof ClaudeAdapter)) {
+      console.warn(`[ws-bridge] handleCLIMessage: no ClaudeAdapter for session ${sessionId}, dropping message`);
+      return;
+    }
+    session.backendAdapter.handleRawMessage(data);
   }
 
   handleCLIClose(ws: ServerWebSocket<SocketData>) {

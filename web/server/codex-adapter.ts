@@ -594,13 +594,19 @@ export class CodexAdapter {
 
     // Clear the current turn — it's gone after reconnect
     this.currentTurnId = null;
+    // Reset so the next turn/start re-sends collaborationMode (the server
+    // sees a fresh connection and won't have the previously-set mode).
+    this.lastSentCollaborationModeKind = null;
+    // Reset retry counter so future messages get fresh retry budget
+    this.reconnectRetryCount = 0;
 
-    // The thread is still alive in the Codex server, so we don't need to
-    // re-initialize. Just mark ourselves as ready for the next turn.
-    // If initialization was in progress, mark it as needing re-attempt.
-    if (this.initInProgress) {
+    // If initialization was in progress or had previously failed, re-attempt.
+    // A WS reconnect means the transport is healthy again — a prior transient
+    // failure should not permanently block the session.
+    if (this.initInProgress || this.initFailed) {
       this.initInProgress = false;
       this.initialized = false;
+      this.initFailed = false;
       this.initialize();
     }
   }

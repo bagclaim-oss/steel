@@ -28,6 +28,13 @@ interface OAuthCredentials {
   [key: string]: unknown;
 }
 
+interface RawCredentials {
+  raw: string;
+  parsed: Record<string, unknown>;
+  oauth: OAuthCredentials;
+  sourcePath?: string;
+}
+
 // Credential file candidates - matches claude-container-auth.ts
 const CREDENTIAL_FILE_NAMES = [
   ".credentials.json",
@@ -36,7 +43,7 @@ const CREDENTIAL_FILE_NAMES = [
   "credentials.json",
 ];
 
-function readCredentialsFromFile(): { raw: string; parsed: Record<string, unknown>; oauth: OAuthCredentials } | null {
+function readCredentialsFromFile(): RawCredentials | null {
   const home =
     process.env.USERPROFILE || process.env.HOME || homedir() || "";
   const claudeDir = join(home, ".claude");
@@ -48,7 +55,7 @@ function readCredentialsFromFile(): { raw: string; parsed: Record<string, unknow
       const raw = readFileSync(credPath, "utf-8");
       const parsed = JSON.parse(raw);
       if (!parsed?.claudeAiOauth?.accessToken) continue;
-      return { raw, parsed, oauth: parsed.claudeAiOauth };
+      return { raw, parsed, oauth: parsed.claudeAiOauth, sourcePath: credPath };
     } catch {
       continue;
     }
@@ -56,7 +63,7 @@ function readCredentialsFromFile(): { raw: string; parsed: Record<string, unknow
   return null;
 }
 
-function readRawCredentials(): { raw: string; parsed: Record<string, unknown>; oauth: OAuthCredentials } | null {
+function readRawCredentials(): RawCredentials | null {
   try {
     // macOS: use Keychain via security command
     if (process.platform === "darwin") {
@@ -81,7 +88,7 @@ function readRawCredentials(): { raw: string; parsed: Record<string, unknown>; o
   }
 }
 
-function writeCredentials(creds: Record<string, unknown>): void {
+function writeCredentials(creds: Record<string, unknown>, sourcePath?: string): void {
   try {
     const json = JSON.stringify(creds);
     if (process.platform === "darwin") {
@@ -91,10 +98,12 @@ function writeCredentials(creds: Record<string, unknown>): void {
         { timeout: 5000, stdio: ["pipe", "pipe", "pipe"] },
       );
     } else {
-      // Windows, Linux, Docker: write to credential file
-      const home =
-        process.env.USERPROFILE || process.env.HOME || homedir() || "";
-      const credPath = join(home, ".claude", ".credentials.json");
+      // Write back to the same file that was read, or default to .credentials.json
+      const credPath = sourcePath ?? join(
+        process.env.USERPROFILE || process.env.HOME || homedir() || "",
+        ".claude",
+        ".credentials.json",
+      );
       writeFileSync(credPath, json, "utf-8");
     }
   } catch {
@@ -158,7 +167,7 @@ async function getValidAccessToken(): Promise<string | null> {
     refreshToken: refreshed.refreshToken,
     expiresAt: Date.now() + refreshed.expiresIn * 1000,
   };
-  writeCredentials(creds.parsed);
+  writeCredentials(creds.parsed, creds.sourcePath);
 
   return refreshed.accessToken;
 }

@@ -186,6 +186,7 @@ describe("getCredentials (Windows)", () => {
 // ===========================================================================
 describe("getCredentials (Linux / Docker)", () => {
   let tempDir: string;
+  const originalHome = process.env.HOME;
 
   beforeEach(() => {
     // Force Linux platform so the file-based credential path is used
@@ -194,7 +195,12 @@ describe("getCredentials (Linux / Docker)", () => {
   });
 
   afterEach(() => {
-    delete process.env.HOME;
+    // Restore original HOME to avoid cross-test environment pollution
+    if (originalHome !== undefined) {
+      process.env.HOME = originalHome;
+    } else {
+      delete process.env.HOME;
+    }
     rmSync(tempDir, { recursive: true, force: true });
   });
 
@@ -267,11 +273,12 @@ describe("getCredentials (Linux / Docker)", () => {
     expect(mockExecSync).not.toHaveBeenCalled();
   });
 
-  it("writes refreshed credentials to file on Linux", async () => {
+  it("writes refreshed credentials back to the same source file", async () => {
+    // Credentials are stored in auth.json (not the default .credentials.json)
     const claudeDir = join(tempDir, ".claude");
     mkdirSync(claudeDir, { recursive: true });
     writeFileSync(
-      join(claudeDir, ".credentials.json"),
+      join(claudeDir, "auth.json"),
       makeCredentialsJson(SAMPLE_TOKEN, { expired: true }),
     );
     process.env.HOME = tempDir;
@@ -297,9 +304,9 @@ describe("getCredentials (Linux / Docker)", () => {
     // Credentials should have been written to file (not via execFileSync/security)
     expect(mockExecFileSync).not.toHaveBeenCalled();
 
-    // Verify the credential file was updated with the new token
+    // Verify the refreshed token was written back to auth.json (the source file)
     const updatedCreds = JSON.parse(
-      readFileSync(join(claudeDir, ".credentials.json"), "utf-8"),
+      readFileSync(join(claudeDir, "auth.json"), "utf-8"),
     );
     expect(updatedCreds.claudeAiOauth.accessToken).toBe("sk-ant-new-token");
     expect(updatedCreds.claudeAiOauth.refreshToken).toBe("sk-ant-new-refresh");

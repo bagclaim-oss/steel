@@ -733,6 +733,46 @@ describe("POST /api/agents — Linear credential staging", () => {
     // updateSettings should NOT have been called to clear staging creds
     expect(updateSettings).not.toHaveBeenCalled();
   });
+
+  it("does NOT clear global settings when updateAgent fails during credential staging", async () => {
+    // If updateAgent returns null (store failure), the global OAuth credentials
+    // must NOT be cleared — otherwise the user's credentials are silently lost.
+    const createdAgent = makeAgent({
+      id: "linear-fail",
+      name: "Linear Fail",
+      triggers: {
+        linear: { enabled: true },
+      },
+    });
+    vi.mocked(agentStore.createAgent).mockReturnValue(createdAgent);
+
+    vi.mocked(getSettings).mockReturnValue({
+      linearOAuthClientId: "client-id-staged",
+      linearOAuthClientSecret: "secret-staged",
+      linearOAuthWebhookSecret: "webhook-staged",
+      linearOAuthAccessToken: "access-staged",
+      linearOAuthRefreshToken: "refresh-staged",
+    } as any);
+
+    // Simulate updateAgent failure (returns null)
+    vi.mocked(agentStore.updateAgent).mockReturnValue(null);
+
+    const res = await app.request("/api/agents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Linear Fail",
+        prompt: "Handle linear issues",
+        triggers: { linear: { enabled: true } },
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    // updateAgent was called (to try to copy creds) but returned null
+    expect(agentStore.updateAgent).toHaveBeenCalled();
+    // updateSettings must NOT have been called — creds are preserved for retry
+    expect(updateSettings).not.toHaveBeenCalled();
+  });
 });
 
 // ─── GET /api/executions ────────────────────────────────────────────────────

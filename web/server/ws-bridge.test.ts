@@ -139,7 +139,7 @@ describe("Session management", () => {
     expect(session.state.repo_root).toBe("");
     expect(session.state.git_ahead).toBe(0);
     expect(session.state.git_behind).toBe(0);
-    expect(session.cliSocket).toBeNull();
+    expect(session.backendAdapter).toBeNull();
     expect(session.browserSockets.size).toBe(0);
     expect(session.pendingPermissions.size).toBe(0);
     expect(session.messageHistory).toEqual([]);
@@ -356,7 +356,7 @@ describe("prePopulateCommands", () => {
 // ─── CLI handlers ────────────────────────────────────────────────────────────
 
 describe("CLI handlers", () => {
-  it("handleCLIOpen: sets cliSocket and broadcasts cli_connected", () => {
+  it("handleCLIOpen: sets backendAdapter and broadcasts cli_connected", () => {
     const browser = makeBrowserSocket("s1");
     bridge.handleBrowserOpen(browser, "s1");
     // Clear session_init send calls
@@ -366,7 +366,8 @@ describe("CLI handlers", () => {
     bridge.handleCLIOpen(cli, "s1");
 
     const session = bridge.getSession("s1")!;
-    expect(session.cliSocket).toBe(cli);
+    expect(session.backendAdapter).not.toBeNull();
+    expect(session.backendAdapter?.isConnected()).toBe(true);
     expect(bridge.isCliConnected("s1")).toBe(true);
 
     // Should have broadcast cli_connected
@@ -742,7 +743,7 @@ describe("CLI handlers", () => {
     expect(forwarded.event.subtype).toBe("hook_progress");
   });
 
-  it("handleCLIClose: nulls cliSocket and broadcasts cli_disconnected", () => {
+  it("handleCLIClose: disconnects backendAdapter and broadcasts cli_disconnected", () => {
     vi.useFakeTimers();
     const cli = makeCliSocket("s1");
     const browser = makeBrowserSocket("s1");
@@ -753,7 +754,7 @@ describe("CLI handlers", () => {
     bridge.handleCLIClose(cli);
 
     const session = bridge.getSession("s1")!;
-    expect(session.cliSocket).toBeNull();
+    expect(session.backendAdapter?.isConnected()).toBe(false);
     expect(bridge.isCliConnected("s1")).toBe(false);
 
     // Advance past disconnect debounce (15s)
@@ -815,9 +816,10 @@ describe("CLI handlers", () => {
     // Stale close event fires from cli1
     bridge.handleCLIClose(cli1);
 
-    // cliSocket should still be cli2, not null
+    // backendAdapter should still be connected via cli2, not disconnected
     const session = bridge.getSession("s1")!;
-    expect(session.cliSocket).toBe(cli2);
+    expect(session.backendAdapter).not.toBeNull();
+    expect(session.backendAdapter?.isConnected()).toBe(true);
     expect(bridge.isCliConnected("s1")).toBe(true);
 
     // No cli_disconnected should be broadcast
@@ -1007,7 +1009,7 @@ describe("Browser handlers", () => {
     bridge.onCLIRelaunchNeededCallback(relaunchCb);
 
     const session = bridge.getOrCreateSession("s1", "codex");
-    session.codexAdapter = { isConnected: () => false } as any;
+    session.backendAdapter = { isConnected: () => false, send: () => false, disconnect: async () => {}, onBrowserMessage: () => {}, onSessionMeta: () => {}, onDisconnect: () => {} } as any;
 
     const browser = makeBrowserSocket("s1");
     bridge.handleBrowserOpen(browser, "s1");
@@ -1618,11 +1620,13 @@ describe("Browser message routing", () => {
       content: "queued message",
     }));
 
+    // Messages are now queued as BrowserOutgoingMessage JSON (not NDJSON)
+    // and converted to backend format when flushed via adapter.send()
     const session = bridge.getSession("s1")!;
     expect(session.pendingMessages).toHaveLength(1);
     const queued = JSON.parse(session.pendingMessages[0]);
-    expect(queued.type).toBe("user");
-    expect(queued.message.content).toBe("queued message");
+    expect(queued.type).toBe("user_message");
+    expect(queued.content).toBe("queued message");
   });
 
   it("user_message: deduplicates repeated client_msg_id", () => {
@@ -1935,7 +1939,7 @@ describe("Persistence", () => {
     expect(session!.state.cwd).toBe("/saved");
     expect(session!.state.total_cost_usd).toBe(0.1);
     expect(session!.messageHistory).toHaveLength(1);
-    expect(session!.cliSocket).toBeNull();
+    expect(session!.backendAdapter).toBeNull();
     expect(session!.browserSockets.size).toBe(0);
     expect(session!.processedClientMessageIdSet.has("restored-client-1")).toBe(true);
   });

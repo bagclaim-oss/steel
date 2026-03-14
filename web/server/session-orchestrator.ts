@@ -149,7 +149,7 @@ export class SessionOrchestrator {
 
     // When a Codex adapter is created, attach it to the WsBridge
     this.launcher.onCodexAdapterCreated((sessionId, adapter) => {
-      this.wsBridge.attachCodexAdapter(sessionId, adapter);
+      this.wsBridge.attachBackendAdapter(sessionId, adapter, "codex");
     });
 
     // When a CLI/Codex process exits, notify agent executor + external listeners

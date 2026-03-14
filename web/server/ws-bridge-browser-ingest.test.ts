@@ -10,12 +10,10 @@ function makeDedupSession(): Session {
   return {
     id: "test-session",
     backendType: "claude",
-    cliSocket: null,
-    codexAdapter: null,
+    backendAdapter: null,
     browserSockets: new Set(),
     state: {} as any,
     pendingPermissions: new Map(),
-    pendingControlRequests: new Map(),
     messageHistory: [],
     pendingMessages: [],
     nextEventSeq: 1,
@@ -23,8 +21,6 @@ function makeDedupSession(): Session {
     lastAckSeq: 0,
     processedClientMessageIds: [],
     processedClientMessageIdSet: new Set(),
-    recentCLIMessageHashes: [],
-    recentCLIMessageHashSet: new Set(),
     lastCliActivityTs: Date.now(),
   };
 }

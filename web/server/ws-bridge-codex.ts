@@ -159,7 +159,7 @@ export function attachCodexAdapterHandlers(
     // Guard: only clear the adapter reference if THIS adapter is still the active
     // one.  During relaunch, a NEW adapter is attached before the OLD one fires
     // its disconnect callback — without this check the new adapter gets nulled out.
-    if (session.codexAdapter !== adapter) {
+    if (session.backendAdapter !== adapter) {
       console.log(`[ws-bridge] Ignoring stale disconnect for session ${sessionId} (adapter replaced)`);
       return;
     }
@@ -167,7 +167,7 @@ export function attachCodexAdapterHandlers(
       deps.broadcastToBrowsers(session, { type: "permission_cancelled", request_id: reqId });
     }
     session.pendingPermissions.clear();
-    session.codexAdapter = null;
+    session.backendAdapter = null;
     deps.persistSession(session);
     console.log(`[ws-bridge] Codex adapter disconnected for session ${sessionId}`);
     deps.broadcastToBrowsers(session, { type: "cli_disconnected" });

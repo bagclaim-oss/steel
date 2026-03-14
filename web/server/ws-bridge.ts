@@ -1071,7 +1071,7 @@ export class WsBridge {
       },
       this.sendToCLI.bind(this),
     );
-    session.stateMachine.transition("streaming", "permission_resolved");
+    // permission_resolved transition is performed inside handlePermissionResponse
   }
 
   private handleToolProgress(session: Session, msg: CLIToolProgressMessage) {

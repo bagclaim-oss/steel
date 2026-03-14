@@ -113,13 +113,16 @@ export function SessionItem({
       }
     }
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" || e.key === "Tab") {
         setMenuOpen(false);
         menuBtnRef.current?.focus();
         return;
       }
-      // Arrow key navigation within menu
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      // Arrow key navigation within menu — only when focus is inside menu
+      if (
+        (e.key === "ArrowDown" || e.key === "ArrowUp") &&
+        (menuRef.current?.contains(document.activeElement) || menuBtnRef.current === document.activeElement)
+      ) {
         e.preventDefault();
         const items = menuRef.current?.querySelectorAll<HTMLElement>("[role='menuitem']");
         if (!items || items.length === 0) return;

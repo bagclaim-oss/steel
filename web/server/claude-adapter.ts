@@ -146,6 +146,9 @@ export class ClaudeAdapter implements IBackendAdapter {
   }
 
   async disconnect(): Promise<void> {
+    // Clear pending control requests to prevent memory leaks from
+    // unresolved promises (CLI won't respond after disconnect)
+    this.pendingControlRequests.clear();
     if (this.cliSocket) {
       try {
         this.cliSocket.close();

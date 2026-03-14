@@ -6,10 +6,18 @@ import type {
 } from "./session-types.js";
 import type { CodexAdapter } from "./codex-adapter.js";
 import type { Session } from "./ws-bridge-types.js";
+import { appendHistory } from "./ws-bridge-persist.js";
 import { validatePermission } from "./ai-validator.js";
 import { getSettings } from "./settings-manager.js";
 import { getEffectiveAiValidation } from "./ai-validation-settings.js";
 import { companionBus } from "./event-bus.js";
+
+/**
+ * @deprecated This file is no longer used in production. Codex adapters are now
+ * wired through the unified `attachBackendAdapter()` pipeline in `ws-bridge.ts`.
+ * This file is kept only for its test coverage which validates Codex-specific
+ * adapter handler logic patterns. It will be removed in a future cleanup pass.
+ */
 
 export interface CodexAttachDeps {
   persistSession: (session: Session) => void;
@@ -64,11 +72,11 @@ export function attachCodexAdapterHandlers(
 
     if (msg.type === "assistant") {
       const assistantMsg = { ...msg, timestamp: msg.timestamp || Date.now() };
-      session.messageHistory.push(assistantMsg);
+      appendHistory(session, assistantMsg);
       deps.persistSession(session);
       companionBus.emit("message:assistant", { sessionId, message: assistantMsg });
     } else if (msg.type === "result") {
-      session.messageHistory.push(msg);
+      appendHistory(session, msg);
       deps.persistSession(session);
       companionBus.emit("message:result", { sessionId, message: msg });
     }

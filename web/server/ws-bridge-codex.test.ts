@@ -1682,32 +1682,35 @@ describe("attachCodexAdapterHandlers", () => {
       // would incorrectly kill active Codex sessions.
       const initialTs = session.lastCliActivityTs;
 
-      // Advance time
+      // Advance time — use try/finally to ensure fake timers are restored
+      // even if assertions fail, preventing leaks into subsequent tests.
       vi.useFakeTimers();
-      vi.advanceTimersByTime(5000);
+      try {
+        vi.advanceTimersByTime(5000);
 
-      attachCodexAdapterHandlers("test-session", session, adapter as unknown as CodexAdapter, deps);
+        attachCodexAdapterHandlers("test-session", session, adapter as unknown as CodexAdapter, deps);
 
-      // Simulate an assistant message from Codex
-      adapter._trigger("onBrowserMessage", {
-        type: "assistant",
-        message: {
-          id: "msg-1",
-          type: "message",
-          role: "assistant",
-          model: "o4-mini",
-          content: [{ type: "text", text: "Hi" }],
-          stop_reason: "end_turn",
-          usage: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
-        },
-        parent_tool_use_id: null,
-        timestamp: Date.now(),
-      });
+        // Simulate an assistant message from Codex
+        adapter._trigger("onBrowserMessage", {
+          type: "assistant",
+          message: {
+            id: "msg-1",
+            type: "message",
+            role: "assistant",
+            model: "o4-mini",
+            content: [{ type: "text", text: "Hi" }],
+            stop_reason: "end_turn",
+            usage: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+          },
+          parent_tool_use_id: null,
+          timestamp: Date.now(),
+        });
 
-      // lastCliActivityTs should have been updated
-      expect(session.lastCliActivityTs).toBeGreaterThan(initialTs);
-
-      vi.useRealTimers();
+        // lastCliActivityTs should have been updated
+        expect(session.lastCliActivityTs).toBeGreaterThan(initialTs);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("updates lastCliActivityTs on result messages", () => {

@@ -438,6 +438,9 @@ export class CodexAdapter {
 
   // Queue messages received before initialization completes
   private pendingOutgoing: BrowserOutgoingMessage[] = [];
+  /** Number of consecutive reconnect-retries for the current user message. */
+  private reconnectRetryCount = 0;
+  private static readonly MAX_RECONNECT_RETRIES = 2;
 
   // Pending approval requests (Codex sends these as JSON-RPC requests with an id)
   private pendingApprovals = new Map<string, number>(); // request_id -> JSON-RPC id
@@ -580,6 +583,8 @@ export class CodexAdapter {
     this.pendingDynamicToolCalls.clear();
     this.pendingExitPlanModeRequests.clear();
     this.pendingApprovals.clear();
+    this.pendingUserInputQuestionIds.clear();
+    this.pendingReviewDecisions.clear();
 
     // Clear the current turn — it's gone after reconnect
     this.currentTurnId = null;
@@ -929,6 +934,13 @@ export class CodexAdapter {
       // if the transport is still connected (avoids immediate "Transport closed").
       this.flushPendingOutgoing();
     } catch (err) {
+      // If a WS reconnection was detected mid-init, handleWsReconnected
+      // already kicked off a fresh initialize(). Don't poison the adapter
+      // by marking it as permanently failed.
+      if (err instanceof Error && err.message === "Transport reconnected") {
+        console.warn(`[codex-adapter] Session ${this.sessionId}: init interrupted by WS reconnection, re-init in progress`);
+        return;
+      }
       const errorMsg = `Codex initialization failed: ${err}`;
       console.error(`[codex-adapter] ${errorMsg}`);
       this.initFailed = true;
@@ -989,17 +1001,23 @@ export class CodexAdapter {
       const result = await this.transport.call("turn/start", turnParams) as { turn: { id: string } };
 
       this.currentTurnId = result.turn.id;
+      this.reconnectRetryCount = 0; // Reset on success
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       if (errMsg === "Transport reconnected") {
         // The WS proxy reconnected mid-call — this is transient.
-        // The proxy has already re-established the connection, so we can
-        // retry the turn/start once (the handleWsReconnected handler takes
-        // care of cleanup; we just need to retry the user's message).
-        this.emit({ type: "error", message: "Connection briefly interrupted. Retrying your message..." });
-        // Re-queue the message so it gets sent after reconnection cleanup
-        this.pendingOutgoing.push(msg);
-        this.flushPendingOutgoing();
+        // Retry up to MAX_RECONNECT_RETRIES times before giving up to
+        // avoid an unbounded loop when the WS keeps dropping.
+        this.reconnectRetryCount++;
+        if (this.reconnectRetryCount > CodexAdapter.MAX_RECONNECT_RETRIES) {
+          this.reconnectRetryCount = 0;
+          this.emit({ type: "error", message: "Connection lost after multiple reconnects. Relaunching session..." });
+          this.cleanupAndDisconnect();
+        } else {
+          this.emit({ type: "error", message: "Connection briefly interrupted. Retrying your message..." });
+          this.pendingOutgoing.push(msg);
+          this.flushPendingOutgoing();
+        }
       } else if (errMsg.startsWith("RPC timeout")) {
         this.emit({ type: "error", message: "Codex is not responding. Relaunching session..." });
         this.cleanupAndDisconnect();

@@ -4524,10 +4524,14 @@ describe("CodexAdapter WS reconnection handling", () => {
     expect(errorMsg).toContain("briefly interrupted");
   });
 
-  it("handleWsReconnected clears pending approvals and currentTurnId", async () => {
+  it("handleWsReconnected clears pending approvals and resets currentTurnId", async () => {
     // When the WS proxy reconnects, the adapter should clean up stale
-    // pending state from the previous connection and reset the turn.
+    // pending state: after reconnection, sending a permission response
+    // for a pre-reconnect request should be silently dropped (no pending
+    // approval entry), and a new user_message should succeed (currentTurnId
+    // was reset, allowing a fresh turn/start).
     let notifHandler: (m: string, p: Record<string, unknown>) => void;
+    let reqHandler: (m: string, id: number, p: Record<string, unknown>) => void;
 
     const transport: ICodexTransport = {
       call: vi.fn(async (method: string) => {
@@ -4540,15 +4544,16 @@ describe("CodexAdapter WS reconnection handling", () => {
       notify: vi.fn(async () => {}),
       respond: vi.fn(async () => {}),
       onNotification: vi.fn((h: (m: string, p: Record<string, unknown>) => void) => { notifHandler = h; }),
-      onRequest: vi.fn(),
+      onRequest: vi.fn((h: (m: string, id: number, p: Record<string, unknown>) => void) => { reqHandler = h; }),
       onRawIncoming: vi.fn(),
       onRawOutgoing: vi.fn(),
       isConnected: vi.fn(() => true),
     };
 
     const disconnectCb = vi.fn();
+    const messages: BrowserIncomingMessage[] = [];
     const adapter = new CodexAdapter(transport, "reconnect-cleanup-test", { model: "o4-mini", cwd: "/tmp" });
-    adapter.onBrowserMessage(() => {});
+    adapter.onBrowserMessage((msg) => messages.push(msg));
     adapter.onDisconnect(disconnectCb);
 
     await new Promise((r) => setTimeout(r, 100));
@@ -4557,14 +4562,44 @@ describe("CodexAdapter WS reconnection handling", () => {
     adapter.sendBrowserMessage({ type: "user_message", content: "hello" });
     await new Promise((r) => setTimeout(r, 50));
 
+    // Simulate a pending approval request from Codex before reconnection
+    reqHandler!("item/commandExecution/requestApproval", 42, {
+      command: { command: "ls" },
+      cwd: "/tmp",
+    });
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Find the permission request to get its request_id
+    const permReqs = messages.filter((m) => m.type === "permission_request");
+    expect(permReqs.length).toBeGreaterThanOrEqual(1);
+    const permReqId = (permReqs[0] as { request: { request_id: string } }).request.request_id;
+
     // Trigger the wsReconnected notification
     notifHandler!("companion/wsReconnected", {});
     await new Promise((r) => setTimeout(r, 50));
 
     // Should NOT have triggered full disconnect (this is a transient recovery)
     expect(disconnectCb).not.toHaveBeenCalled();
-
-    // The adapter should still be usable — verify it can accept new messages
     expect(adapter.isConnected()).toBe(true);
+
+    // Sending a permission response for the pre-reconnect request should
+    // be silently dropped (respond should NOT be called for it)
+    const respondBefore = (transport.respond as ReturnType<typeof vi.fn>).mock.calls.length;
+    adapter.sendBrowserMessage({
+      type: "permission_response",
+      request_id: permReqId,
+      behavior: "allow",
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    // respond() should not have been called again — the approval was cleared
+    expect((transport.respond as ReturnType<typeof vi.fn>).mock.calls.length).toBe(respondBefore);
+
+    // A new user_message should succeed — verifying currentTurnId was reset
+    adapter.sendBrowserMessage({ type: "user_message", content: "after reconnect" });
+    await new Promise((r) => setTimeout(r, 50));
+    // turn/start should have been called again (at least 2 times total: init + post-reconnect)
+    const turnStartCalls = (transport.call as ReturnType<typeof vi.fn>).mock.calls
+      .filter((args: unknown[]) => args[0] === "turn/start");
+    expect(turnStartCalls.length).toBeGreaterThanOrEqual(2);
   });
 });

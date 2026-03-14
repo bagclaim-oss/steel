@@ -10,7 +10,7 @@ export interface QuickTerminalTab {
 
 export type QuickTerminalPlacement = "top" | "right" | "bottom" | "left";
 
-function getInitialQuickTerminalPlacement(): QuickTerminalPlacement {
+export function getInitialQuickTerminalPlacement(): QuickTerminalPlacement {
   if (typeof window === "undefined") return "bottom";
   const stored = window.localStorage.getItem("cc-terminal-placement");
   if (stored === "top" || stored === "right" || stored === "bottom" || stored === "left") return stored;

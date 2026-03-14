@@ -89,6 +89,8 @@ export const createSessionsSlice: StateCreator<AppState, [], [], SessionsSlice> 
     set((s) => {
       const sessions = new Map(s.sessions);
       sessions.set(session.session_id, session);
+      // Cross-slice write: initialize the messages entry (owned by ChatSlice)
+      // atomically with the session so consumers always find a messages array.
       const messages = new Map(s.messages);
       if (!messages.has(session.session_id)) messages.set(session.session_id, []);
       return { sessions, messages };

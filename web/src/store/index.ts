@@ -4,10 +4,9 @@ import { createSessionsSlice, type SessionsSlice } from "./sessions-slice.js";
 import { createChatSlice, type ChatSlice } from "./chat-slice.js";
 import { createPermissionsSlice, type PermissionsSlice } from "./permissions-slice.js";
 import { createTasksSlice, type TasksSlice } from "./tasks-slice.js";
-import { createUiSlice, type UiSlice } from "./ui-slice.js";
-import { createTerminalSlice, type TerminalSlice } from "./terminal-slice.js";
+import { createUiSlice, type UiSlice, getInitialDiffBase } from "./ui-slice.js";
+import { createTerminalSlice, type TerminalSlice, getInitialQuickTerminalPlacement } from "./terminal-slice.js";
 import { createUpdatesSlice, type UpdatesSlice } from "./updates-slice.js";
-import type { DiffBase } from "./ui-slice.js";
 
 export type AppState = AuthSlice &
   SessionsSlice &
@@ -19,20 +18,6 @@ export type AppState = AuthSlice &
   UpdatesSlice & {
     reset: () => void;
   };
-
-function getInitialQuickTerminalPlacement() {
-  if (typeof window === "undefined") return "bottom";
-  const stored = window.localStorage.getItem("cc-terminal-placement");
-  if (stored === "top" || stored === "right" || stored === "bottom" || stored === "left") return stored;
-  return "bottom";
-}
-
-function getInitialDiffBase(): DiffBase {
-  if (typeof window === "undefined") return "last-commit";
-  const stored = window.localStorage.getItem("cc-diff-base");
-  if (stored === "last-commit" || stored === "default-branch") return stored;
-  return "last-commit";
-}
 
 export const useStore = create<AppState>((...args) => ({
   ...createAuthSlice(...args),
@@ -47,7 +32,8 @@ export const useStore = create<AppState>((...args) => ({
   reset: () => {
     const [set] = args;
     set({
-      // Sessions
+      // Sessions — note: collapsedProjects is intentionally preserved across
+      // resets so the user's sidebar collapse preferences persist.
       sessions: new Map(),
       sdkSessions: [],
       currentSessionId: null,

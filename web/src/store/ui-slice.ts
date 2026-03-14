@@ -25,7 +25,7 @@ function getInitialNotificationDesktop(): boolean {
   return false;
 }
 
-function getInitialDiffBase(): DiffBase {
+export function getInitialDiffBase(): DiffBase {
   if (typeof window === "undefined") return "last-commit";
   const stored = window.localStorage.getItem("cc-diff-base");
   if (stored === "last-commit" || stored === "default-branch") return stored;
@@ -156,6 +156,8 @@ export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => (
   },
   newSession: () => {
     localStorage.removeItem("cc-current-session");
+    // Cross-slice write: clears currentSessionId (owned by SessionsSlice)
+    // alongside the homeResetKey bump to return the user to the home page.
     set((s) => ({ currentSessionId: null, homeResetKey: s.homeResetKey + 1 }));
   },
   setEditorTabEnabled: (enabled) => set({ editorTabEnabled: enabled }),

@@ -37,6 +37,7 @@ vi.mock("./settings-manager.js", () => ({
 import { WsBridge, type SocketData } from "./ws-bridge.js";
 import { SessionStore } from "./session-store.js";
 import { containerManager } from "./container-manager.js";
+import { companionBus } from "./event-bus.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -68,6 +69,7 @@ beforeEach(() => {
   bridge = new WsBridge();
   bridge.setStore(store);
   mockExecSync.mockReset();
+  companionBus.clear();
   // Suppress console output to prevent Vitest EnvironmentTeardownError.
   // ws-bridge.ts and session-store.ts log via console.log/warn/error;
   // when the Vitest worker tears down while a console relay RPC is still
@@ -469,7 +471,7 @@ describe("CLI handlers", () => {
     });
 
     const callback = vi.fn();
-    bridge.onCLISessionIdReceived(callback);
+    companionBus.on("session:cli-id-received", ({ sessionId, cliSessionId }) => callback(sessionId, cliSessionId));
 
     const cli = makeCliSocket("s1");
     bridge.handleCLIOpen(cli, "s1");
@@ -912,7 +914,7 @@ describe("Browser handlers", () => {
     session.state.git_branch = "main";
 
     const gitInfoCb = vi.fn();
-    bridge.onSessionGitInfoReadyCallback(gitInfoCb);
+    companionBus.on("session:git-info-ready", ({ sessionId, cwd, branch }) => gitInfoCb(sessionId, cwd, branch));
 
     const browser = makeBrowserSocket("s1");
     bridge.handleBrowserOpen(browser, "s1");
@@ -990,7 +992,7 @@ describe("Browser handlers", () => {
 
   it("handleBrowserOpen: triggers relaunch callback when CLI is dead", () => {
     const relaunchCb = vi.fn();
-    bridge.onCLIRelaunchNeededCallback(relaunchCb);
+    companionBus.on("session:relaunch-needed", ({ sessionId }) => relaunchCb(sessionId));
 
     bridge.getOrCreateSession("s1");
     const browser = makeBrowserSocket("s1");
@@ -1006,7 +1008,7 @@ describe("Browser handlers", () => {
 
   it("handleBrowserOpen: does NOT relaunch when Codex adapter is attached but still initializing", () => {
     const relaunchCb = vi.fn();
-    bridge.onCLIRelaunchNeededCallback(relaunchCb);
+    companionBus.on("session:relaunch-needed", ({ sessionId }) => relaunchCb(sessionId));
 
     const session = bridge.getOrCreateSession("s1", "codex");
     session.backendAdapter = { isConnected: () => false, send: () => false, disconnect: async () => {}, onBrowserMessage: () => {}, onSessionMeta: () => {}, onDisconnect: () => {} } as any;
@@ -2820,7 +2822,7 @@ describe("Restore from disk with pendingPermissions", () => {
 describe("onFirstTurnCompletedCallback", () => {
   it("fires on first successful result regardless of num_turns", async () => {
     const callback = vi.fn();
-    bridge.onFirstTurnCompletedCallback(callback);
+    companionBus.on("session:first-turn-completed", ({ sessionId, firstUserMessage }) => callback(sessionId, firstUserMessage));
 
     const cli = makeCliSocket("s1");
     bridge.handleCLIOpen(cli, "s1");
@@ -2855,7 +2857,7 @@ describe("onFirstTurnCompletedCallback", () => {
 
   it("does not fire on subsequent results for the same session", async () => {
     const callback = vi.fn();
-    bridge.onFirstTurnCompletedCallback(callback);
+    companionBus.on("session:first-turn-completed", ({ sessionId, firstUserMessage }) => callback(sessionId, firstUserMessage));
 
     const cli = makeCliSocket("s1");
     bridge.handleCLIOpen(cli, "s1");
@@ -2909,7 +2911,7 @@ describe("onFirstTurnCompletedCallback", () => {
 
   it("does not fire on error results", async () => {
     const callback = vi.fn();
-    bridge.onFirstTurnCompletedCallback(callback);
+    companionBus.on("session:first-turn-completed", ({ sessionId, firstUserMessage }) => callback(sessionId, firstUserMessage));
 
     const cli = makeCliSocket("s1");
     bridge.handleCLIOpen(cli, "s1");
@@ -2942,7 +2944,7 @@ describe("onFirstTurnCompletedCallback", () => {
 
   it("fires after initial error result followed by a successful result", async () => {
     const callback = vi.fn();
-    bridge.onFirstTurnCompletedCallback(callback);
+    companionBus.on("session:first-turn-completed", ({ sessionId, firstUserMessage }) => callback(sessionId, firstUserMessage));
 
     const cli = makeCliSocket("s1");
     bridge.handleCLIOpen(cli, "s1");
@@ -2993,7 +2995,7 @@ describe("onFirstTurnCompletedCallback", () => {
 
   it("does not fire when there is no user message in history", async () => {
     const callback = vi.fn();
-    bridge.onFirstTurnCompletedCallback(callback);
+    companionBus.on("session:first-turn-completed", ({ sessionId, firstUserMessage }) => callback(sessionId, firstUserMessage));
 
     const cli = makeCliSocket("s1");
     bridge.handleCLIOpen(cli, "s1");
@@ -3020,7 +3022,7 @@ describe("onFirstTurnCompletedCallback", () => {
 
   it("fires independently for different sessions", async () => {
     const callback = vi.fn();
-    bridge.onFirstTurnCompletedCallback(callback);
+    companionBus.on("session:first-turn-completed", ({ sessionId, firstUserMessage }) => callback(sessionId, firstUserMessage));
 
     // Setup session 1
     const cli1 = makeCliSocket("s1");
@@ -3083,7 +3085,7 @@ describe("onFirstTurnCompletedCallback", () => {
 
   it("cleans up auto-naming tracking when session is removed", async () => {
     const callback = vi.fn();
-    bridge.onFirstTurnCompletedCallback(callback);
+    companionBus.on("session:first-turn-completed", ({ sessionId, firstUserMessage }) => callback(sessionId, firstUserMessage));
 
     const cli = makeCliSocket("s1");
     bridge.handleCLIOpen(cli, "s1");
@@ -3143,7 +3145,7 @@ describe("onFirstTurnCompletedCallback", () => {
 
   it("cleans up auto-naming tracking when session is closed", async () => {
     const callback = vi.fn();
-    bridge.onFirstTurnCompletedCallback(callback);
+    companionBus.on("session:first-turn-completed", ({ sessionId, firstUserMessage }) => callback(sessionId, firstUserMessage));
 
     const cli = makeCliSocket("s1");
     bridge.handleCLIOpen(cli, "s1");
@@ -3202,7 +3204,7 @@ describe("onFirstTurnCompletedCallback", () => {
 
   it("does not fire for restored sessions with completed turns", async () => {
     const callback = vi.fn();
-    bridge.onFirstTurnCompletedCallback(callback);
+    companionBus.on("session:first-turn-completed", ({ sessionId, firstUserMessage }) => callback(sessionId, firstUserMessage));
 
     // Persist a session with num_turns > 0 and a user message in history
     store.save({
@@ -3265,7 +3267,7 @@ describe("onFirstTurnCompletedCallback", () => {
 
   it("allows auto-naming for restored sessions with zero turns", async () => {
     const callback = vi.fn();
-    bridge.onFirstTurnCompletedCallback(callback);
+    companionBus.on("session:first-turn-completed", ({ sessionId, firstUserMessage }) => callback(sessionId, firstUserMessage));
 
     // Persist a session with num_turns === 0 (brand new, never completed a turn)
     store.save({
@@ -3517,8 +3519,9 @@ describe("MCP control messages", () => {
 
 describe("per-session listener error handling", () => {
   it("catches and logs errors thrown by assistant message listeners", async () => {
-    // A throwing listener should not crash the message pipeline or prevent
-    // persistSession from running.
+    // A throwing listener registered on the event bus should not crash
+    // the message pipeline or prevent persistSession from running.
+    // The EventBus catches handler errors and logs them.
     const sessionId = "listener-error-session";
     const cli = makeCliSocket(sessionId);
     bridge.handleCLIOpen(cli, sessionId);
@@ -3527,9 +3530,11 @@ describe("per-session listener error handling", () => {
     const browser = makeBrowserSocket(sessionId);
     bridge.handleBrowserOpen(browser, sessionId);
 
-    // Register a throwing listener
+    // Register a throwing listener via the event bus
     const throwingCb = () => { throw new Error("listener boom"); };
-    bridge.onAssistantMessageForSession(sessionId, throwingCb);
+    companionBus.on("message:assistant", ({ sessionId: sid, message }) => {
+      if (sid === sessionId) throwingCb();
+    });
 
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -3541,7 +3546,7 @@ describe("per-session listener error handling", () => {
     await bridge.handleCLIMessage(cli, assistantMsg);
 
     expect(spy).toHaveBeenCalledWith(
-      expect.stringContaining("Assistant listener error"),
+      expect.stringContaining("Handler error"),
       expect.any(Error),
     );
 
@@ -3549,8 +3554,8 @@ describe("per-session listener error handling", () => {
   });
 
   it("catches and logs errors from async result listeners", async () => {
-    // An async result listener that rejects should have its rejection caught
-    // and logged, not become an unhandled promise rejection.
+    // A sync-throwing result listener registered on the event bus should
+    // have its error caught and logged, not become an unhandled exception.
     const sessionId = "async-listener-session";
     const cli = makeCliSocket(sessionId);
     bridge.handleCLIOpen(cli, sessionId);
@@ -3561,9 +3566,11 @@ describe("per-session listener error handling", () => {
 
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    // Register a sync-throwing listener for result
+    // Register a sync-throwing listener for result via the event bus
     const throwingCb = () => { throw new Error("result listener boom"); };
-    bridge.onResultForSession(sessionId, throwingCb);
+    companionBus.on("message:result", ({ sessionId: sid, message }) => {
+      if (sid === sessionId) throwingCb();
+    });
 
     // Send a result message
     const resultMsg = JSON.stringify({
@@ -3576,7 +3583,7 @@ describe("per-session listener error handling", () => {
     await bridge.handleCLIMessage(cli, resultMsg);
 
     expect(spy).toHaveBeenCalledWith(
-      expect.stringContaining("Result listener error"),
+      expect.stringContaining("Handler error"),
       expect.any(Error),
     );
 
@@ -3804,22 +3811,18 @@ describe("diagnostics and callbacks", () => {
     expect(stats[1].id).toBe("diag-2");
   });
 
-  it("onIdleKillCallback registers the callback", () => {
-    const cb = vi.fn();
-    bridge.onIdleKillCallback(cb);
-    // Callback is stored — can't directly assert it's set (private field),
-    // but covering the registration path is the goal.
-    expect(cb).not.toHaveBeenCalled();
-  });
-
-  it("onAssistantMessageForSession: unsubscribe function removes the listener", async () => {
+  it("companionBus message:assistant: unsubscribe function removes the listener", async () => {
+    // After event bus migration, per-session listeners are registered via
+    // companionBus.on("message:assistant", ...) with a sessionId filter.
     const cli = makeCliSocket("s1");
     const browser = makeBrowserSocket("s1");
     bridge.handleCLIOpen(cli, "s1");
     bridge.handleBrowserOpen(browser, "s1");
 
     const listener = vi.fn();
-    const unsubscribe = bridge.onAssistantMessageForSession("s1", listener);
+    const unsubscribe = companionBus.on("message:assistant", ({ sessionId, message }) => {
+      if (sessionId === "s1") listener(message);
+    });
 
     // Send an assistant message — listener should fire
     await bridge.handleCLIMessage(cli, JSON.stringify({
@@ -3843,7 +3846,9 @@ describe("diagnostics and callbacks", () => {
     expect(listener).toHaveBeenCalledTimes(1); // Still 1 — unsubscribed
   });
 
-  it("onResultForSession: unsubscribe function removes the listener", async () => {
+  it("companionBus message:result: unsubscribe function removes the listener", async () => {
+    // After event bus migration, per-session listeners are registered via
+    // companionBus.on("message:result", ...) with a sessionId filter.
     const cli = makeCliSocket("s1");
     const browser = makeBrowserSocket("s1");
     bridge.handleCLIOpen(cli, "s1");
@@ -3855,7 +3860,9 @@ describe("diagnostics and callbacks", () => {
     }));
 
     const listener = vi.fn();
-    const unsubscribe = bridge.onResultForSession("s1", listener);
+    const unsubscribe = companionBus.on("message:result", ({ sessionId, message }) => {
+      if (sessionId === "s1") listener(message);
+    });
 
     // Send a result message — listener should fire
     await bridge.handleCLIMessage(cli, JSON.stringify({
@@ -3877,5 +3884,37 @@ describe("diagnostics and callbacks", () => {
       uuid: "uuid-result-unsub-2", session_id: "s1",
     }));
     expect(listener).toHaveBeenCalledTimes(1); // Still 1 — unsubscribed
+  });
+
+  it("getCodexRateLimits returns null for unknown session", () => {
+    // Covers the early-return path when session doesn't exist.
+    expect(bridge.getCodexRateLimits("nonexistent")).toBeNull();
+  });
+
+  it("getCodexRateLimits returns null when no codex adapter", () => {
+    // Covers the path where session exists but has no codex adapter.
+    bridge.getOrCreateSession("no-adapter");
+    expect(bridge.getCodexRateLimits("no-adapter")).toBeNull();
+  });
+
+  it("broadcastToSession is a no-op for unknown session", () => {
+    // Covers the early-return path when session doesn't exist.
+    expect(() => bridge.broadcastToSession("nonexistent", { type: "cli_connected" })).not.toThrow();
+  });
+
+  it("broadcastToSession sends to connected browsers", () => {
+    // Covers the happy path: session exists and has browsers.
+    const browser = makeBrowserSocket("bcast");
+    bridge.getOrCreateSession("bcast");
+    bridge.handleBrowserOpen(browser, "bcast");
+    bridge.broadcastToSession("bcast", { type: "cli_connected" });
+    expect(browser.send).toHaveBeenCalled();
+  });
+
+  it("setRecorder stores the recorder reference", () => {
+    // Covers the setRecorder setter (line 165).
+    const fakeRecorder = { start: vi.fn(), stop: vi.fn() } as any;
+    bridge.setRecorder(fakeRecorder);
+    expect((bridge as any).recorder).toBe(fakeRecorder);
   });
 });

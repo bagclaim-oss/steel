@@ -59,10 +59,7 @@ export function AgentsPage({ route }: Props) {
   const [wizardLoading, setWizardLoading] = useState(false);
   const [wizardEditingAgent, setWizardEditingAgent] = useState<AgentInfo | null>(null);
 
-  // Check if Linear OAuth is configured (for Agent SDK trigger visibility)
-  useEffect(() => {
-    api.getLinearOAuthStatus().then((s) => setLinearOAuthConfigured(s.configured)).catch(() => {});
-  }, []);
+  // linearOAuthConfigured is derived from agents list in loadAgents below
 
   // Check hash for wizard entry params (OAuth return or IntegrationsPage link)
   useEffect(() => {
@@ -80,6 +77,9 @@ export function AgentsPage({ route }: Props) {
     try {
       const list = await api.listAgents();
       setAgents(list);
+      // Derive linearOAuthConfigured from agents: true if any Linear agent has an access token
+      const hasLinearAgent = list.some(a => a.triggers?.linear?.enabled && a.triggers?.linear?.hasAccessToken);
+      setLinearOAuthConfigured(hasLinearAgent);
     } catch {
       // ignore
     } finally {
@@ -275,7 +275,10 @@ export function AgentsPage({ route }: Props) {
     setWizardCreatedAgentId(null);
     setWizardAgentName("");
     setWizardEditingAgent(null);
-    setWizardStep(4);
+    setWizardCredentialsSaved(false);
+    setWizardOauthConnected(false);
+    setWizardOauthError("");
+    setWizardStep(1);
   }, []);
 
   async function handleSave() {

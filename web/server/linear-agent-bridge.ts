@@ -2,7 +2,7 @@
 // Bridges Linear Agent Interaction SDK sessions with Companion CLI sessions.
 // When Linear sends an AgentSessionEvent webhook, this module:
 // 1. Acknowledges immediately (post a "thought" activity within 10s)
-// 2. Finds the right Companion agent to handle it
+// 2. Finds the right Companion agent to handle it (by oauthClientId)
 // 3. Launches a CLI session via AgentExecutor
 // 4. Relays CLI output back to Linear as agent activities
 // 5. Relays TodoWrite → Linear plan checklist
@@ -11,9 +11,10 @@
 import type { AgentExecutor } from "./agent-executor.js";
 import type { WsBridge } from "./ws-bridge.js";
 import type { BrowserIncomingMessage } from "./session-types.js";
+import type { AgentConfig } from "./agent-types.js";
 import * as agentStore from "./agent-store.js";
 import * as linearAgent from "./linear-agent.js";
-import type { AgentSessionEventPayload, AgentPlanItem } from "./linear-agent.js";
+import type { AgentSessionEventPayload, AgentPlanItem, LinearOAuthCredentials } from "./linear-agent.js";
 import { getSettings } from "./settings-manager.js";
 
 /** Interval (ms) for flushing intermediate progress as ephemeral thoughts. */
@@ -130,8 +131,8 @@ export class LinearAgentBridge {
   private agentExecutor: AgentExecutor;
   private wsBridge: WsBridge;
 
-  /** Maps Linear agent session IDs to Companion session IDs */
-  private sessionMap = new Map<string, string>();
+  /** Maps Linear agent session IDs to Companion session info */
+  private sessionMap = new Map<string, { companionSessionId: string; agentId: string }>();
   /** Maps Companion session IDs back to Linear agent session IDs */
   private reverseMap = new Map<string, string>();
   /** Track active session unsubscribers for cleanup */
@@ -143,11 +144,14 @@ export class LinearAgentBridge {
     this.restoreSessionMaps();
   }
 
-  /** Restore Linear↔Companion session mappings from persisted session state. */
+  /** Restore Linear<->Companion session mappings from persisted session state. */
   private restoreSessionMaps(): void {
     const mappings = this.wsBridge.getLinearSessionMappings();
     for (const { sessionId, linearSessionId } of mappings) {
-      this.sessionMap.set(linearSessionId, sessionId);
+      // Try to find the agent for this session from the session's execution history
+      // Fallback: find any enabled Linear agent
+      const agentId = this.findAnyLinearAgentId() || "";
+      this.sessionMap.set(linearSessionId, { companionSessionId: sessionId, agentId });
       this.reverseMap.set(sessionId, linearSessionId);
     }
     if (mappings.length > 0) {
@@ -176,22 +180,22 @@ export class LinearAgentBridge {
 
     console.log(`[linear-agent-bridge] New agent session: ${linearSessionId}`);
 
-    // 1. Immediately acknowledge with a thought (must be within 10s)
-    linearAgent.postActivity(linearSessionId, {
+    // 1. Find the right Companion agent by OAuth client ID
+    const agent = this.findLinearAgentByClientId(payload.oauthClientId);
+    if (!agent) {
+      // Can't post activity without credentials — just log
+      console.error(`[linear-agent-bridge] No agent configured for oauthClientId: ${payload.oauthClientId}`);
+      return;
+    }
+
+    const creds = this.getCredentials(agent);
+
+    // 2. Immediately acknowledge with a thought (must be within 10s)
+    linearAgent.postActivity(creds, linearSessionId, {
       type: "thought",
       body: "Starting Companion session...",
       ephemeral: true,
     }).catch((err) => console.error("[linear-agent-bridge] Failed to post initial thought:", err));
-
-    // 2. Find the right Companion agent
-    const agent = this.findLinearAgent();
-    if (!agent) {
-      await linearAgent.postActivity(linearSessionId, {
-        type: "error",
-        body: "No Companion agent is configured to handle Linear mentions. Enable the Linear trigger on an agent in The Companion.",
-      });
-      return;
-    }
 
     // 3. Launch the CLI session with enriched prompt
     try {
@@ -204,7 +208,7 @@ export class LinearAgentBridge {
         // Check if the agent is already running (overlap prevention)
         const agentData = agentStore.getAgent(agent.id);
         const isOverlap = agentData?.lastSessionId && this.wsBridge.getSession(agentData.lastSessionId);
-        await linearAgent.postActivity(linearSessionId, {
+        await linearAgent.postActivity(creds, linearSessionId, {
           type: "error",
           body: isOverlap
             ? `Agent "${agent.name}" is currently busy with another session. Please wait for it to complete.`
@@ -215,28 +219,28 @@ export class LinearAgentBridge {
 
       const companionSessionId = sessionInfo.sessionId;
 
-      // 4. Map sessions and persist
-      this.sessionMap.set(linearSessionId, companionSessionId);
+      // 4. Map sessions and persist (include agentId for follow-up credential lookup)
+      this.sessionMap.set(linearSessionId, { companionSessionId, agentId: agent.id });
       this.reverseMap.set(companionSessionId, linearSessionId);
       this.wsBridge.setLinearSessionId(companionSessionId, linearSessionId);
 
       // 5. Set external URL linking back to Companion
       const settings = getSettings();
       const baseUrl = settings.publicUrl || "http://localhost:3456";
-      linearAgent.updateSessionUrls(linearSessionId, [
+      linearAgent.updateSessionUrls(creds, linearSessionId, [
         { label: "Companion Session", url: `${baseUrl}/#/session/${companionSessionId}` },
       ]).catch((err) => console.error("[linear-agent-bridge] Failed to set external URLs:", err));
 
-      // 6. Set up response relay
-      this.setupRelay(linearSessionId, companionSessionId);
+      // 6. Set up response relay (pass agentId for credential lookup)
+      this.setupRelay(linearSessionId, companionSessionId, agent.id);
 
-      await linearAgent.postActivity(linearSessionId, {
+      await linearAgent.postActivity(creds, linearSessionId, {
         type: "thought",
         body: `Agent "${agent.name}" session started. Working on it...`,
       });
     } catch (err) {
       console.error("[linear-agent-bridge] Failed to start session:", err);
-      await linearAgent.postActivity(linearSessionId, {
+      await linearAgent.postActivity(creds, linearSessionId, {
         type: "error",
         body: `Failed to start session: ${err instanceof Error ? err.message : String(err)}`,
       });
@@ -271,8 +275,8 @@ export class LinearAgentBridge {
       return;
     }
 
-    const companionSessionId = this.sessionMap.get(linearSessionId);
-    if (!companionSessionId) {
+    const mapping = this.sessionMap.get(linearSessionId);
+    if (!mapping) {
       // Session not found — might have expired. Create a new one with the follow-up message.
       console.log(`[linear-agent-bridge] No session mapping for ${linearSessionId}, creating new`);
       await this.handleCreated({
@@ -282,6 +286,8 @@ export class LinearAgentBridge {
       });
       return;
     }
+
+    const { companionSessionId, agentId } = mapping;
 
     console.log(`[linear-agent-bridge] Follow-up for session ${linearSessionId} → ${companionSessionId}`);
 
@@ -302,25 +308,39 @@ export class LinearAgentBridge {
       return;
     }
 
+    // Look up agent for credentials
+    const agent = agentStore.getAgent(agentId);
+    const creds = agent ? this.getCredentials(agent) : null;
+
     // Post acknowledgement
-    linearAgent.postActivity(linearSessionId, {
-      type: "thought",
-      body: "Processing follow-up...",
-      ephemeral: true,
-    }).catch((err) => console.error("[linear-agent-bridge] Failed to post thought:", err));
+    if (creds) {
+      linearAgent.postActivity(creds, linearSessionId, {
+        type: "thought",
+        body: "Processing follow-up...",
+        ephemeral: true,
+      }).catch((err) => console.error("[linear-agent-bridge] Failed to post thought:", err));
+    }
 
     // Re-establish relay for the new turn (resets pendingText accumulator).
     // setupRelay calls cleanupRelay internally first, so old listeners are removed.
-    this.setupRelay(linearSessionId, companionSessionId);
+    this.setupRelay(linearSessionId, companionSessionId, agentId);
 
     // Inject user message into the running Companion session
     this.wsBridge.injectUserMessage(companionSessionId, message);
   }
 
   /** Set up bidirectional relay between a Companion session and a Linear agent session. */
-  private setupRelay(linearSessionId: string, companionSessionId: string): void {
+  private setupRelay(linearSessionId: string, companionSessionId: string, agentId: string): void {
     // Clean up any existing relay
     this.cleanupRelay(companionSessionId);
+
+    // Look up current agent credentials for this relay session
+    const agent = agentStore.getAgent(agentId);
+    const creds = agent ? this.getCredentials(agent) : null;
+    if (!creds) {
+      console.error(`[linear-agent-bridge] Cannot setup relay — agent ${agentId} not found`);
+      return;
+    }
 
     const cleanups: Array<() => void> = [];
     let pendingText = "";
@@ -341,7 +361,7 @@ export class LinearAgentBridge {
           pendingToolUseIds.set(tool.id, tool.name);
         }
 
-        linearAgent.postActivity(linearSessionId, {
+        linearAgent.postActivity(creds, linearSessionId, {
           type: "action",
           action: tool.name,
           parameter: tool.input || undefined,
@@ -362,7 +382,7 @@ export class LinearAgentBridge {
                 status: mapTodoStatus(t.status),
               }));
             if (planItems.length > 0) {
-              linearAgent.updateSessionPlan(linearSessionId, planItems)
+              linearAgent.updateSessionPlan(creds, linearSessionId, planItems)
                 .catch((err) => console.error("[linear-agent-bridge] Failed to update plan:", err));
             }
           }
@@ -374,7 +394,7 @@ export class LinearAgentBridge {
         const toolName = pendingToolUseIds.get(result.tool_use_id);
         if (toolName && result.content) {
           pendingToolUseIds.delete(result.tool_use_id);
-          linearAgent.postActivity(linearSessionId, {
+          linearAgent.postActivity(creds, linearSessionId, {
             type: "action",
             action: toolName,
             result: result.content,
@@ -392,7 +412,7 @@ export class LinearAgentBridge {
       if (pendingText.length > lastFlushedLength) {
         const newText = pendingText.slice(lastFlushedLength);
         lastFlushedLength = pendingText.length;
-        linearAgent.postActivity(linearSessionId, {
+        linearAgent.postActivity(creds, linearSessionId, {
           type: "thought",
           body: newText.slice(0, 2000),
           ephemeral: true,
@@ -407,7 +427,7 @@ export class LinearAgentBridge {
     const unsubResult = this.wsBridge.onResultForSession(companionSessionId, async () => {
       if (pendingText) {
         try {
-          await linearAgent.postActivity(linearSessionId, {
+          await linearAgent.postActivity(creds, linearSessionId, {
             type: "response",
             body: pendingText,
           });
@@ -432,14 +452,53 @@ export class LinearAgentBridge {
     }
   }
 
-  /** Find the first enabled agent with a Linear trigger. */
-  private findLinearAgent() {
+  /** Extract Linear OAuth credentials from an agent's config. */
+  private getCredentials(agent: AgentConfig): LinearOAuthCredentials {
+    const linear = agent.triggers?.linear;
+    return {
+      clientId: linear?.oauthClientId || "",
+      clientSecret: linear?.oauthClientSecret || "",
+      webhookSecret: linear?.webhookSecret || "",
+      accessToken: linear?.accessToken || "",
+      refreshToken: linear?.refreshToken || "",
+    };
+  }
+
+  /** Create a callback that persists refreshed tokens back to the agent config. */
+  private createTokenRefreshCallback(agentId: string): (tokens: { accessToken: string; refreshToken: string }) => void {
+    return (tokens) => {
+      const agent = agentStore.getAgent(agentId);
+      if (agent?.triggers?.linear) {
+        agentStore.updateAgent(agentId, {
+          triggers: {
+            ...agent.triggers,
+            linear: {
+              ...agent.triggers.linear,
+              accessToken: tokens.accessToken,
+              refreshToken: tokens.refreshToken,
+            },
+          },
+        });
+      }
+    };
+  }
+
+  /** Find the agent configured for a specific Linear OAuth client ID. */
+  private findLinearAgentByClientId(oauthClientId: string | undefined): AgentConfig | null {
+    if (!oauthClientId) return null;
     const agents = agentStore.listAgents();
-    const enabledAgents = agents.filter((a) => a.enabled && a.triggers?.linear?.enabled);
-    if (enabledAgents.length > 1) {
-      console.log(`[linear-agent-bridge] ${enabledAgents.length} Linear agents found, using "${enabledAgents[0].name}"`);
-    }
-    return enabledAgents[0] || null;
+    const agent = agents.find(
+      (a) => a.enabled && a.triggers?.linear?.enabled
+        && a.triggers.linear.oauthClientId === oauthClientId,
+    );
+    return agent || null;
+  }
+
+  /** Find any enabled Linear agent's ID (for backward compat on session restore). */
+  private findAnyLinearAgentId(): string | null {
+    const agents = agentStore.listAgents();
+    const agent = agents.find((a) => a.enabled && a.triggers?.linear?.enabled);
+    return agent?.id || null;
   }
 
   /** Clean up all session mappings and listeners. */

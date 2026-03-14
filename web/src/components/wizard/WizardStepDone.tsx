@@ -57,7 +57,7 @@ export function WizardStepDone({ agentName, onFinish, onAddAnother }: WizardStep
             onClick={onAddAnother}
             className="px-4 py-2.5 rounded-lg text-sm font-medium text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
           >
-            + Create Another
+            + Create Another Agent
           </button>
         )}
         <button

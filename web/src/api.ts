@@ -633,9 +633,17 @@ export interface AgentInfo {
       expression: string;
       recurring: boolean;
     };
-    /** Linear Agent Interaction SDK trigger (uses global OAuth app) */
+    /** Linear Agent Interaction SDK trigger (per-agent OAuth app) */
     linear?: {
       enabled: boolean;
+      /** OAuth app client ID (for display only, secret fields are stripped server-side) */
+      oauthClientId?: string;
+      /** Whether the agent has an access token (OAuth connected) */
+      hasAccessToken?: boolean;
+      /** Whether the agent has a client secret configured */
+      hasClientSecret?: boolean;
+      /** Whether the agent has a webhook secret configured */
+      hasWebhookSecret?: boolean;
     };
   };
   enabled: boolean;

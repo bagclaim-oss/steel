@@ -49,6 +49,7 @@ function makeCreatedEvent(overrides: Partial<AgentSessionEventPayload> = {}): Ag
   return {
     action: "created",
     type: "AgentSessionEvent",
+    oauthClientId: "test-oauth-client-id",
     agentSession: {
       id: "linear-session-1",
       status: "pending",
@@ -64,6 +65,7 @@ function makePromptedEvent(linearSessionId: string, message: string): AgentSessi
   return {
     action: "prompted",
     type: "AgentSessionEvent",
+    oauthClientId: "test-oauth-client-id",
     agentSession: {
       id: linearSessionId,
       status: "inProgress",
@@ -78,7 +80,7 @@ const testAgent = {
   id: "agent-1",
   name: "Linear Bot",
   enabled: true,
-  triggers: { linear: { enabled: true } },
+  triggers: { linear: { enabled: true, oauthClientId: "test-oauth-client-id" } },
 };
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -91,6 +93,8 @@ describe("LinearAgentBridge", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    // Default: getAgent returns the testAgent (needed for setupRelay credential lookup)
+    vi.mocked(agentStore.getAgent).mockReturnValue(testAgent as ReturnType<typeof agentStore.getAgent>);
     executor = createMockAgentExecutor();
     wsBridge = createMockWsBridge();
     bridge = new LinearAgentBridge(executor, wsBridge);
@@ -110,6 +114,7 @@ describe("LinearAgentBridge", () => {
 
       // Should post initial acknowledgement thought
       expect(linearAgent.postActivity).toHaveBeenCalledWith(
+        expect.any(Object),
         "linear-session-1",
         expect.objectContaining({ type: "thought", body: "Starting Companion session..." }),
       );
@@ -123,6 +128,7 @@ describe("LinearAgentBridge", () => {
 
       // Should set external URLs
       expect(linearAgent.updateSessionUrls).toHaveBeenCalledWith(
+        expect.any(Object),
         "linear-session-1",
         expect.arrayContaining([
           expect.objectContaining({ label: "Companion Session" }),
@@ -141,6 +147,7 @@ describe("LinearAgentBridge", () => {
 
       // Should post "session started" thought
       expect(linearAgent.postActivity).toHaveBeenCalledWith(
+        expect.any(Object),
         "linear-session-1",
         expect.objectContaining({
           type: "thought",
@@ -159,20 +166,21 @@ describe("LinearAgentBridge", () => {
       expect(wsBridge.setLinearSessionId).toHaveBeenCalledWith("comp-sess-1", "linear-session-1");
     });
 
-    it("posts error when no agent with Linear trigger is found", async () => {
+    it("logs error and returns when no agent matches the oauthClientId", async () => {
+      // No agents configured — findLinearAgentByClientId returns null
       vi.mocked(agentStore.listAgents).mockReturnValue([]);
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
       await bridge.handleEvent(makeCreatedEvent());
 
-      expect(linearAgent.postActivity).toHaveBeenCalledWith(
-        "linear-session-1",
-        expect.objectContaining({
-          type: "error",
-          body: expect.stringContaining("No Companion agent"),
-        }),
+      // Can't post activity without credentials — just logs
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining("No agent configured for oauthClientId"),
       );
+      expect(linearAgent.postActivity).not.toHaveBeenCalled();
       // Should not attempt to launch session
       expect(executor.executeAgent).not.toHaveBeenCalled();
+      consoleSpy.mockRestore();
     });
 
     it("posts error when agent executor returns null (no overlap)", async () => {
@@ -183,6 +191,7 @@ describe("LinearAgentBridge", () => {
       await bridge.handleEvent(makeCreatedEvent());
 
       expect(linearAgent.postActivity).toHaveBeenCalledWith(
+        expect.any(Object),
         "linear-session-1",
         expect.objectContaining({
           type: "error",
@@ -201,6 +210,7 @@ describe("LinearAgentBridge", () => {
       await bridge.handleEvent(makeCreatedEvent());
 
       expect(linearAgent.postActivity).toHaveBeenCalledWith(
+        expect.any(Object),
         "linear-session-1",
         expect.objectContaining({
           type: "error",
@@ -216,6 +226,7 @@ describe("LinearAgentBridge", () => {
       await bridge.handleEvent(makeCreatedEvent());
 
       expect(linearAgent.postActivity).toHaveBeenCalledWith(
+        expect.any(Object),
         "linear-session-1",
         expect.objectContaining({
           type: "error",
@@ -233,6 +244,7 @@ describe("LinearAgentBridge", () => {
       await bridge.handleEvent({
         action: "created",
         type: "AgentSessionEvent",
+        oauthClientId: "test-oauth-client-id",
         agentSession: {
           id: "real-linear-session",
           status: "pending",
@@ -296,17 +308,20 @@ describe("LinearAgentBridge", () => {
       consoleSpy.mockRestore();
     });
 
-    it("skips disabled agents when finding Linear agent", async () => {
+    it("skips disabled agents when finding Linear agent by clientId", async () => {
+      // Disabled agent has matching clientId but is disabled — should not be found
       const disabledAgent = { ...testAgent, enabled: false };
       vi.mocked(agentStore.listAgents).mockReturnValue([disabledAgent] as ReturnType<typeof agentStore.listAgents>);
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
       await bridge.handleEvent(makeCreatedEvent());
 
-      // No agent found → error posted
-      expect(linearAgent.postActivity).toHaveBeenCalledWith(
-        "linear-session-1",
-        expect.objectContaining({ type: "error" }),
+      // Can't post activity without credentials — just logs
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining("No agent configured for oauthClientId"),
       );
+      expect(linearAgent.postActivity).not.toHaveBeenCalled();
+      consoleSpy.mockRestore();
     });
   });
 
@@ -318,12 +333,15 @@ describe("LinearAgentBridge", () => {
       await bridge.handleEvent(makeCreatedEvent());
 
       vi.clearAllMocks();
+      // Re-mock getAgent after clearAllMocks (needed for credential lookup in handlePrompted/setupRelay)
+      vi.mocked(agentStore.getAgent).mockReturnValue(testAgent as ReturnType<typeof agentStore.getAgent>);
 
       // Now send a follow-up
       await bridge.handleEvent(makePromptedEvent("linear-session-1", "What's the status?"));
 
       // Should post acknowledgement thought
       expect(linearAgent.postActivity).toHaveBeenCalledWith(
+        expect.any(Object),
         "linear-session-1",
         expect.objectContaining({ type: "thought", body: "Processing follow-up..." }),
       );
@@ -397,6 +415,8 @@ describe("LinearAgentBridge", () => {
 
     it("restores session mappings from wsBridge on construction", async () => {
       // Create a bridge with pre-existing mappings (simulates server restart)
+      // listAgents must be mocked before construction for findAnyLinearAgentId
+      vi.mocked(agentStore.listAgents).mockReturnValue([testAgent] as ReturnType<typeof agentStore.listAgents>);
       const wsBridgeWithMappings = createMockWsBridge([
         { sessionId: "comp-restored-1", linearSessionId: "linear-restored-1" },
       ]);
@@ -450,6 +470,7 @@ describe("LinearAgentBridge", () => {
       await resultCb({} as never);
 
       expect(linearAgent.postActivity).toHaveBeenCalledWith(
+        expect.any(Object),
         "linear-session-1",
         expect.objectContaining({ type: "response", body: "Here is the fix for the login bug." }),
       );
@@ -469,6 +490,7 @@ describe("LinearAgentBridge", () => {
       } as never);
 
       expect(linearAgent.postActivity).toHaveBeenCalledWith(
+        expect.any(Object),
         "linear-session-1",
         expect.objectContaining({
           type: "action",
@@ -495,10 +517,12 @@ describe("LinearAgentBridge", () => {
       // All three tool_use blocks should be posted as action activities
       expect(linearAgent.postActivity).toHaveBeenCalledTimes(3);
       expect(linearAgent.postActivity).toHaveBeenCalledWith(
+        expect.any(Object),
         "linear-session-1",
         expect.objectContaining({ type: "action", action: "Read" }),
       );
       expect(linearAgent.postActivity).toHaveBeenCalledWith(
+        expect.any(Object),
         "linear-session-1",
         expect.objectContaining({ type: "action", action: "Edit" }),
       );
@@ -521,6 +545,7 @@ describe("LinearAgentBridge", () => {
 
       // Should accumulate both into one response
       expect(linearAgent.postActivity).toHaveBeenCalledWith(
+        expect.any(Object),
         "linear-session-1",
         expect.objectContaining({ type: "response", body: "Line 1\nLine 2" }),
       );
@@ -581,6 +606,7 @@ describe("LinearAgentBridge", () => {
       } as never);
 
       expect(linearAgent.postActivity).toHaveBeenCalledWith(
+        expect.any(Object),
         "linear-session-1",
         expect.objectContaining({ type: "action", action: "Read" }),
       );
@@ -622,6 +648,7 @@ describe("LinearAgentBridge", () => {
       } as never);
 
       expect(linearAgent.updateSessionPlan).toHaveBeenCalledWith(
+        expect.any(Object),
         "linear-session-1",
         [
           { content: "Read the codebase", status: "completed" },
@@ -703,6 +730,7 @@ describe("LinearAgentBridge", () => {
       } as never);
 
       expect(linearAgent.postActivity).toHaveBeenCalledWith(
+        expect.any(Object),
         "linear-session-1",
         expect.objectContaining({
           type: "action",
@@ -759,6 +787,7 @@ describe("LinearAgentBridge", () => {
       vi.advanceTimersByTime(30_000);
 
       expect(linearAgent.postActivity).toHaveBeenCalledWith(
+        expect.any(Object),
         "linear-session-1",
         expect.objectContaining({
           type: "thought",
@@ -809,7 +838,7 @@ describe("LinearAgentBridge", () => {
 
       // Only the response should have been posted, no extra thought
       const thoughtCalls = vi.mocked(linearAgent.postActivity).mock.calls
-        .filter(([, content]) => (content as { type: string }).type === "thought");
+        .filter(([, , content]) => (content as { type: string }).type === "thought");
       expect(thoughtCalls).toHaveLength(0);
     });
   });
@@ -826,6 +855,8 @@ describe("LinearAgentBridge", () => {
       // Capture the result callback and trigger turn completion
       const resultCb = vi.mocked(wsBridge.onResultForSession).mock.calls[0][1];
       vi.clearAllMocks();
+      // Re-mock getAgent after clearAllMocks (needed for credential lookup in setupRelay)
+      vi.mocked(agentStore.getAgent).mockReturnValue(testAgent as ReturnType<typeof agentStore.getAgent>);
 
       await resultCb({} as never);
 
@@ -849,6 +880,8 @@ describe("LinearAgentBridge", () => {
       await resultCb1({} as never);
 
       vi.clearAllMocks();
+      // Re-mock getAgent after clearAllMocks (needed for credential lookup in setupRelay)
+      vi.mocked(agentStore.getAgent).mockReturnValue(testAgent as ReturnType<typeof agentStore.getAgent>);
 
       // Follow-up prompt — should re-establish relay
       await bridge.handleEvent(makePromptedEvent("linear-session-1", "Follow up"));
@@ -867,6 +900,7 @@ describe("LinearAgentBridge", () => {
 
       // The second response should be forwarded to Linear
       expect(linearAgent.postActivity).toHaveBeenCalledWith(
+        expect.any(Object),
         "linear-session-1",
         expect.objectContaining({ type: "response", body: "Second response" }),
       );

@@ -3911,7 +3911,6 @@ describe("diagnostics and callbacks", () => {
     // Covers the setRecorder setter (line 165).
     const fakeRecorder = { start: vi.fn(), stop: vi.fn() } as any;
     bridge.setRecorder(fakeRecorder);
-    // No assertion on internal state — covering the setter path is the goal.
-    expect(true).toBe(true);
+    expect((bridge as any).recorder).toBe(fakeRecorder);
   });
 });

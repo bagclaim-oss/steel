@@ -443,6 +443,15 @@ export class LinearAgentBridge {
     });
     cleanups.push(unsubResult);
 
+    // Auto-cleanup relay when the Companion session exits, restoring the
+    // implicit cleanup that the old per-session WsBridge listener Maps provided.
+    const unsubExited = companionBus.on("session:exited", ({ sessionId }) => {
+      if (sessionId === companionSessionId) {
+        this.cleanupRelay(companionSessionId);
+      }
+    });
+    cleanups.push(unsubExited);
+
     this.sessionCleanups.set(companionSessionId, cleanups);
   }
 

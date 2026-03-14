@@ -6,6 +6,7 @@ import {
 } from "./ws-bridge-publish.js";
 import type { Session, SocketData } from "./ws-bridge-types.js";
 import type { BrowserIncomingMessage } from "./session-types.js";
+import { SessionStateMachine } from "./session-state-machine.js";
 import type { ServerWebSocket } from "bun";
 
 function makeMockSocket(sessionId = "test-session") {
@@ -59,6 +60,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     processedClientMessageIds: [],
     processedClientMessageIdSet: new Set(),
     lastCliActivityTs: Date.now(),
+    stateMachine: new SessionStateMachine("test-session"),
     ...overrides,
   };
 }

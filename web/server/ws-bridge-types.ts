@@ -7,6 +7,7 @@ import type {
   BufferedBrowserEvent,
 } from "./session-types.js";
 import type { IBackendAdapter } from "./backend-adapter.js";
+import type { SessionStateMachine } from "./session-state-machine.js";
 import { getSettings } from "./settings-manager.js";
 
 export interface CLISocketData {
@@ -56,6 +57,8 @@ export interface Session {
   processedClientMessageIdSet: Set<string>;
   /** Timestamp of last non-keepalive CLI message (for idle detection) */
   lastCliActivityTs: number;
+  /** Formal session state machine tracking phase and validating transitions. */
+  stateMachine: SessionStateMachine;
 }
 
 export type GitSessionKey =

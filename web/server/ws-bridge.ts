@@ -48,6 +48,7 @@ import {
 import { validatePermission } from "./ai-validator.js";
 import { getEffectiveAiValidation } from "./ai-validation-settings.js";
 import { companionBus } from "./event-bus.js";
+import { SessionStateMachine } from "./session-state-machine.js";
 
 // ─── Bridge ───────────────────────────────────────────────────────────────────
 
@@ -165,6 +166,7 @@ export class WsBridge {
           Array.isArray(p.processedClientMessageIds) ? p.processedClientMessageIds : [],
         ),
         lastCliActivityTs: Date.now(),
+        stateMachine: new SessionStateMachine(p.id, "terminated"),
       };
       session.state.backend_type = session.backendType;
       // Resolve git info for restored sessions (may have been persisted without it)
@@ -253,8 +255,10 @@ export class WsBridge {
         processedClientMessageIds: [],
         processedClientMessageIdSet: new Set(),
         lastCliActivityTs: Date.now(),
+        stateMachine: new SessionStateMachine(sessionId),
       };
       this.sessions.set(sessionId, session);
+      this.wireStateMachineListeners(session);
     } else if (backendType) {
       // Only overwrite backendType when explicitly provided (e.g. attachBackendAdapter)
       // Prevents handleBrowserOpen from resetting codex→claude
@@ -299,6 +303,23 @@ export class WsBridge {
     this.sessions.delete(sessionId);
     this.autoNamingAttempted.delete(sessionId);
     this.store?.remove(sessionId);
+  }
+
+  /** Wire state machine transition listener to broadcast phase changes. */
+  private wireStateMachineListeners(session: Session): void {
+    session.stateMachine.onTransition((event) => {
+      companionBus.emit("session:phase-changed", {
+        sessionId: event.sessionId,
+        from: event.from,
+        to: event.to,
+        trigger: event.trigger,
+      });
+      this.broadcastToBrowsers(session, {
+        type: "session_phase",
+        phase: event.to,
+        previousPhase: event.from,
+      });
+    });
   }
 
   /**
@@ -360,6 +381,7 @@ export class WsBridge {
         };
         this.refreshGitInfo(session, { notifyPoller: true });
         this.broadcastToBrowsers(session, { type: "session_init", session: session.state });
+        session.stateMachine.transition("ready", "system_init");
         this.persistSession(session);
         return;
       }
@@ -381,6 +403,11 @@ export class WsBridge {
       // -- status_change: update compacting flag ---------------------------
       if (msg.type === "status_change") {
         session.state.is_compacting = msg.status === "compacting";
+        if (msg.status === "compacting") {
+          session.stateMachine.transition("compacting", "compaction_started");
+        } else {
+          session.stateMachine.transition("ready", "compaction_ended");
+        }
         // Claude status messages may include permissionMode (not in the typed interface)
         const permMode = (msg as unknown as { permissionMode?: string }).permissionMode;
         if (permMode) {
@@ -420,6 +447,7 @@ export class WsBridge {
         }
         this.refreshGitInfo(session, { broadcastUpdate: true, notifyPoller: true });
         this.appendHistory(session, msg);
+        session.stateMachine.transition("ready", "turn_completed");
         this.persistSession(session);
         companionBus.emit("message:result", { sessionId: session.id, message: msg });
 
@@ -460,6 +488,7 @@ export class WsBridge {
         }
 
         session.pendingPermissions.set(perm.request_id, perm);
+        session.stateMachine.transition("awaiting_permission", "permission_requested");
         this.persistSession(session);
       }
 
@@ -647,6 +676,7 @@ export class WsBridge {
       // (also broadcasts cli_connected for new adapters)
       this.attachBackendAdapter(sessionId, adapter);
     }
+    session.stateMachine.transition("initializing", "cli_ws_open");
 
     // Cancel any pending disconnect debounce timer — CLI reconnected in time
     if (this.cancelDisconnectTimer(sessionId)) {
@@ -707,6 +737,7 @@ export class WsBridge {
     if (session.backendAdapter instanceof ClaudeAdapter) {
       session.backendAdapter.detachWebSocket(ws);
     }
+    session.stateMachine.transition("reconnecting", "cli_ws_closed");
 
     // Debounce: delay disconnect notification by 15s.
     // CLI cycles its WebSocket every ~30s (close code 1000) and uses exponential
@@ -720,6 +751,7 @@ export class WsBridge {
       // Check if CLI reconnected during grace period
       if (session.backendAdapter?.isConnected()) return;
       console.log(`[ws-bridge] CLI disconnect confirmed for ${sessionId}`);
+      session.stateMachine.transition("terminated", "disconnect_confirmed");
       this.broadcastToBrowsers(session, { type: "cli_disconnected" });
       for (const [reqId] of session.pendingPermissions) {
         this.broadcastToBrowsers(session, { type: "permission_cancelled", request_id: reqId });
@@ -971,6 +1003,7 @@ export class WsBridge {
         timestamp: ts,
         id: `user-${ts}-${this.userMsgCounter++}`,
       });
+      session.stateMachine.transition("streaming", "user_message");
       this.persistSession(session);
     }
 
@@ -983,6 +1016,7 @@ export class WsBridge {
         msg = { ...msg, updated_input: pending.input };
       }
       session.pendingPermissions.delete(msg.request_id);
+      session.stateMachine.transition("streaming", "permission_resolved");
       this.persistSession(session);
     }
 

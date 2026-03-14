@@ -1074,19 +1074,14 @@ describe("SessionOrchestrator", () => {
       });
     });
 
-    it("cleans up auto-relaunch tracking state on delete", async () => {
-      // Simulate auto-relaunch state existing for this session by triggering
-      // a relaunch cycle first via initialize + the auto-relaunch callback.
-      // Instead, we verify indirectly: after delete, a new session with the same ID
-      // won't carry stale counts. We check the internal cleanup happens by verifying
-      // no memory leak: the delete method clears autoRelaunchCounts and relaunchingSet.
+    it("removes container unconditionally during delete (unlike kill)", async () => {
+      // deleteSession always removes the container, even if kill reports no process found,
+      // because we're permanently removing the session and must clean up all resources.
+      deps.launcher.kill.mockResolvedValue(false);
+
       await orchestrator.deleteSession("s1");
 
-      // The key verification is that deleteSession completes without error
-      // and includes all cleanup steps. The auto-relaunch maps are private
-      // but their cleanup prevents memory leaks in long-running processes.
-      expect(deps.launcher.kill).toHaveBeenCalledWith("s1");
-      expect(deps.wsBridge.closeSession).toHaveBeenCalledWith("s1");
+      expect(containerManager.removeContainer).toHaveBeenCalledWith("s1");
     });
   });
 
@@ -1332,10 +1327,11 @@ describe("SessionOrchestrator", () => {
     });
 
     it("skips relaunch when PID is still alive after grace", async () => {
-      // If the process PID is still running, skip relaunch.
+      // Use state "exited" to ensure we reach the PID check (line 699), not stopped
+      // by the "connected"/"running" state guard or "starting" guard.
       deps.launcher.getSession
         .mockReturnValueOnce({ archived: false } as any) // check archived
-        .mockReturnValueOnce({ state: "starting", pid: process.pid } as any); // after grace, use own PID
+        .mockReturnValueOnce({ state: "exited", pid: process.pid } as any); // after grace: PID is alive
       deps.wsBridge.isCliConnected.mockReturnValue(false);
       orchestrator.initialize();
 
@@ -1361,6 +1357,32 @@ describe("SessionOrchestrator", () => {
       await promise;
 
       expect(deps.launcher.relaunch).toHaveBeenCalledWith("s1");
+    });
+
+    it("preserves retry budget when relaunch returns ok:false without error", async () => {
+      // A silent failure (ok:false, no error string) should NOT reset the auto-relaunch
+      // count. This prevents unlimited retries when the launcher silently fails.
+      deps.launcher.getSession.mockReturnValue({ archived: false, state: "exited", pid: undefined } as any);
+      deps.wsBridge.isCliConnected.mockReturnValue(false);
+      deps.launcher.relaunch.mockResolvedValue({ ok: false }); // no error string
+      orchestrator.initialize();
+
+      const cb = deps.wsBridge.onCLIRelaunchNeededCallback.mock.calls[0][0];
+
+      // Trigger 3 silent-failure relaunches (the max)
+      for (let i = 0; i < 3; i++) {
+        const p = cb("s1");
+        await vi.advanceTimersByTimeAsync(15_000);
+        await p;
+      }
+
+      // 4th attempt should hit the MAX_AUTO_RELAUNCHES limit
+      const p4 = cb("s1");
+      await vi.advanceTimersByTimeAsync(15_000);
+      await p4;
+
+      // Only 3 relaunch calls, 4th was rejected at the limit
+      expect(deps.launcher.relaunch).toHaveBeenCalledTimes(3);
     });
 
     it("stops after MAX_AUTO_RELAUNCHES attempts", async () => {

@@ -718,9 +718,10 @@ export class SessionOrchestrator {
         const result = await this.launcher.relaunch(sessionId);
         if (!result.ok && result.error) {
           this.wsBridge.broadcastToSession(sessionId, { type: "error", message: result.error });
-        } else {
+        } else if (result.ok) {
           this.autoRelaunchCounts.delete(sessionId);
         }
+        // ok=false without error: keep count to preserve the retry budget
       } finally {
         setTimeout(() => this.relaunchingSet.delete(sessionId), RELAUNCH_COOLDOWN_MS);
       }

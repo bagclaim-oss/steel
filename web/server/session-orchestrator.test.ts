@@ -954,6 +954,55 @@ describe("SessionOrchestrator", () => {
       expect(deps.launcher.setArchived).toHaveBeenCalledWith("s1", true);
     });
 
+    it("catches thrown transition errors and still archives", async () => {
+      // When transitionLinearIssue throws, archiveSession should catch it
+      // and continue with the archive operation.
+      vi.mocked(sessionLinearIssues.getLinearIssue).mockReturnValue({
+        id: "issue-1",
+        identifier: "ENG-42",
+        teamId: "team-1",
+        connectionId: "conn-1",
+      } as any);
+      vi.mocked(resolveApiKey).mockReturnValue({ apiKey: "lin_api_123", connectionId: "conn-1" });
+      vi.mocked(fetchLinearTeamStates).mockResolvedValue([{
+        id: "team-1",
+        key: "ENG",
+        name: "Engineering",
+        states: [{ id: "state-backlog", name: "Backlog", type: "backlog" }],
+      }]);
+      vi.mocked(transitionLinearIssue).mockRejectedValue(new Error("Network error"));
+
+      const result = await orchestrator.archiveSession("s1", { linearTransition: "backlog" });
+
+      expect(result.ok).toBe(true);
+      expect(result.linearTransition).toEqual({ ok: false, error: "Transition failed unexpectedly" });
+      expect(deps.launcher.setArchived).toHaveBeenCalledWith("s1", true);
+    });
+
+    it("skips transition when no target state found", async () => {
+      // When the target state cannot be found (e.g., team has no backlog state),
+      // linearTransition should be marked as skipped.
+      vi.mocked(sessionLinearIssues.getLinearIssue).mockReturnValue({
+        id: "issue-1",
+        identifier: "ENG-42",
+        teamId: "team-1",
+        connectionId: "conn-1",
+      } as any);
+      vi.mocked(resolveApiKey).mockReturnValue({ apiKey: "lin_api_123", connectionId: "conn-1" });
+      vi.mocked(fetchLinearTeamStates).mockResolvedValue([{
+        id: "team-1",
+        key: "ENG",
+        name: "Engineering",
+        states: [{ id: "state-done", name: "Done", type: "completed" }],
+        // No backlog state
+      }]);
+
+      const result = await orchestrator.archiveSession("s1", { linearTransition: "backlog" });
+
+      expect(result.ok).toBe(true);
+      expect(result.linearTransition).toEqual({ ok: true, skipped: true });
+    });
+
     it("cleans up worktree during archive", async () => {
       deps.worktreeTracker.getBySession.mockReturnValue({
         sessionId: "s1",
@@ -1203,6 +1252,148 @@ describe("SessionOrchestrator", () => {
         force: true,
         branchToDelete: undefined,
       });
+    });
+  });
+
+  // ── getSession ────────────────────────────────────────────────────────────
+
+  describe("getSession()", () => {
+    it("delegates to launcher.getSession", () => {
+      const mockSession = { sessionId: "s1", state: "connected" };
+      deps.launcher.getSession.mockReturnValue(mockSession);
+
+      const result = orchestrator.getSession("s1");
+
+      expect(result).toBe(mockSession);
+      expect(deps.launcher.getSession).toHaveBeenCalledWith("s1");
+    });
+
+    it("returns undefined for unknown session", () => {
+      deps.launcher.getSession.mockReturnValue(undefined);
+
+      const result = orchestrator.getSession("unknown");
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  // ── Auto-relaunch ──────────────────────────────────────────────────────────
+
+  describe("handleAutoRelaunch (via initialize)", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("skips relaunch for archived sessions", async () => {
+      // Archived sessions should not be auto-relaunched.
+      deps.launcher.getSession.mockReturnValue({ archived: true } as any);
+      orchestrator.initialize();
+
+      const cb = deps.wsBridge.onCLIRelaunchNeededCallback.mock.calls[0][0];
+      const promise = cb("s1");
+      await vi.advanceTimersByTimeAsync(15_000);
+      await promise;
+
+      expect(deps.launcher.relaunch).not.toHaveBeenCalled();
+    });
+
+    it("skips relaunch when CLI reconnects during grace period", async () => {
+      // During the grace period, if CLI reconnects, relaunch should be skipped.
+      deps.launcher.getSession.mockReturnValue({ archived: false } as any);
+      deps.wsBridge.isCliConnected.mockReturnValue(true);
+      orchestrator.initialize();
+
+      const cb = deps.wsBridge.onCLIRelaunchNeededCallback.mock.calls[0][0];
+      const promise = cb("s1");
+      await vi.advanceTimersByTimeAsync(15_000);
+      await promise;
+
+      expect(deps.launcher.relaunch).not.toHaveBeenCalled();
+    });
+
+    it("skips relaunch when session state is 'connected' after grace", async () => {
+      // If the session reconnects (state=connected) during grace, skip relaunch.
+      deps.launcher.getSession
+        .mockReturnValueOnce({ archived: false } as any) // check archived
+        .mockReturnValueOnce({ state: "connected" } as any); // after grace
+      deps.wsBridge.isCliConnected.mockReturnValue(false);
+      orchestrator.initialize();
+
+      const cb = deps.wsBridge.onCLIRelaunchNeededCallback.mock.calls[0][0];
+      const promise = cb("s1");
+      await vi.advanceTimersByTimeAsync(15_000);
+      await promise;
+
+      expect(deps.launcher.relaunch).not.toHaveBeenCalled();
+    });
+
+    it("skips relaunch when PID is still alive after grace", async () => {
+      // If the process PID is still running, skip relaunch.
+      deps.launcher.getSession
+        .mockReturnValueOnce({ archived: false } as any) // check archived
+        .mockReturnValueOnce({ state: "starting", pid: process.pid } as any); // after grace, use own PID
+      deps.wsBridge.isCliConnected.mockReturnValue(false);
+      orchestrator.initialize();
+
+      const cb = deps.wsBridge.onCLIRelaunchNeededCallback.mock.calls[0][0];
+      const promise = cb("s1");
+      await vi.advanceTimersByTimeAsync(15_000);
+      await promise;
+
+      expect(deps.launcher.relaunch).not.toHaveBeenCalled();
+    });
+
+    it("relaunches when CLI does not reconnect after grace period", async () => {
+      // When CLI disconnects and doesn't reconnect, the session should be relaunched.
+      deps.launcher.getSession
+        .mockReturnValueOnce({ archived: false } as any) // First call: check archived
+        .mockReturnValueOnce({ state: "exited", pid: undefined } as any); // Second call: after grace
+      deps.wsBridge.isCliConnected.mockReturnValue(false);
+      orchestrator.initialize();
+
+      const cb = deps.wsBridge.onCLIRelaunchNeededCallback.mock.calls[0][0];
+      const promise = cb("s1");
+      await vi.advanceTimersByTimeAsync(15_000);
+      await promise;
+
+      expect(deps.launcher.relaunch).toHaveBeenCalledWith("s1");
+    });
+
+    it("stops after MAX_AUTO_RELAUNCHES attempts", async () => {
+      // After reaching the max auto-relaunch count, give up and notify the user.
+      // Mock relaunch to return an error so the count doesn't get cleared
+      // (successful relaunch clears the count, simulating recovery).
+      deps.launcher.getSession.mockReturnValue({ archived: false, state: "exited", pid: undefined } as any);
+      deps.wsBridge.isCliConnected.mockReturnValue(false);
+      deps.launcher.relaunch.mockResolvedValue({ ok: false, error: "crashed again" });
+      orchestrator.initialize();
+
+      const cb = deps.wsBridge.onCLIRelaunchNeededCallback.mock.calls[0][0];
+
+      // Trigger 3 relaunches (the max). Each needs the relaunchingSet cooldown
+      // to clear before the next attempt can proceed.
+      for (let i = 0; i < 3; i++) {
+        const p = cb("s1");
+        await vi.advanceTimersByTimeAsync(15_000);
+        await p;
+      }
+
+      // 4th attempt should be rejected since count reached MAX_AUTO_RELAUNCHES
+      const p4 = cb("s1");
+      await vi.advanceTimersByTimeAsync(15_000);
+      await p4;
+
+      // relaunch should have been called 3 times, not 4
+      expect(deps.launcher.relaunch).toHaveBeenCalledTimes(3);
+      // Should broadcast error message to session
+      expect(deps.wsBridge.broadcastToSession).toHaveBeenCalledWith("s1", expect.objectContaining({
+        type: "error",
+        message: expect.stringContaining("keeps crashing"),
+      }));
     });
   });
 });

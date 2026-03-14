@@ -483,7 +483,7 @@ export class WsBridge {
     }
   }
 
-  handleCLIMessage(ws: ServerWebSocket<SocketData>, raw: string | Buffer) {
+  async handleCLIMessage(ws: ServerWebSocket<SocketData>, raw: string | Buffer) {
     const data = typeof raw === "string" ? raw : raw.toString("utf-8");
     const sessionId = (ws.data as CLISocketData).sessionId;
     const session = this.sessions.get(sessionId);
@@ -504,7 +504,7 @@ export class WsBridge {
       }
 
       if (isDuplicateCLIMessage(msg, line, session, WsBridge.CLI_DEDUP_WINDOW)) continue;
-      this.routeCLIMessage(session, msg);
+      await this.routeCLIMessage(session, msg);
     }
   }
 
@@ -722,7 +722,7 @@ export class WsBridge {
 
   // ── CLI message routing ─────────────────────────────────────────────────
 
-  private routeCLIMessage(session: Session, msg: CLIMessage) {
+  private async routeCLIMessage(session: Session, msg: CLIMessage) {
     // Track activity for idle detection (skip keepalives — they don't indicate real work)
     if (msg.type !== "keep_alive") {
       session.lastCliActivityTs = Date.now();
@@ -746,7 +746,7 @@ export class WsBridge {
         break;
 
       case "control_request":
-        this.handleControlRequest(session, msg);
+        await this.handleControlRequest(session, msg);
         break;
 
       case "tool_progress":

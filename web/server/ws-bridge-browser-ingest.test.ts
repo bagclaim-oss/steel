@@ -146,14 +146,26 @@ describe("deduplicateBrowserMessage", () => {
     expect(persistFn).not.toHaveBeenCalled();
   });
 
-  it("deduplicates across all idempotent message types", () => {
-    // Verify all idempotent types share the same dedup namespace
+  it("deduplicates within each idempotent message type", () => {
+    // Verify each idempotent type is individually deduped by client_msg_id
     const types = Array.from(IDEMPOTENT_BROWSER_MESSAGE_TYPES);
     for (const type of types) {
       const msg = { type, client_msg_id: `${type}-id` } as any;
       expect(deduplicateBrowserMessage(msg, IDEMPOTENT_BROWSER_MESSAGE_TYPES, session, 100, persistFn)).toBe(false);
       expect(deduplicateBrowserMessage(msg, IDEMPOTENT_BROWSER_MESSAGE_TYPES, session, 100, persistFn)).toBe(true);
     }
+  });
+
+  it("deduplicates across different idempotent message types with same client_msg_id", () => {
+    // A shared client_msg_id should be deduplicated regardless of which
+    // idempotent type sends it — the dedup namespace is type-agnostic.
+    const sharedId = "shared-cross-type-id";
+    const msg1 = { type: "user_message" as const, content: "hello", client_msg_id: sharedId };
+    expect(deduplicateBrowserMessage(msg1, IDEMPOTENT_BROWSER_MESSAGE_TYPES, session, 100, persistFn)).toBe(false);
+
+    // Same client_msg_id from a different idempotent type — should be filtered
+    const msg2 = { type: "interrupt" as const, client_msg_id: sharedId };
+    expect(deduplicateBrowserMessage(msg2, IDEMPOTENT_BROWSER_MESSAGE_TYPES, session, 100, persistFn)).toBe(true);
   });
 
   it("enforces window cap by evicting oldest client_msg_ids", () => {
@@ -211,6 +223,31 @@ describe("deduplicateBrowserMessage", () => {
       expect(deduplicateBrowserMessage(msg, IDEMPOTENT_BROWSER_MESSAGE_TYPES, session, 100, persistFn)).toBe(false);
       // Browser B sends same client_msg_id
       expect(deduplicateBrowserMessage(msg, IDEMPOTENT_BROWSER_MESSAGE_TYPES, session, 100, persistFn)).toBe(true);
+    });
+
+    it("dedup survives server restart via processedClientMessageIds persistence", () => {
+      // This tests the critical path: browser sends message → server persists
+      // processedClientMessageIds → server restarts → session restored from disk
+      // → browser retransmits same message → dedup fires.
+      //
+      // Step 1: Process a message (simulates pre-restart state)
+      const msg = { type: "user_message" as const, content: "hello", client_msg_id: "restart-id-1" };
+      expect(deduplicateBrowserMessage(msg, IDEMPOTENT_BROWSER_MESSAGE_TYPES, session, 100, persistFn)).toBe(false);
+
+      // Step 2: Simulate server restart — create a new session restored from disk.
+      // restoreFromDisk reconstructs processedClientMessageIdSet from the persisted
+      // processedClientMessageIds array (see WsBridge.restoreFromDisk).
+      const restoredSession = makeDedupSession();
+      restoredSession.processedClientMessageIds = [...session.processedClientMessageIds];
+      restoredSession.processedClientMessageIdSet = new Set(session.processedClientMessageIds);
+
+      // Step 3: Browser retransmits the same message after reconnecting
+      const result = deduplicateBrowserMessage(msg, IDEMPOTENT_BROWSER_MESSAGE_TYPES, restoredSession, 100, persistFn);
+      expect(result).toBe(true); // Should be deduplicated
+
+      // Step 4: A new message should still pass through
+      const newMsg = { type: "user_message" as const, content: "world", client_msg_id: "restart-id-2" };
+      expect(deduplicateBrowserMessage(newMsg, IDEMPOTENT_BROWSER_MESSAGE_TYPES, restoredSession, 100, persistFn)).toBe(false);
     });
   });
 });

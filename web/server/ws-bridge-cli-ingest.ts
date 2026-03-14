@@ -39,12 +39,13 @@ export function isDuplicateCLIMessage(
   windowSize: number,
 ): boolean {
   if (msg.type === "assistant" || msg.type === "result" || msg.type === "system") {
-    const hash = Bun.hash(rawLine).toString(36);
-    if (state.recentCLIMessageHashSet.has(hash)) {
+    // Namespace with "h:" prefix to prevent collisions with uuid-based keys
+    const key = `h:${Bun.hash(rawLine).toString(36)}`;
+    if (state.recentCLIMessageHashSet.has(key)) {
       return true;
     }
-    state.recentCLIMessageHashes.push(hash);
-    state.recentCLIMessageHashSet.add(hash);
+    state.recentCLIMessageHashes.push(key);
+    state.recentCLIMessageHashSet.add(key);
     while (state.recentCLIMessageHashes.length > windowSize) {
       const old = state.recentCLIMessageHashes.shift()!;
       state.recentCLIMessageHashSet.delete(old);
@@ -53,12 +54,15 @@ export function isDuplicateCLIMessage(
   }
 
   if (msg.type === "stream_event" && (msg as { uuid?: string }).uuid) {
-    const uuid = (msg as { uuid: string }).uuid;
-    if (state.recentCLIMessageHashSet.has(uuid)) {
+    // Namespace with "u:" prefix to prevent collisions with hash-based keys.
+    // Current CLI versions (1.0+) always provide UUIDs on stream_event messages.
+    // UUID-less stream_events from older protocol versions fall through to no-dedup below.
+    const key = `u:${(msg as { uuid: string }).uuid}`;
+    if (state.recentCLIMessageHashSet.has(key)) {
       return true;
     }
-    state.recentCLIMessageHashes.push(uuid);
-    state.recentCLIMessageHashSet.add(uuid);
+    state.recentCLIMessageHashes.push(key);
+    state.recentCLIMessageHashSet.add(key);
     while (state.recentCLIMessageHashes.length > windowSize) {
       const old = state.recentCLIMessageHashes.shift()!;
       state.recentCLIMessageHashSet.delete(old);
@@ -66,6 +70,12 @@ export function isDuplicateCLIMessage(
     return false;
   }
 
-  // All other message types are never considered duplicates
+  // All other message types (keep_alive, control_request, tool_progress, etc.)
+  // are never considered duplicates — they're either stateless or handled by
+  // separate mechanisms. stream_event without uuid also falls through here;
+  // current CLI versions (1.0+) always provide UUIDs, but older protocol
+  // versions may not. In that case, reconnect replay could produce duplicate
+  // stream content in the UI — acceptable since stream_events are transient
+  // and the final assistant message is always deduplicated.
   return false;
 }

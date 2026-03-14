@@ -15,6 +15,14 @@ export const EVENT_BUFFER_LIMIT = 600;
  * Broadcast a message to all connected browsers for a session.
  * Assigns a monotonic sequence number via sequenceEvent, records the
  * outgoing message, and sends to every browser socket (removing broken ones).
+ *
+ * Note: sequenceEvent internally calls persistFn when buffering events.
+ * Callers that also call persistSession after broadcastToBrowsers will
+ * trigger a redundant (but harmless) debounced save. This is intentional —
+ * the caller-side persist covers state mutations beyond the event buffer
+ * (e.g. messageHistory, pendingPermissions), while the internal persist
+ * covers the event buffer/seq counters. SessionStore's debouncer coalesces
+ * them into a single write.
  */
 export function broadcastToBrowsers(
   session: Session,

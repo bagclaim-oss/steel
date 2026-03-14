@@ -131,6 +131,15 @@ function connect() {
       log(`Reconnected successfully (attempt ${reconnectAttempt})`);
       reconnecting = false;
       reconnectAttempt = 0;
+      // Notify the adapter that the WebSocket was re-established.
+      // Any pending RPC calls from before the drop will never get responses
+      // from Codex (it sees this as a fresh connection), so the adapter needs
+      // to reject them and clean up.
+      const reconnectNotification = JSON.stringify({
+        method: "companion/wsReconnected",
+        params: {},
+      });
+      process.stdout.write(reconnectNotification + "\n");
     }
     startHeartbeat();
     flushQueue();

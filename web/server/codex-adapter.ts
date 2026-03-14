@@ -292,6 +292,25 @@ export class StdioTransport implements ICodexTransport {
         }
       }
     } else if ("method" in msg) {
+      // When the WS proxy reconnects to Codex, all pending RPC calls are
+      // orphaned (Codex sees a fresh connection and won't respond to them).
+      // Reject them immediately so callers don't hang until timeout.
+      if ((msg as JsonRpcNotification).method === "companion/wsReconnected") {
+        const pendingCount = this.pending.size;
+        if (pendingCount > 0) {
+          console.warn(
+            `[codex-adapter] WS proxy reconnected — rejecting ${pendingCount} orphaned RPC call(s)`,
+          );
+          for (const [id, timer] of this.pendingTimers) {
+            clearTimeout(timer);
+          }
+          this.pendingTimers.clear();
+          for (const [id, { reject }] of this.pending) {
+            reject(new Error("Transport reconnected"));
+          }
+          this.pending.clear();
+        }
+      }
       // Notification (no id)
       this.notificationHandler?.(msg.method, (msg as JsonRpcNotification).params || {});
     }
@@ -540,6 +559,39 @@ export class CodexAdapter {
    */
   handleTransportClose(): void {
     this.cleanupAndDisconnect();
+  }
+
+  /**
+   * Handle a WebSocket proxy reconnection event.  The proxy reconnected
+   * to the Codex app-server after a transient drop (e.g. outbound queue
+   * overflow on the Codex side).  Pending RPC calls were already rejected
+   * by the StdioTransport, but we need to:
+   *  1. Cancel any pending dynamic tool call timers
+   *  2. Cancel pending permissions (they're stale after reconnect)
+   *  3. Re-initialize the thread so we can accept new messages
+   */
+  private handleWsReconnected(): void {
+    console.log(`[codex-adapter] Session ${this.sessionId}: WS proxy reconnected to Codex`);
+
+    // Clean up pending dynamic tool calls (timers would fire stale errors)
+    for (const pending of this.pendingDynamicToolCalls.values()) {
+      clearTimeout(pending.timeout);
+    }
+    this.pendingDynamicToolCalls.clear();
+    this.pendingExitPlanModeRequests.clear();
+    this.pendingApprovals.clear();
+
+    // Clear the current turn — it's gone after reconnect
+    this.currentTurnId = null;
+
+    // The thread is still alive in the Codex server, so we don't need to
+    // re-initialize. Just mark ourselves as ready for the next turn.
+    // If initialization was in progress, mark it as needing re-attempt.
+    if (this.initInProgress) {
+      this.initInProgress = false;
+      this.initialized = false;
+      this.initialize();
+    }
   }
 
   /**
@@ -939,7 +991,16 @@ export class CodexAdapter {
       this.currentTurnId = result.turn.id;
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      if (errMsg.startsWith("RPC timeout")) {
+      if (errMsg === "Transport reconnected") {
+        // The WS proxy reconnected mid-call — this is transient.
+        // The proxy has already re-established the connection, so we can
+        // retry the turn/start once (the handleWsReconnected handler takes
+        // care of cleanup; we just need to retry the user's message).
+        this.emit({ type: "error", message: "Connection briefly interrupted. Retrying your message..." });
+        // Re-queue the message so it gets sent after reconnection cleanup
+        this.pendingOutgoing.push(msg);
+        this.flushPendingOutgoing();
+      } else if (errMsg.startsWith("RPC timeout")) {
         this.emit({ type: "error", message: "Codex is not responding. Relaunching session..." });
         this.cleanupAndDisconnect();
       } else if (errMsg === "Transport closed") {
@@ -1282,6 +1343,9 @@ export class CodexAdapter {
         }
         break;
       }
+      case "companion/wsReconnected":
+        this.handleWsReconnected();
+        break;
       default:
         // Unknown notification, log for debugging
         if (!method.startsWith("account/") && !method.startsWith("codex/event/")) {

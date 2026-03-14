@@ -113,9 +113,14 @@ export function SessionItem({
       }
     }
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" || e.key === "Tab") {
+      if (e.key === "Escape") {
         setMenuOpen(false);
         menuBtnRef.current?.focus();
+        return;
+      }
+      if (e.key === "Tab") {
+        setMenuOpen(false);
+        // Let native Tab move focus to the next element in sequence
         return;
       }
       // Arrow key navigation within menu — only when focus is inside menu

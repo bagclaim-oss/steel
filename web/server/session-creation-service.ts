@@ -407,26 +407,37 @@ export async function executeSessionCreation(
     "in_progress",
   );
 
-  const session = launcher.launch({
-    model: body.model as string | undefined,
-    permissionMode: body.permissionMode as string | undefined,
-    cwd,
-    claudeBinary: body.claudeBinary as string | undefined,
-    codexBinary: body.codexBinary as string | undefined,
-    codexInternetAccess: backend === "codex",
-    codexSandbox: backend === "codex" ? "danger-full-access" : undefined,
-    allowedTools: body.allowedTools as string[] | undefined,
-    env: envVars,
-    backendType: backend,
-    containerId,
-    containerName,
-    containerImage,
-    containerCwd: containerInfo?.containerCwd,
-    resumeSessionAt,
-    forkSession,
-    systemPrompt: backend === "codex" ? linearSystemPrompt : undefined,
-    sandboxSlug: sandboxEnabled ? ((body.sandboxSlug as string) || undefined) : undefined,
-  });
+  let session: SdkSessionInfo;
+  try {
+    session = launcher.launch({
+      model: body.model as string | undefined,
+      permissionMode: body.permissionMode as string | undefined,
+      cwd,
+      claudeBinary: body.claudeBinary as string | undefined,
+      codexBinary: body.codexBinary as string | undefined,
+      codexInternetAccess: backend === "codex",
+      codexSandbox: backend === "codex" ? "danger-full-access" : undefined,
+      allowedTools: body.allowedTools as string[] | undefined,
+      env: envVars,
+      backendType: backend,
+      containerId,
+      containerName,
+      containerImage,
+      containerCwd: containerInfo?.containerCwd,
+      resumeSessionAt,
+      forkSession,
+      systemPrompt: backend === "codex" ? linearSystemPrompt : undefined,
+      sandboxSlug: sandboxEnabled ? ((body.sandboxSlug as string) || undefined) : undefined,
+    });
+  } catch (err) {
+    if (tempId) containerManager.removeContainer(tempId);
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new SessionCreationError(
+      `Failed to launch CLI: ${reason}`,
+      503,
+      "launching_cli",
+    );
+  }
 
   // -- Post-launch tracking --
   if (containerInfo) {

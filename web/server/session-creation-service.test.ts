@@ -601,6 +601,33 @@ describe("executeSessionCreation", () => {
     }
   });
 
+
+  // -- launcher.launch() failure cleans up container --
+  it("cleans up container when launcher.launch() throws", async () => {
+    // Set up a containerized session via container.image (triggers effectiveImage)
+    vi.mocked(hasContainerClaudeAuth).mockReturnValueOnce(true);
+
+    // Make launcher.launch() throw
+    deps.launcher.launch = vi.fn(() => {
+      throw new Error("spawn failed");
+    });
+
+    try {
+      await executeSessionCreation(
+        { backend: "claude", cwd: "/workspace", container: { image: "test:latest" } },
+        deps,
+      );
+      expect.unreachable("should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(SessionCreationError);
+      expect((e as SessionCreationError).statusCode).toBe(503);
+      expect((e as SessionCreationError).step).toBe("launching_cli");
+      expect((e as SessionCreationError).message).toContain("spawn failed");
+      // Verify container cleanup
+      expect(containerManager.removeContainer).toHaveBeenCalled();
+    }
+  });
+
   // -- cwd validation for containerized sessions --
   it("throws 400 when cwd is missing for containerized session", async () => {
     try {

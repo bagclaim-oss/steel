@@ -58,8 +58,9 @@ export class EventBus<
    */
   emit<K extends keyof TMap>(event: K, payload: TMap[K]): void {
     const regular = this.handlers.get(event);
-    if (regular) {
-      for (const handler of regular) {
+    if (regular && regular.size > 0) {
+      const snapshot = [...regular];
+      for (const handler of snapshot) {
         try {
           const result = handler(payload);
           if (result && typeof (result as Promise<void>).catch === "function") {

@@ -202,4 +202,43 @@ describe("EventBus", () => {
     expect(persistent).toHaveBeenCalledTimes(2);
     expect(oneShot).toHaveBeenCalledOnce(); // still only once
   });
+
+  // ── snapshot safety ───────────────────────────────────────────────
+
+  it("handlers added during emit are not called in the same dispatch", () => {
+    // Verifies that emit() snapshots the handler set before iterating,
+    // so a handler that subscribes a new handler during dispatch does not
+    // cause the new handler to fire in the same emit cycle.
+    const late = vi.fn();
+    const adder = () => {
+      bus.on("test:foo", late);
+    };
+
+    bus.on("test:foo", adder);
+    bus.emit("test:foo", { value: 1 });
+    // late was added during dispatch but should NOT have been called
+    expect(late).not.toHaveBeenCalled();
+
+    // On the next emit, late should fire
+    bus.emit("test:foo", { value: 2 });
+    expect(late).toHaveBeenCalledWith({ value: 2 });
+  });
+
+  it("handlers removed during emit still fire in the same dispatch", () => {
+    // Verifies snapshot: unsubscribing a handler mid-dispatch does not
+    // prevent it from running since the snapshot was taken before iteration.
+    const h1 = vi.fn();
+    const h2 = vi.fn();
+    let unsub2: () => void;
+
+    const remover = () => {
+      unsub2();
+    };
+
+    bus.on("test:foo", remover);
+    unsub2 = bus.on("test:foo", h2);
+    bus.emit("test:foo", { value: 1 });
+    // h2 was in the snapshot, so it still fires despite being removed mid-dispatch
+    expect(h2).toHaveBeenCalledWith({ value: 1 });
+  });
 });

@@ -1,7 +1,7 @@
 // Typed event map for the Companion internal event bus.
 // Each key is a namespaced event name; values are the payload passed to handlers.
 
-import type { BrowserIncomingMessage, BackendType } from "./session-types.js";
+import type { BrowserIncomingMessage } from "./session-types.js";
 import type { CodexAdapter } from "./codex-adapter.js";
 
 export interface CompanionEventMap {

@@ -64,7 +64,7 @@ const linearAgentBridge = new LinearAgentBridge(agentExecutor, wsBridge);
 
 const orchestrator = new SessionOrchestrator({
   launcher, wsBridge, sessionStore, worktreeTracker,
-  prPoller, recorder, agentExecutor, port,
+  prPoller, agentExecutor,
 });
 
 // ── Cloud relay connection (for receiving webhooks behind a firewall) ────────

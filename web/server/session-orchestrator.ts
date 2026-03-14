@@ -2,7 +2,6 @@ import type { CliLauncher, SdkSessionInfo } from "./cli-launcher.js";
 import type { WsBridge } from "./ws-bridge.js";
 import type { SessionStore } from "./session-store.js";
 import type { WorktreeTracker } from "./worktree-tracker.js";
-import type { RecorderManager } from "./recorder.js";
 import type { AgentExecutor } from "./agent-executor.js";
 import type { BackendType, CreationStepId } from "./session-types.js";
 import type { ContainerConfig, ContainerInfo } from "./container-manager.js";
@@ -46,9 +45,7 @@ export interface SessionOrchestratorDeps {
     watch(sessionId: string, cwd: string, branch: string): void;
     unwatch(sessionId: string): void;
   };
-  recorder: RecorderManager;
   agentExecutor: AgentExecutor;
-  port: number;
 }
 
 export interface CreateSessionRequest {
@@ -124,6 +121,9 @@ export class SessionOrchestrator {
   private relaunchingSet = new Set<string>();
   private autoRelaunchCounts = new Map<string, number>();
 
+  // Idempotency guard for initialize()
+  private _initialized = false;
+
   // Event listeners
   private exitCallbacks: ((sessionId: string, exitCode: number | null) => void)[] = [];
 
@@ -139,6 +139,9 @@ export class SessionOrchestrator {
   // ── Initialization (event wiring) ──────────────────────────────────────────
 
   initialize(): void {
+    if (this._initialized) return;
+    this._initialized = true;
+
     // When the CLI reports its internal session_id, store it for --resume
     this.wsBridge.onCLISessionIdReceived((sessionId, cliSessionId) => {
       this.launcher.setCLISessionId(sessionId, cliSessionId);
@@ -564,7 +567,9 @@ export class SessionOrchestrator {
 
   async killSession(sessionId: string): Promise<{ ok: boolean }> {
     const killed = await this.launcher.kill(sessionId);
-    containerManager.removeContainer(sessionId);
+    if (killed) {
+      containerManager.removeContainer(sessionId);
+    }
     return { ok: killed };
   }
 
@@ -639,6 +644,8 @@ export class SessionOrchestrator {
     sessionLinearIssues.removeLinearIssue(sessionId);
     this.launcher.removeSession(sessionId);
     this.wsBridge.closeSession(sessionId);
+    this.autoRelaunchCounts.delete(sessionId);
+    this.relaunchingSet.delete(sessionId);
     return { ok: true, worktree: worktreeResult };
   }
 

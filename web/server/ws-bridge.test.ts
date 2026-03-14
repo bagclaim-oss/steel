@@ -3807,22 +3807,18 @@ describe("diagnostics and callbacks", () => {
     expect(stats[1].id).toBe("diag-2");
   });
 
-  it("onIdleKillCallback registers the callback", () => {
-    const cb = vi.fn();
-    bridge.onIdleKillCallback(cb);
-    // Callback is stored — can't directly assert it's set (private field),
-    // but covering the registration path is the goal.
-    expect(cb).not.toHaveBeenCalled();
-  });
-
-  it("onAssistantMessageForSession: unsubscribe function removes the listener", async () => {
+  it("companionBus message:assistant: unsubscribe function removes the listener", async () => {
+    // After event bus migration, per-session listeners are registered via
+    // companionBus.on("message:assistant", ...) with a sessionId filter.
     const cli = makeCliSocket("s1");
     const browser = makeBrowserSocket("s1");
     bridge.handleCLIOpen(cli, "s1");
     bridge.handleBrowserOpen(browser, "s1");
 
     const listener = vi.fn();
-    const unsubscribe = bridge.onAssistantMessageForSession("s1", listener);
+    const unsubscribe = companionBus.on("message:assistant", ({ sessionId, message }) => {
+      if (sessionId === "s1") listener(message);
+    });
 
     // Send an assistant message — listener should fire
     await bridge.handleCLIMessage(cli, JSON.stringify({
@@ -3846,7 +3842,9 @@ describe("diagnostics and callbacks", () => {
     expect(listener).toHaveBeenCalledTimes(1); // Still 1 — unsubscribed
   });
 
-  it("onResultForSession: unsubscribe function removes the listener", async () => {
+  it("companionBus message:result: unsubscribe function removes the listener", async () => {
+    // After event bus migration, per-session listeners are registered via
+    // companionBus.on("message:result", ...) with a sessionId filter.
     const cli = makeCliSocket("s1");
     const browser = makeBrowserSocket("s1");
     bridge.handleCLIOpen(cli, "s1");
@@ -3858,7 +3856,9 @@ describe("diagnostics and callbacks", () => {
     }));
 
     const listener = vi.fn();
-    const unsubscribe = bridge.onResultForSession("s1", listener);
+    const unsubscribe = companionBus.on("message:result", ({ sessionId, message }) => {
+      if (sessionId === "s1") listener(message);
+    });
 
     // Send a result message — listener should fire
     await bridge.handleCLIMessage(cli, JSON.stringify({

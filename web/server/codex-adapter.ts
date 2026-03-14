@@ -582,6 +582,12 @@ export class CodexAdapter {
     }
     this.pendingDynamicToolCalls.clear();
     this.pendingExitPlanModeRequests.clear();
+    // Emit permission_cancelled for each stale approval so the browser
+    // can dismiss its permission dialog (the bridge also clears its own
+    // pendingPermissions map when it sees these messages).
+    for (const [requestId] of this.pendingApprovals) {
+      this.emit({ type: "permission_cancelled", request_id: requestId });
+    }
     this.pendingApprovals.clear();
     this.pendingUserInputQuestionIds.clear();
     this.pendingReviewDecisions.clear();
@@ -933,14 +939,16 @@ export class CodexAdapter {
       // Flush any messages that were queued during initialization, but only
       // if the transport is still connected (avoids immediate "Transport closed").
       this.flushPendingOutgoing();
+      this.initInProgress = false;
     } catch (err) {
       // If a WS reconnection was detected mid-init, handleWsReconnected
-      // already kicked off a fresh initialize(). Don't poison the adapter
-      // by marking it as permanently failed.
+      // already kicked off a fresh initialize(). Don't reset initInProgress
+      // here — that would clobber the new initialize() call's flag.
       if (err instanceof Error && err.message === "Transport reconnected") {
         console.warn(`[codex-adapter] Session ${this.sessionId}: init interrupted by WS reconnection, re-init in progress`);
         return;
       }
+      this.initInProgress = false;
       const errorMsg = `Codex initialization failed: ${err}`;
       console.error(`[codex-adapter] ${errorMsg}`);
       this.initFailed = true;
@@ -949,8 +957,6 @@ export class CodexAdapter {
       this.pendingOutgoing.length = 0;
       this.emit({ type: "error", message: errorMsg });
       this.initErrorCb?.(errorMsg);
-    } finally {
-      this.initInProgress = false;
     }
   }
 

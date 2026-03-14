@@ -467,6 +467,35 @@ describe("attachCodexAdapterHandlers", () => {
     expect(deps.persistSession).toHaveBeenCalled();
   });
 
+  it("permission_cancelled removes entry from pendingPermissions", () => {
+    // When the adapter emits permission_cancelled (e.g. after a WS reconnect),
+    // the bridge should remove the corresponding entry from pendingPermissions
+    // so the browser doesn't show a stale approval dialog.
+    attachCodexAdapterHandlers("test-session", session, adapter as unknown as CodexAdapter, deps);
+
+    // Pre-populate a pending permission
+    session.pendingPermissions.set("perm-stale", {
+      request_id: "perm-stale",
+      tool_name: "Bash",
+      input: { command: "rm -rf /" },
+      description: "Execute: rm -rf /",
+      tool_use_id: "tool-stale",
+      timestamp: Date.now(),
+    });
+
+    adapter._trigger("onBrowserMessage", {
+      type: "permission_cancelled",
+      request_id: "perm-stale",
+    });
+
+    expect(session.pendingPermissions.has("perm-stale")).toBe(false);
+    expect(deps.persistSession).toHaveBeenCalled();
+    expect(deps.broadcastToBrowsers).toHaveBeenCalledWith(
+      session,
+      expect.objectContaining({ type: "permission_cancelled", request_id: "perm-stale" }),
+    );
+  });
+
   // ── broadcast to browsers ───────────────────────────────────────────────
 
   it("all messages are broadcast to browsers", () => {

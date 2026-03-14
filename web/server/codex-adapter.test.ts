@@ -4582,6 +4582,11 @@ describe("CodexAdapter WS reconnection handling", () => {
     expect(disconnectCb).not.toHaveBeenCalled();
     expect(adapter.isConnected()).toBe(true);
 
+    // Adapter should have emitted permission_cancelled for the stale approval
+    const cancelMsgs = messages.filter((m) => m.type === "permission_cancelled");
+    expect(cancelMsgs.length).toBe(1);
+    expect((cancelMsgs[0] as { request_id: string }).request_id).toBe(permReqId);
+
     // Sending a permission response for the pre-reconnect request should
     // be silently dropped (respond should NOT be called for it)
     const respondBefore = (transport.respond as ReturnType<typeof vi.fn>).mock.calls.length;

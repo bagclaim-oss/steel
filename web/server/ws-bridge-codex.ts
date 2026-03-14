@@ -96,6 +96,12 @@ export function attachCodexAdapterHandlers(
       }
     }
 
+    if (msg.type === "permission_cancelled") {
+      const reqId = (msg as { request_id: string }).request_id;
+      session.pendingPermissions.delete(reqId);
+      deps.persistSession(session);
+    }
+
     if (msg.type === "permission_request") {
       const perm = msg.request;
 

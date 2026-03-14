@@ -160,7 +160,11 @@ export class SessionOrchestrator {
     });
     companionBus.on("session:exited", ({ sessionId, exitCode }) => {
       for (const cb of this.exitCallbacks) {
-        cb(sessionId, exitCode);
+        try {
+          cb(sessionId, exitCode);
+        } catch (err) {
+          console.error("[orchestrator] exitCallback error:", err);
+        }
       }
     });
 

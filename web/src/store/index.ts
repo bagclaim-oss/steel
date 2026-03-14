@@ -7,7 +7,7 @@ import { createTasksSlice, type TasksSlice } from "./tasks-slice.js";
 import { createUiSlice, type UiSlice } from "./ui-slice.js";
 import { createTerminalSlice, type TerminalSlice } from "./terminal-slice.js";
 import { createUpdatesSlice, type UpdatesSlice } from "./updates-slice.js";
-import type { DiffBase } from "./types.js";
+import type { DiffBase } from "./ui-slice.js";
 
 export type AppState = AuthSlice &
   SessionsSlice &
@@ -96,4 +96,5 @@ export const useStore = create<AppState>((...args) => ({
 }));
 
 // Re-export types for backward compatibility
-export type { QuickTerminalTab, QuickTerminalPlacement, DiffBase } from "./types.js";
+export type { QuickTerminalTab, QuickTerminalPlacement } from "./terminal-slice.js";
+export type { DiffBase } from "./ui-slice.js";

@@ -2,4 +2,5 @@
 // This file exists so that existing imports from "./store.js" continue to resolve.
 export { useStore } from "./store/index.js";
 export type { AppState } from "./store/index.js";
-export type { QuickTerminalTab, QuickTerminalPlacement, DiffBase } from "./store/types.js";
+export type { QuickTerminalTab, QuickTerminalPlacement } from "./store/terminal-slice.js";
+export type { DiffBase } from "./store/ui-slice.js";

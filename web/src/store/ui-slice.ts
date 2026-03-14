@@ -1,6 +1,7 @@
 import type { StateCreator } from "zustand";
 import type { AppState } from "./index.js";
-import type { DiffBase } from "./types.js";
+
+export type DiffBase = "last-commit" | "default-branch";
 import { type TaskPanelConfig, getInitialTaskPanelConfig, getDefaultConfig, persistTaskPanelConfig } from "../components/task-panel-sections.js";
 
 function getInitialDarkMode(): boolean {

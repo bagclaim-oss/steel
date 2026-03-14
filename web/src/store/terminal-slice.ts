@@ -1,6 +1,14 @@
 import type { StateCreator } from "zustand";
 import type { AppState } from "./index.js";
-import type { QuickTerminalTab, QuickTerminalPlacement } from "./types.js";
+
+export interface QuickTerminalTab {
+  id: string;
+  label: string;
+  cwd: string;
+  containerId?: string;
+}
+
+export type QuickTerminalPlacement = "top" | "right" | "bottom" | "left";
 
 function getInitialQuickTerminalPlacement(): QuickTerminalPlacement {
   if (typeof window === "undefined") return "bottom";

@@ -3919,3 +3919,230 @@ describe("diagnostics and callbacks", () => {
     expect((bridge as any).recorder).toBe(fakeRecorder);
   });
 });
+
+// ─── set_ai_validation browser message ──────────────────────────────────────
+
+describe("set_ai_validation browser message", () => {
+  it("updates AI validation settings and broadcasts session_update", () => {
+    // When a browser sends set_ai_validation, the bridge should update the
+    // session state and broadcast the new settings to all connected browsers.
+    const browser = makeBrowserSocket("s1");
+    bridge.handleBrowserOpen(browser, "s1");
+    browser.send.mockClear();
+
+    bridge.handleBrowserMessage(
+      browser,
+      JSON.stringify({
+        type: "set_ai_validation",
+        aiValidationEnabled: true,
+        aiValidationAutoApprove: true,
+        aiValidationAutoDeny: false,
+      }),
+    );
+
+    const session = bridge.getSession("s1")!;
+    expect(session.state.aiValidationEnabled).toBe(true);
+    expect(session.state.aiValidationAutoApprove).toBe(true);
+    expect(session.state.aiValidationAutoDeny).toBe(false);
+
+    // Should have broadcast session_update with the new AI validation settings
+    const calls = browser.send.mock.calls.map(([arg]: [string]) => JSON.parse(arg));
+    const updateMsg = calls.find((c: any) => c.type === "session_update");
+    expect(updateMsg).toBeDefined();
+    expect(updateMsg.session.aiValidationEnabled).toBe(true);
+    expect(updateMsg.session.aiValidationAutoApprove).toBe(true);
+    expect(updateMsg.session.aiValidationAutoDeny).toBe(false);
+  });
+
+  it("does not forward set_ai_validation to CLI backend", () => {
+    // set_ai_validation is a bridge-level message that should never be
+    // sent to the CLI. Verify the CLI socket does not receive it.
+    const cli = makeCliSocket("s1");
+    const browser = makeBrowserSocket("s1");
+    bridge.handleCLIOpen(cli, "s1");
+    bridge.handleBrowserOpen(browser, "s1");
+    cli.send.mockClear();
+
+    bridge.handleBrowserMessage(
+      browser,
+      JSON.stringify({
+        type: "set_ai_validation",
+        aiValidationEnabled: true,
+      }),
+    );
+
+    // CLI should not have received any messages after clearing
+    const cliCalls = cli.send.mock.calls.map(([arg]: [string]) => arg);
+    const aiMsg = cliCalls.find((s: string) => s.includes("set_ai_validation"));
+    expect(aiMsg).toBeUndefined();
+  });
+});
+
+// ─── Idle kill watchdog ─────────────────────────────────────────────────────
+
+describe("Idle kill watchdog", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("starts watchdog when last browser disconnects and emits idle-kill after threshold", () => {
+    // When the last browser disconnects, the bridge should start a periodic
+    // idle check. If no CLI activity occurs for IDLE_KILL_THRESHOLD_MS and
+    // no browser reconnects, the session:idle-kill event should fire.
+    const idleKillHandler = vi.fn();
+    companionBus.on("session:idle-kill", idleKillHandler);
+
+    const cli = makeCliSocket("s1");
+    const browser = makeBrowserSocket("s1");
+    bridge.handleCLIOpen(cli, "s1");
+    bridge.handleBrowserOpen(browser, "s1");
+
+    // Disconnect the browser — should start idle watchdog
+    bridge.handleBrowserClose(browser);
+
+    // Advance past the idle kill threshold (default 20 min) + check interval (60s)
+    // The watchdog checks every 60s, so we need to advance enough for:
+    // 1) The idle threshold to be exceeded (20 min)
+    // 2) A check interval to fire
+    vi.advanceTimersByTime(20 * 60_000 + 60_000);
+
+    expect(idleKillHandler).toHaveBeenCalledWith({ sessionId: "s1" });
+  });
+
+  it("cancels watchdog when browser reconnects before idle threshold", () => {
+    // If a browser reconnects before the idle threshold, the watchdog
+    // should be cancelled and no idle-kill event should fire.
+    const idleKillHandler = vi.fn();
+    companionBus.on("session:idle-kill", idleKillHandler);
+
+    const cli = makeCliSocket("s1");
+    const browser1 = makeBrowserSocket("s1");
+    bridge.handleCLIOpen(cli, "s1");
+    bridge.handleBrowserOpen(browser1, "s1");
+
+    // Disconnect browser — starts watchdog
+    bridge.handleBrowserClose(browser1);
+
+    // Advance a bit (5 min) but not past threshold
+    vi.advanceTimersByTime(5 * 60_000);
+
+    // Reconnect a browser — should cancel watchdog
+    const browser2 = makeBrowserSocket("s1");
+    bridge.handleBrowserOpen(browser2, "s1");
+
+    // Advance well past the threshold
+    vi.advanceTimersByTime(30 * 60_000);
+
+    // Should NOT have triggered idle kill
+    expect(idleKillHandler).not.toHaveBeenCalled();
+  });
+
+  it("checkIdleKill stops watchdog if session is removed", () => {
+    // If the session is removed while the watchdog is running (e.g. user
+    // deleted it), the watchdog should clean itself up on the next tick.
+    const idleKillHandler = vi.fn();
+    companionBus.on("session:idle-kill", idleKillHandler);
+
+    const cli = makeCliSocket("s1");
+    const browser = makeBrowserSocket("s1");
+    bridge.handleCLIOpen(cli, "s1");
+    bridge.handleBrowserOpen(browser, "s1");
+
+    // Disconnect browser — starts watchdog
+    bridge.handleBrowserClose(browser);
+
+    // Remove session while watchdog is active
+    bridge.removeSession("s1");
+
+    // Advance past threshold + check
+    vi.advanceTimersByTime(25 * 60_000);
+
+    // Should NOT fire idle-kill because session was removed
+    expect(idleKillHandler).not.toHaveBeenCalled();
+  });
+
+  it("checkIdleKill stops watchdog if browser reconnects before check fires", () => {
+    // Edge case: browser reconnects between check intervals. The next
+    // check should see browserSockets.size > 0 and cancel the watchdog.
+    const idleKillHandler = vi.fn();
+    companionBus.on("session:idle-kill", idleKillHandler);
+
+    const cli = makeCliSocket("s1");
+    const browser1 = makeBrowserSocket("s1");
+    bridge.handleCLIOpen(cli, "s1");
+    bridge.handleBrowserOpen(browser1, "s1");
+
+    // Disconnect browser
+    bridge.handleBrowserClose(browser1);
+
+    // Advance 10 min (past one check interval but under threshold)
+    vi.advanceTimersByTime(10 * 60_000);
+
+    // Manually add a browser socket directly to simulate reconnect
+    // without calling handleBrowserOpen (which would cancel watchdog)
+    const session = bridge.getSession("s1")!;
+    const browser2 = makeBrowserSocket("s1");
+    session.browserSockets.add(browser2);
+
+    // Advance past threshold
+    vi.advanceTimersByTime(15 * 60_000);
+
+    // Watchdog should have noticed the browser and cancelled itself
+    expect(idleKillHandler).not.toHaveBeenCalled();
+  });
+});
+
+// ─── injectMcpSetServers ────────────────────────────────────────────────────
+
+describe("injectMcpSetServers", () => {
+  it("sends mcp_set_servers to backend adapter", () => {
+    // When injectMcpSetServers is called on a connected session, it should
+    // forward the MCP server configuration to the backend adapter.
+    const cli = makeCliSocket("s1");
+    bridge.handleCLIOpen(cli, "s1");
+
+    const servers = { "test-mcp": { command: "test-cmd", args: [] } } as any;
+    bridge.injectMcpSetServers("s1", servers);
+
+    // The CLI socket should have received the mcp_set_servers message
+    const calls = cli.send.mock.calls.map(([arg]: [string]) => arg);
+    const mcpMsg = calls.find((s: string) => s.includes("mcp_set_servers"));
+    expect(mcpMsg).toBeDefined();
+  });
+
+  it("is a no-op for nonexistent session", () => {
+    // Should log an error but not throw.
+    expect(() => bridge.injectMcpSetServers("nonexistent", {})).not.toThrow();
+  });
+});
+
+// ─── injectSystemPrompt ─────────────────────────────────────────────────────
+
+describe("injectSystemPrompt", () => {
+  it("sends initialize control_request to ClaudeAdapter", () => {
+    // When injectSystemPrompt is called on a Claude session, it should
+    // send a raw NDJSON control_request with the appendSystemPrompt.
+    const cli = makeCliSocket("s1");
+    bridge.handleCLIOpen(cli, "s1");
+
+    bridge.injectSystemPrompt("s1", "You are a helpful assistant.");
+
+    // The CLI socket should have received the control_request
+    const calls = cli.send.mock.calls.map(([arg]: [string]) => arg);
+    const initMsg = calls.find((s: string) => s.includes("appendSystemPrompt"));
+    expect(initMsg).toBeDefined();
+    const parsed = JSON.parse(initMsg!.trim());
+    expect(parsed.type).toBe("control_request");
+    expect(parsed.request.subtype).toBe("initialize");
+    expect(parsed.request.appendSystemPrompt).toBe("You are a helpful assistant.");
+  });
+
+  it("is a no-op for nonexistent session", () => {
+    // Should log an error but not throw.
+    expect(() => bridge.injectSystemPrompt("nonexistent", "prompt")).not.toThrow();
+  });
+});

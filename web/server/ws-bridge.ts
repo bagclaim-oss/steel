@@ -359,6 +359,21 @@ export class WsBridge {
     const session = this.getOrCreateSession(sessionId, backendType);
     session.backendAdapter = adapter;
 
+    // Advance the state machine so that system_init (starting → ready) is reachable.
+    // For Claude, handleCLIOpen does starting → initializing via cli_ws_open.
+    // For Codex (and any non-Claude adapter), the adapter attachment IS the transport
+    // open event — no separate WS open fires — so do the equivalent transition here.
+    // Also handles relaunched sessions stuck in "terminated": step through
+    // terminated → starting → initializing so system_init can land on "ready".
+    if (!(adapter instanceof ClaudeAdapter)) {
+      const phase = session.stateMachine.phase;
+      if (phase === "terminated") {
+        session.stateMachine.transition("starting", "adapter_reattached");
+      }
+      // starting → initializing (or reconnecting → initializing)
+      session.stateMachine.transition("initializing", "adapter_attached");
+    }
+
     // ── onBrowserMessage — messages from backend → browsers ──────────────
     adapter.onBrowserMessage((msg) => {
       // Track activity for idle detection
@@ -675,6 +690,11 @@ export class WsBridge {
       // Wire up the shared event pipeline via attachBackendAdapter
       // (also broadcasts cli_connected for new adapters)
       this.attachBackendAdapter(sessionId, adapter);
+    }
+    // For relaunched sessions the state machine may be "terminated".
+    // Step through terminated → starting first so the cli_ws_open trigger can land.
+    if (session.stateMachine.phase === "terminated") {
+      session.stateMachine.transition("starting", "cli_reattached");
     }
     session.stateMachine.transition("initializing", "cli_ws_open");
 

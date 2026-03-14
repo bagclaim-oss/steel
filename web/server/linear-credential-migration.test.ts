@@ -299,4 +299,39 @@ describe("migrateLinearCredentialsToAgents", () => {
 
     consoleSpy.mockRestore();
   });
+
+  // If updateAgent returns null (store failure), the global credentials
+  // must NOT be cleared — otherwise the user's credentials are silently lost.
+  it("does NOT clear global credentials when updateAgent fails during migration", () => {
+    vi.mocked(getSettings).mockReturnValue({
+      linearOAuthClientId: "client-id",
+      linearOAuthClientSecret: "secret",
+      linearOAuthWebhookSecret: "webhook",
+      linearOAuthAccessToken: "access",
+      linearOAuthRefreshToken: "refresh",
+    } as ReturnType<typeof getSettings>);
+
+    const eligible = makeAgent({
+      id: "linear-agent",
+      name: "Linear Agent",
+      triggers: { linear: { enabled: true } },
+    });
+    vi.mocked(agentStore.listAgents).mockReturnValue([eligible]);
+    // Simulate a store failure
+    vi.mocked(agentStore.updateAgent).mockReturnValue(null);
+
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    migrateLinearCredentialsToAgents();
+
+    expect(agentStore.updateAgent).toHaveBeenCalled();
+    // Credentials must NOT be cleared if the agent write failed
+    expect(updateSettings).not.toHaveBeenCalled();
+    // Should log an error about the failure
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to write credentials to agent"),
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
 });

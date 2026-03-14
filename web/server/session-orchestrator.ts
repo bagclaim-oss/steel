@@ -153,9 +153,12 @@ export class SessionOrchestrator {
       this.wsBridge.attachCodexAdapter(sessionId, adapter);
     });
 
-    // When a CLI/Codex process exits, notify agent executor + external listeners
+    // When a CLI/Codex process exits, notify agent executor and external listeners
+    // separately so a throw in one doesn't skip the other (bus isolates each handler).
     companionBus.on("session:exited", ({ sessionId, exitCode }) => {
       this.agentExecutor.handleSessionExited(sessionId, exitCode);
+    });
+    companionBus.on("session:exited", ({ sessionId, exitCode }) => {
       for (const cb of this.exitCallbacks) {
         cb(sessionId, exitCode);
       }

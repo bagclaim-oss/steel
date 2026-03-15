@@ -825,12 +825,12 @@ export function HomePage() {
   const canSend = text.trim().length > 0 && !sending;
 
   return (
-    <div className="flex-1 h-full flex items-start justify-center px-3 sm:px-4 pt-6 sm:pt-8 pb-6 pb-safe overflow-y-auto overscroll-y-contain">
+    <div className="flex-1 h-full flex items-start justify-center px-3 sm:px-4 pt-4 sm:pt-8 pb-6 pb-safe overflow-y-auto overscroll-y-contain">
       <div className="w-full max-w-2xl">
-        {/* Logo + Title */}
-        <div className="flex flex-col items-center justify-center mb-3 sm:mb-4">
-          <img src={logoSrc} alt="The Companion" className="w-16 h-16 sm:w-20 sm:h-20 mb-2.5" />
-          <h1 className="text-2xl sm:text-[2rem] font-semibold tracking-tight text-cc-fg">
+        {/* Logo + Title — compact on mobile, centered on desktop */}
+        <div className="flex items-center gap-2.5 sm:flex-col sm:items-center sm:gap-0 mb-3 sm:mb-4">
+          <img src={logoSrc} alt="The Companion" className="w-9 h-9 sm:w-20 sm:h-20 sm:mb-2.5" />
+          <h1 className="text-lg sm:text-[2rem] font-semibold tracking-tight text-cc-fg">
             The Companion
           </h1>
         </div>
@@ -909,22 +909,22 @@ export function HomePage() {
                 onPaste={handlePaste}
                 aria-label="Task description"
               placeholder="Fix a bug, build a feature, refactor code..."
-                rows={4}
-                className="w-full px-4 pt-4 pb-2 text-base sm:text-sm bg-transparent resize-none focus:outline-none text-cc-fg font-sans-ui placeholder:text-cc-muted overflow-y-auto"
-                style={{ minHeight: "100px", maxHeight: "200px" }}
+                rows={3}
+                className="w-full px-3.5 sm:px-4 pt-3 sm:pt-4 pb-2 text-[15px] sm:text-sm bg-transparent resize-none focus:outline-none text-cc-fg font-sans-ui placeholder:text-cc-muted overflow-y-auto"
+                style={{ minHeight: "80px", maxHeight: "200px" }}
               />
 
               {/* Separator */}
               <div className="mx-3 border-t border-cc-border/40" />
 
               {/* Bottom toolbar */}
-              <div className="flex items-center justify-between px-3 py-2.5">
+              <div className="flex items-center justify-between px-3 py-2">
                 {/* Left: mode dropdown */}
                 <div className="relative" ref={modeDropdownRef}>
                   <button
                     onClick={() => setShowModeDropdown(!showModeDropdown)}
                     aria-expanded={showModeDropdown}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-cc-muted hover:text-cc-fg rounded-lg hover:bg-cc-hover transition-colors cursor-pointer"
+                    className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-cc-muted hover:text-cc-fg rounded-lg hover:bg-cc-hover transition-colors cursor-pointer"
                   >
                     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
                       <path d="M2 4h12M2 8h8M2 12h10" strokeLinecap="round" />
@@ -952,7 +952,7 @@ export function HomePage() {
                 </div>
 
                 {/* Right: image placeholder + send */}
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1">
                   {/* Image upload */}
                   <button
                     onClick={() => fileInputRef.current?.click()}
@@ -970,7 +970,7 @@ export function HomePage() {
                   <button
                     onClick={handleSend}
                     disabled={!canSend}
-                    className={`flex items-center justify-center w-10 h-10 rounded-full transition-colors ${
+                    className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-colors ${
                       canSend
                         ? "bg-cc-primary hover:bg-cc-primary-hover text-white cursor-pointer"
                         : "bg-cc-hover text-cc-muted cursor-not-allowed"
@@ -985,8 +985,8 @@ export function HomePage() {
               </div>
             </div>
 
-            {/* Below-card selectors — grouped */}
-            <div className="mt-2 sm:mt-3 px-1 space-y-2">
+            {/* Below-card selectors — compact flow layout */}
+            <div className="mt-2 sm:mt-3 space-y-1.5 sm:space-y-2">
 
               {/* Backend toggle */}
               {backends.length > 1 && (
@@ -997,7 +997,7 @@ export function HomePage() {
                       onClick={() => b.available && switchBackend(b.id as BackendType)}
                       disabled={!b.available}
                       title={b.available ? b.name : `${b.name} CLI not found in PATH`}
-                      className={`flex items-center gap-1 px-2.5 min-h-[44px] sm:min-h-0 sm:py-2 text-xs rounded-md transition-colors ${
+                      className={`flex items-center gap-1 px-2.5 py-1.5 sm:py-2 text-xs rounded-md transition-colors ${
                         !b.available
                           ? "text-cc-muted/40 cursor-not-allowed"
                           : backend === b.id
@@ -1017,17 +1017,17 @@ export function HomePage() {
                 </div>
               )}
 
-              {/* ── Workspace group: Folder + Branch/Worktree ── */}
-              <section className="rounded-lg border border-cc-border/30 bg-cc-card/20 p-0.5">
-                <span className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-cc-muted/75 block">
+              {/* ── Workspace: Folder + Branch/Worktree ── */}
+              <section className="rounded-lg border border-cc-border/20 bg-cc-card/10 px-0.5 py-0.5">
+                <span className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-cc-muted/60 block">
                   Workspace
                 </span>
-                <div className="flex flex-col sm:flex-row sm:items-center">
+                <div className="flex flex-wrap items-center">
                   {/* Folder selector */}
                   <div>
                     <button
                       onClick={() => setShowFolderPicker(true)}
-                      className="flex items-center gap-1.5 px-2.5 min-h-[44px] sm:min-h-0 sm:py-2 text-xs text-cc-muted hover:text-cc-fg rounded-md hover:bg-cc-hover transition-colors cursor-pointer"
+                      className="flex items-center gap-1.5 px-2 py-1.5 sm:py-2 text-xs text-cc-muted hover:text-cc-fg rounded-md hover:bg-cc-hover transition-colors cursor-pointer"
                     >
                       <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 opacity-60">
                         <path d="M1 3.5A1.5 1.5 0 012.5 2h3.379a1.5 1.5 0 011.06.44l.622.621a.5.5 0 00.353.146H13.5A1.5 1.5 0 0115 4.707V12.5a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 011 12.5v-9z" />
@@ -1060,18 +1060,18 @@ export function HomePage() {
                 </div>
               </section>
 
-              {/* ── Runtime group: Model + Env + Sandbox ── */}
-              <section className="rounded-lg border border-cc-border/30 bg-cc-card/20 p-0.5">
-                <span className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-cc-muted/75 block">
+              {/* ── Runtime: Model + Env + Sandbox ── */}
+              <section className="rounded-lg border border-cc-border/20 bg-cc-card/10 px-0.5 py-0.5">
+                <span className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-cc-muted/60 block">
                   Runtime
                 </span>
-                <div className="flex flex-col sm:flex-row sm:items-center">
+                <div className="flex flex-wrap items-center">
                   {/* Model selector */}
                   <div className="relative" ref={modelDropdownRef}>
                     <button
                       onClick={() => setShowModelDropdown(!showModelDropdown)}
                       aria-expanded={showModelDropdown}
-                      className="flex items-center gap-1.5 px-2.5 min-h-[44px] sm:min-h-0 sm:py-2 text-xs text-cc-muted hover:text-cc-fg rounded-md hover:bg-cc-hover transition-colors cursor-pointer"
+                      className="flex items-center gap-1.5 px-2 py-1.5 sm:py-2 text-xs text-cc-muted hover:text-cc-fg rounded-md hover:bg-cc-hover transition-colors cursor-pointer"
                     >
                       <span>{selectedModel.icon}</span>
                       <span>{selectedModel.label}</span>
@@ -1107,12 +1107,12 @@ export function HomePage() {
                         setShowEnvDropdown(!showEnvDropdown);
                       }}
                       aria-expanded={showEnvDropdown}
-                      className="flex items-center gap-1.5 px-2.5 min-h-[44px] sm:min-h-0 sm:py-2 text-xs text-cc-muted hover:text-cc-fg rounded-md hover:bg-cc-hover transition-colors cursor-pointer"
+                      className="flex items-center gap-1.5 px-2 py-1.5 sm:py-2 text-xs text-cc-muted hover:text-cc-fg rounded-md hover:bg-cc-hover transition-colors cursor-pointer"
                     >
                       <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 opacity-60">
                         <path d="M8 1a2 2 0 012 2v1h2a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2h2V3a2 2 0 012-2zm0 1.5a.5.5 0 00-.5.5v1h1V3a.5.5 0 00-.5-.5zM4 5.5a.5.5 0 00-.5.5v6a.5.5 0 00.5.5h8a.5.5 0 00.5-.5V6a.5.5 0 00-.5-.5H4z" />
                       </svg>
-                      <span className="max-w-[120px] truncate">
+                      <span className="max-w-[100px] sm:max-w-[120px] truncate">
                         {selectedEnv ? envs.find((e) => e.slug === selectedEnv)?.name || "Env" : "No env"}
                       </span>
                       <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 opacity-50">
@@ -1176,7 +1176,7 @@ export function HomePage() {
                         setShowSandboxDropdown(!showSandboxDropdown);
                       }}
                       aria-expanded={showSandboxDropdown}
-                      className={`flex items-center gap-1.5 px-2.5 min-h-[44px] sm:min-h-0 sm:py-2 text-xs rounded-md transition-colors cursor-pointer ${
+                      className={`flex items-center gap-1.5 px-2 py-1.5 sm:py-2 text-xs rounded-md transition-colors cursor-pointer ${
                         sandboxEnabled
                           ? "text-cc-primary bg-cc-primary/10 hover:bg-cc-primary/15"
                           : "text-cc-muted hover:text-cc-fg hover:bg-cc-hover"
@@ -1186,7 +1186,7 @@ export function HomePage() {
                         <rect x="2" y="4" width="12" height="10" rx="1.5" />
                         <path d="M5 4V2.5A1.5 1.5 0 016.5 1h3A1.5 1.5 0 0111 2.5V4" />
                       </svg>
-                      <span className="max-w-[120px] truncate">
+                      <span className="max-w-[100px] sm:max-w-[120px] truncate">
                         {sandboxEnabled
                           ? (selectedSandbox ? sandboxes.find((s) => s.slug === selectedSandbox)?.name || "Sandbox" : "Sandbox")
                           : "Sandbox"}
@@ -1274,13 +1274,13 @@ export function HomePage() {
                 </div>
               </section>
 
-              {/* ── Resume group: Branch from session (Claude only) ── */}
+              {/* ── Resume: Branch from session (Claude only) ── */}
               {backend === "claude" && (
-                <section className="rounded-lg border border-cc-border/30 bg-cc-card/20 p-0.5">
+                <section className="rounded-lg border border-cc-border/20 bg-cc-card/10 px-0.5 py-0.5">
                   <button
                     type="button"
                     onClick={() => setShowBranchingControls((v) => !v)}
-                    className={`w-full flex items-center gap-1.5 px-2 min-h-[44px] sm:min-h-0 sm:py-2 text-xs rounded-md transition-colors cursor-pointer ${
+                    className={`w-full flex items-center gap-1.5 px-2 py-1.5 sm:py-2 text-xs rounded-md transition-colors cursor-pointer ${
                       showBranchingControls
                         ? "text-cc-primary"
                         : "text-cc-muted hover:text-cc-fg"
@@ -1414,7 +1414,7 @@ export function HomePage() {
                                 return (
                                   <div
                                     key={`${candidate.resumeSessionId}-row-${candidate.sessionId}`}
-                                    className="px-2.5 py-2.5 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_auto] sm:items-center"
+                                    className="px-2 py-2 sm:px-2.5 sm:py-2.5 grid grid-cols-1 gap-1.5 sm:gap-2 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_auto] sm:items-center"
                                   >
                                     <div className="min-w-0">
                                       <p className={`text-xs truncate ${selected ? "text-cc-primary font-medium" : "text-cc-fg"}`}>
@@ -1505,7 +1505,7 @@ export function HomePage() {
 
               {/* Onboarding tip — shown once for new users */}
               {showOnboardingTip && (
-                <div className="flex items-start gap-2 px-2 py-2 rounded-lg bg-cc-primary/5 border border-cc-primary/10 text-[11px] text-cc-muted">
+                <div className="flex items-start gap-2 px-2 py-1.5 sm:py-2 rounded-lg bg-cc-primary/5 border border-cc-primary/10 text-[11px] text-cc-muted">
                   <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 text-cc-primary/60 shrink-0 mt-0.5">
                     <path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM0 8a8 8 0 1116 0A8 8 0 010 8zm6.5-.25A.75.75 0 017.25 7h1a.75.75 0 01.75.75v2.75h.25a.75.75 0 010 1.5h-2a.75.75 0 010-1.5h.25v-2h-.25a.75.75 0 01-.75-.75zM8 6a1 1 0 110-2 1 1 0 010 2z" />
                   </svg>
@@ -1560,7 +1560,7 @@ export function HomePage() {
                     {pullError}
                   </div>
                 )}
-                <div className="flex gap-2 mt-2.5">
+                <div className="flex flex-wrap gap-2 mt-2.5">
                   <button
                     onClick={handleCancelPull}
                     disabled={pulling}

@@ -575,7 +575,7 @@ export class SessionOrchestrator {
       return { ok: true, session };
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.error("[orchestrator] Failed to create session:", msg);
+      log.error("orchestrator", "Failed to create session", { error: msg });
       return { ok: false, error: msg, status: 500 };
     }
   }
@@ -741,7 +741,7 @@ export class SessionOrchestrator {
     if (freshInfo && freshInfo.state !== "starting") {
       this.autoRelaunchCounts.set(sessionId, count + 1);
       metricsCollector.recordRelaunchAttempted();
-      console.log(`[orchestrator] Auto-relaunching CLI for session ${sessionId} (attempt ${count + 1}/${MAX_AUTO_RELAUNCHES})`);
+      log.info("orchestrator", "Auto-relaunching CLI", { sessionId, attempt: count + 1, maxAttempts: MAX_AUTO_RELAUNCHES });
       const session = this.wsBridge.getSession(sessionId);
       if (session?.stateMachine) {
         session.stateMachine.transition("starting", "relaunch_initiated");

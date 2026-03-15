@@ -2,6 +2,7 @@
 // Centralizes session phase definitions and validates transitions.
 
 import { metricsCollector } from "./metrics-collector.js";
+import { log } from "./logger.js";
 
 /**
  * The formal phases a session can be in.
@@ -120,10 +121,12 @@ export class SessionStateMachine {
     const allowed = VALID_TRANSITIONS.get(this._phase);
     if (!allowed || !allowed.has(to)) {
       metricsCollector.recordError("invalid_state_transition");
-      console.warn(
-        `[state-machine] Blocked invalid transition for session ${this._sessionId}: ` +
-          `${this._phase} -> ${to} (trigger: ${trigger})`,
-      );
+      log.warn("state-machine", "Blocked invalid transition", {
+        sessionId: this._sessionId,
+        from: this._phase,
+        to,
+        trigger,
+      });
       return false;
     }
 

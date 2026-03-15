@@ -256,6 +256,32 @@ describe("disconnectSession", () => {
     expect(lastWs).toBe(ws);
     expect(useStore.getState().connectionStatus.get("s1")).toBe("disconnected");
   });
+
+  it("clears queued outgoing messages on explicit disconnect", () => {
+    wsModule.connectSession("s1");
+    const firstWs = lastWs;
+    firstWs.readyState = MockWebSocket.CONNECTING;
+
+    wsModule.sendToSession("s1", {
+      type: "user_message",
+      content: "stale queued message",
+    });
+
+    expect(firstWs.send).not.toHaveBeenCalled();
+
+    wsModule.disconnectSession("s1");
+
+    wsModule.connectSession("s1");
+    const secondWs = lastWs;
+    secondWs.readyState = MockWebSocket.OPEN;
+    secondWs.onopen?.(new Event("open"));
+
+    expect(secondWs.send).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(secondWs.send.mock.calls[0][0])).toEqual({
+      type: "session_subscribe",
+      last_seq: 0,
+    });
+  });
 });
 
 // ===========================================================================

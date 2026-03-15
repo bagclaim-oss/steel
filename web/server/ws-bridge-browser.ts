@@ -49,7 +49,7 @@ export function handleSessionSubscribe(
   const earliest = session.eventBuffer[0]?.seq ?? session.nextEventSeq;
   const hasGap = lastAckSeq > 0 && lastAckSeq < earliest - 1;
   if (hasGap) {
-    if (lastAckSeq !== 0 && session.messageHistory.length > 0) {
+    if (session.messageHistory.length > 0) {
       sendToBrowser(ws, {
         type: "message_history",
         messages: session.messageHistory,
@@ -74,7 +74,10 @@ export function handleSessionSubscribe(
     return;
   }
 
-  const missed = session.eventBuffer.filter((evt) => evt.seq > lastAckSeq);
+  const sentFullHistory = lastAckSeq === 0 && session.messageHistory.length > 0;
+  const missed = session.eventBuffer.filter(
+    (evt) => evt.seq > lastAckSeq && (!sentFullHistory || !isHistoryBackedEvent(evt.message)),
+  );
   if (missed.length === 0) return;
   sendToBrowser(ws, {
     type: "event_replay",

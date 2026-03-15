@@ -1084,6 +1084,7 @@ export function disconnectSession(sessionId: string) {
   streamingPhaseBySession.delete(sessionId);
   streamingDraftMessageIdBySession.delete(sessionId);
   lastSeqBySession.delete(sessionId);
+  pendingOutgoingBySession.delete(sessionId);
 }
 
 export function disconnectAll() {

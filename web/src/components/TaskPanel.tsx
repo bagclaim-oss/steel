@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useMemo, type ComponentType, type ReactNode } from "react";
+import { useEffect, useState, useCallback, useRef, type ComponentType, type ReactNode } from "react";
 import { useStore } from "../store.js";
 import { api, type UsageLimits, type GitHubPRInfo, type LinearIssue, type LinearComment } from "../api.js";
 import type { TaskItem, SdkSessionInfo } from "../types.js";
@@ -13,6 +13,21 @@ import { SectionErrorBoundary } from "./SectionErrorBoundary.js";
 
 const EMPTY_TASKS: TaskItem[] = [];
 const COUNTDOWN_REFRESH_MS = 30_000;
+
+/** O(1) SDK session lookup using a cached Map selector. */
+function useSdkSession(sessionId: string): SdkSessionInfo | undefined {
+  return useStore(
+    useCallback(
+      (s) => {
+        for (const x of s.sdkSessions) {
+          if (x.sessionId === sessionId) return x;
+        }
+        return undefined;
+      },
+      [sessionId],
+    ),
+  );
+}
 
 // ─── PanelSection — collapsible wrapper for every context section ────────────
 
@@ -51,15 +66,18 @@ function PanelSection({
     return set.has(id) ? true : !defaultOpen;
   });
 
+  // Persist collapse state as a side-effect (pure updater, I/O in effect)
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) { isInitialMount.current = false; return; }
+    const set = getInitialCollapsed();
+    if (collapsed) set.add(id); else set.delete(id);
+    persistCollapsed(set);
+  }, [collapsed, id]);
+
   const toggle = useCallback(() => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      const set = getInitialCollapsed();
-      if (next) set.add(id); else set.delete(id);
-      persistCollapsed(set);
-      return next;
-    });
-  }, [id]);
+    setCollapsed((prev) => !prev);
+  }, []);
 
   return (
     <div className="border-t border-cc-separator first:border-t-0">
@@ -418,7 +436,7 @@ export function GitHubPRDisplay({ pr }: { pr: GitHubPRInfo }) {
 
 function GitHubPRSection({ sessionId }: { sessionId: string }) {
   const session = useStore((s) => s.sessions.get(sessionId));
-  const sdk = useStore((s) => s.sdkSessions.find((x) => x.sessionId === sessionId));
+  const sdk = useSdkSession(sessionId);
   const prStatus = useStore((s) => s.prStatus.get(sessionId));
 
   const cwd = session?.cwd || sdk?.cwd;
@@ -783,7 +801,7 @@ function LinearIssueSection({ sessionId }: { sessionId: string }) {
 /** Wrapper that renders the correct usage/rate-limit component based on backend type */
 function UsageLimitsRenderer({ sessionId }: { sessionId: string }) {
   const session = useStore((s) => s.sessions.get(sessionId));
-  const sdk = useStore((s) => s.sdkSessions.find((x) => x.sessionId === sessionId));
+  const sdk = useSdkSession(sessionId);
   const isCodex = (session?.backend_type || sdk?.backendType) === "codex";
 
   if (isCodex) {
@@ -800,7 +818,7 @@ function UsageLimitsRenderer({ sessionId }: { sessionId: string }) {
 /** Git branch info */
 function GitBranchSection({ sessionId }: { sessionId: string }) {
   const session = useStore((s) => s.sessions.get(sessionId));
-  const sdk = useStore((s) => s.sdkSessions.find((x) => x.sessionId === sessionId));
+  const sdk = useSdkSession(sessionId);
 
   const branch = session?.git_branch || sdk?.gitBranch;
   const branchAhead = session?.git_ahead || 0;
@@ -873,7 +891,7 @@ function GitBranchSection({ sessionId }: { sessionId: string }) {
 function TasksSection({ sessionId }: { sessionId: string }) {
   const tasks = useStore((s) => s.sessionTasks.get(sessionId) || EMPTY_TASKS);
   const session = useStore((s) => s.sessions.get(sessionId));
-  const sdk = useStore((s) => s.sdkSessions.find((x) => x.sessionId === sessionId));
+  const sdk = useSdkSession(sessionId);
   const isCodex = (session?.backend_type || sdk?.backendType) === "codex";
 
   if (!session || isCodex) return null;
@@ -1063,18 +1081,11 @@ export { CodexRateLimitsSection, CodexTokenDetailsSection };
 
 export function TaskPanel({ sessionId }: { sessionId: string }) {
   const session = useStore((s) => s.sessions.get(sessionId));
-  const sdkSessions = useStore((s) => s.sdkSessions);
+  const sdk = useSdkSession(sessionId);
   const taskPanelOpen = useStore((s) => s.taskPanelOpen);
   const setTaskPanelOpen = useStore((s) => s.setTaskPanelOpen);
   const configMode = useStore((s) => s.taskPanelConfigMode);
   const config = useStore((s) => s.taskPanelConfig);
-
-  // O(1) lookup instead of O(n) .find() per section
-  const sdk = useMemo(() => {
-    const m = new Map<string, SdkSessionInfo>();
-    for (const s of sdkSessions) m.set(s.sessionId, s);
-    return m.get(sessionId);
-  }, [sdkSessions, sessionId]);
 
   if (!taskPanelOpen) return null;
 

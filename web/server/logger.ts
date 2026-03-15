@@ -79,6 +79,7 @@ export class LogFileWriter {
   private logsDir: string;
   private maxLines: number;
   private fd: number;
+  private closed = false;
   private dirCreated = false;
   private initialCleanupTimer: ReturnType<typeof setTimeout> | null = null;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
@@ -127,6 +128,7 @@ export class LogFileWriter {
   }
 
   write(line: string): void {
+    if (this.closed) return;
     try {
       writeSync(this.fd, line + "\n");
     } catch {
@@ -190,6 +192,7 @@ export class LogFileWriter {
   }
 
   close(): void {
+    this.closed = true;
     if (this.initialCleanupTimer) {
       clearTimeout(this.initialCleanupTimer);
       this.initialCleanupTimer = null;
@@ -218,6 +221,9 @@ let fileWriter: LogFileWriter | null = null;
  */
 export function initLogFile(options?: { logsDir?: string; maxLines?: number }): LogFileWriter | null {
   if (!LogFileWriter.isEnabled()) return null;
+  if (fileWriter) {
+    fileWriter.close();
+  }
   fileWriter = new LogFileWriter(options);
   return fileWriter;
 }

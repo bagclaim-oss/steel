@@ -80,6 +80,7 @@ export class LogFileWriter {
   private maxLines: number;
   private fd: number;
   private dirCreated = false;
+  private initialCleanupTimer: ReturnType<typeof setTimeout> | null = null;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(options?: { logsDir?: string; maxLines?: number }) {
@@ -97,8 +98,11 @@ export class LogFileWriter {
     this.fd = openSync(this.filePath, "a");
 
     // Defer initial cleanup so it doesn't block the event loop at startup
-    const initialDelay = setTimeout(() => this.cleanup(), 2000);
-    if (initialDelay.unref) initialDelay.unref();
+    this.initialCleanupTimer = setTimeout(() => {
+      this.initialCleanupTimer = null;
+      this.cleanup();
+    }, 2000);
+    if (this.initialCleanupTimer.unref) this.initialCleanupTimer.unref();
     this.cleanupTimer = setInterval(() => this.cleanup(), LOG_CLEANUP_INTERVAL_MS);
     if (this.cleanupTimer.unref) this.cleanupTimer.unref();
   }
@@ -186,6 +190,10 @@ export class LogFileWriter {
   }
 
   close(): void {
+    if (this.initialCleanupTimer) {
+      clearTimeout(this.initialCleanupTimer);
+      this.initialCleanupTimer = null;
+    }
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = null;

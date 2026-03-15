@@ -82,6 +82,7 @@ export class ClaudeAdapter implements IBackendAdapter {
   /** Whether the CLI has sent the init message (system.init). */
   private initialized = false;
   private protocolDriftSeen = new Set<string>();
+  private parseErrorSeen = new Set<string>();
 
   constructor(
     sessionId: string,
@@ -188,7 +189,7 @@ export class ClaudeAdapter implements IBackendAdapter {
       try {
         msg = JSON.parse(line);
       } catch {
-        reportProtocolDrift(new Set(), {
+        reportProtocolDrift(this.parseErrorSeen, {
           backend: "claude",
           sessionId: this.sessionId,
           direction: "incoming",

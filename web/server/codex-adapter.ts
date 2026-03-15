@@ -194,10 +194,12 @@ export class StdioTransport implements ICodexTransport {
   private writer: WritableStreamDefaultWriter<Uint8Array>;
   private connected = true;
   private buffer = "";
+  private protocolDriftSeen = new Set<string>();
 
   constructor(
     stdin: WritableStream<Uint8Array> | { write(data: Uint8Array): number },
     stdout: ReadableStream<Uint8Array>,
+    private readonly sessionId = "unknown",
   ) {
     // Handle both Bun subprocess stdin types
     let writable: WritableStream<Uint8Array>;
@@ -261,9 +263,9 @@ export class StdioTransport implements ICodexTransport {
       try {
         msg = JSON.parse(trimmed);
       } catch {
-        reportProtocolDrift(new Set(), {
+        reportProtocolDrift(this.protocolDriftSeen, {
           backend: "codex",
-          sessionId: "transport",
+          sessionId: this.sessionId,
           direction: "incoming",
           messageKind: "parse_error",
           messageName: "json-rpc",
@@ -509,6 +511,7 @@ export class CodexAdapter implements IBackendAdapter {
       this.transport = new StdioTransport(
         stdin as WritableStream<Uint8Array> | { write(data: Uint8Array): number },
         stdout as ReadableStream<Uint8Array>,
+        this.sessionId,
       );
 
       // Monitor process exit — when using a subprocess directly,

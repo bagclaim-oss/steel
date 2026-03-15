@@ -240,6 +240,26 @@ describe("Protocol drift handling", () => {
 
     spy.mockRestore();
   });
+
+  it("deduplicates repeated Claude parse-error drift logs", () => {
+    const spy = vi.spyOn(log, "warn").mockImplementation(() => {});
+
+    adapter.handleRawMessage("not-json\nstill-not-json\n");
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(
+      "protocol-monitor",
+      "Backend protocol drift detected",
+      expect.objectContaining({
+        backend: "claude",
+        sessionId: "sess-1",
+        messageKind: "parse_error",
+        messageName: "ndjson",
+      }),
+    );
+
+    spy.mockRestore();
+  });
 });
 
 // ─── Connection lifecycle ───────────────────────────────────────────────────

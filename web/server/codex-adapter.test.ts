@@ -3035,7 +3035,7 @@ describe("CodexAdapter", () => {
     stdout.push(JSON.stringify({ id: 2, result: { thread: { id: "thr_123" } } }) + "\n");
     await new Promise((r) => setTimeout(r, 50));
 
-    // Send an unknown request type
+    // Should respond with error (fail-closed)
     stdin.chunks = [];
     stdout.push(JSON.stringify({
       method: "some/unknown/request",
@@ -4266,6 +4266,9 @@ describe("StdioTransport RPC timeout", () => {
       pushResponse(json: object) {
         controller.enqueue(new TextEncoder().encode(JSON.stringify(json) + "\n"));
       },
+      pushRaw(line: string) {
+        controller.enqueue(new TextEncoder().encode(line + "\n"));
+      },
       close() {
         controller.close();
       },
@@ -4315,6 +4318,31 @@ describe("StdioTransport RPC timeout", () => {
 
     await expect(p1).rejects.toThrow("Transport closed");
     await expect(p2).rejects.toThrow("Transport closed");
+  });
+
+  it("deduplicates parse-error drift logs and keeps the real session id", async () => {
+    const streams = createStreams();
+    const transport = new StdioTransport(streams.stdin, streams.stdout, "sess-transport-1");
+    const spy = vi.spyOn(log, "warn").mockImplementation(() => {});
+
+    streams.pushRaw("not-json");
+    streams.pushRaw("still-not-json");
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(
+      "protocol-monitor",
+      "Backend protocol drift detected",
+      expect.objectContaining({
+        backend: "codex",
+        sessionId: "sess-transport-1",
+        messageKind: "parse_error",
+        messageName: "json-rpc",
+      }),
+    );
+
+    spy.mockRestore();
+    void transport;
   });
 
   it("rejects pending RPC calls when companion/wsReconnected notification arrives", async () => {

@@ -1360,6 +1360,9 @@ export class CodexAdapter implements IBackendAdapter {
       case "thread/started":
         // Thread started after init — nothing to emit.
         break;
+      case "thread/status/changed":
+        this.handleThreadStatusChanged(params);
+        break;
       case "thread/tokenUsage/updated":
         this.handleTokenUsageUpdated(params);
         break;
@@ -1903,6 +1906,16 @@ export class CodexAdapter implements IBackendAdapter {
     const toolUseId = `codex-plan-${turnId}-${nextCount}`;
 
     this.emitToolUseTracked(toolUseId, "TodoWrite", { todos });
+  }
+
+  private handleThreadStatusChanged(params: Record<string, unknown>): void {
+    const raw = params.status;
+    const status = typeof raw === "string"
+      ? raw
+      : (raw && typeof raw === "object" && typeof (raw as Record<string, unknown>).type === "string")
+        ? ((raw as Record<string, unknown>).type as string)
+        : null;
+    this.emit({ type: "status_change", status: status === "idle" ? null : status });
   }
 
   private extractPlanTodos(params: Record<string, unknown>, turnId: string): PlanTodo[] {

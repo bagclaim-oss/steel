@@ -3778,6 +3778,21 @@ describe("CodexAdapter with ICodexTransport", () => {
     spy.mockRestore();
   });
 
+  it("handles thread/status/changed without unhandled-notification noise", async () => {
+    const { mock, messages } = await initAdapter();
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mock.pushNotification("thread/status/changed", {
+      threadId: "thr_init",
+      status: { type: "idle" },
+    });
+    await new Promise((r) => setTimeout(r, 20));
+
+    const statusMsgs = messages.filter((m) => m.type === "status_change") as Array<{ status: string | null }>;
+    expect(statusMsgs.some((m) => m.status === null)).toBe(true);
+    expect(spy).not.toHaveBeenCalledWith(expect.stringContaining("Unhandled notification: thread/status/changed"));
+    spy.mockRestore();
+  });
+
   // ── Request handler coverage ──────────────────────────────────────────
 
   it("responds to auth token refresh request with error", async () => {

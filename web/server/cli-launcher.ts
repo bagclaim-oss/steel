@@ -739,6 +739,8 @@ export class CliLauncher {
           (port) => this.claimedCodexWsPorts.has(port),
         );
         this.claimCodexWsPort(proxyConnectPort);
+        // Set immediately after claiming so any downstream failure can release it.
+        info.codexWsPort = proxyConnectPort;
       } catch (err) {
         console.error(`[cli-launcher] Failed to find free port for Codex WS: ${err}`);
         info.state = "exited";
@@ -839,7 +841,9 @@ export class CliLauncher {
 
     // Store WS metadata
     const wsUrl = `ws://127.0.0.1:${proxyConnectPort}`;
-    info.codexWsPort = proxyConnectPort;
+    if (typeof info.codexWsPort !== "number") {
+      info.codexWsPort = proxyConnectPort;
+    }
     info.codexWsUrl = wsUrl;
 
     // Connect to Codex app-server through a Node helper process that uses the

@@ -56,7 +56,6 @@ import { log } from "./logger.js";
 
 const RETRYABLE_BACKEND_MESSAGE_TYPES = new Set<BrowserOutgoingMessage["type"]>([
   "user_message",
-  "permission_response",
   "mcp_get_status",
   "mcp_toggle",
   "mcp_reconnect",

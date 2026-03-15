@@ -1155,10 +1155,16 @@ export class CodexAdapter implements IBackendAdapter {
           this.cleanupAndDisconnect();
         } else {
           this.emit({ type: "error", message: "Codex server busy. Retrying your message..." });
+          // Capture the retry counter at scheduling time so we can detect if a
+          // WS reconnect (which resets state) fired during the backoff window.
+          // Without this guard the stale setTimeout closure would re-inject the
+          // message into a freshly reconnected session, causing a phantom turn.
+          const retrySnapshot = this.reconnectRetryCount;
           setTimeout(() => {
-            this.pendingOutgoing.push(msg);
+            if (this.reconnectRetryCount !== retrySnapshot) return; // stale — reconnect occurred
+            this.pendingOutgoing.unshift(msg);
             this.flushPendingOutgoing();
-          }, 1000 * this.reconnectRetryCount); // Linear backoff: 1s, 2s, 3s...
+          }, 1000 * retrySnapshot); // Linear backoff: 1s, 2s, 3s...
         }
       } else if (errMsg.startsWith("RPC timeout")) {
         this.emit({ type: "error", message: "Codex is not responding. Relaunching session..." });

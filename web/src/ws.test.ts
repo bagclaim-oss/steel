@@ -127,6 +127,23 @@ describe("connectSession", () => {
     expect(first.close).toHaveBeenCalled();
   });
 
+  it("does not clobber the new socket when replaced socket closes later", () => {
+    wsModule.connectSession("s1");
+    const first = lastWs;
+    first.readyState = MockWebSocket.CLOSING;
+
+    wsModule.connectSession("s1");
+    const second = lastWs;
+    expect(second).not.toBe(first);
+
+    first.onclose?.();
+
+    // Old socket close must not drop the replacement socket's state.
+    expect(useStore.getState().connectionStatus.get("s1")).toBe("connecting");
+    wsModule.sendToSession("s1", { type: "interrupt" });
+    expect(second.send).toHaveBeenCalled();
+  });
+
   it("sends session_subscribe with last_seq on open", () => {
     localStorage.setItem("companion:last-seq:s1", "12");
     wsModule.connectSession("s1");

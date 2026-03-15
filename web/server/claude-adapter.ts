@@ -189,14 +189,18 @@ export class ClaudeAdapter implements IBackendAdapter {
       try {
         msg = JSON.parse(line);
       } catch {
-        reportProtocolDrift(this.parseErrorSeen, {
-          backend: "claude",
-          sessionId: this.sessionId,
-          direction: "incoming",
-          messageKind: "parse_error",
-          messageName: "ndjson",
-          rawPreview: line,
-        });
+        reportProtocolDrift(
+          this.parseErrorSeen,
+          {
+            backend: "claude",
+            sessionId: this.sessionId,
+            direction: "incoming",
+            messageKind: "parse_error",
+            messageName: "ndjson",
+            rawPreview: line,
+          },
+          (message) => this.browserMessageCb?.({ type: "error", message }),
+        );
         continue;
       }
 

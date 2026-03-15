@@ -23,6 +23,7 @@ import type {
 } from "./session-types.js";
 import type { RecorderManager } from "./recorder.js";
 import { reportProtocolDrift } from "./protocol-monitor.js";
+import { log } from "./logger.js";
 
 // ─── Codex JSON-RPC Types ─────────────────────────────────────────────────────
 
@@ -147,6 +148,7 @@ export interface ICodexTransport {
   onRequest(handler: (method: string, id: number, params: Record<string, unknown>) => void): void;
   onRawIncoming(cb: (line: string) => void): void;
   onRawOutgoing(cb: (data: string) => void): void;
+  onParseError(cb: (message: string) => void): void;
   isConnected(): boolean;
 }
 
@@ -191,6 +193,7 @@ export class StdioTransport implements ICodexTransport {
   private requestHandler: ((method: string, id: number, params: Record<string, unknown>) => void) | null = null;
   private rawInCb: ((line: string) => void) | null = null;
   private rawOutCb: ((data: string) => void) | null = null;
+  private parseErrorCb: ((message: string) => void) | null = null;
   private writer: WritableStreamDefaultWriter<Uint8Array>;
   private connected = true;
   private buffer = "";
@@ -231,7 +234,10 @@ export class StdioTransport implements ICodexTransport {
         this.processBuffer();
       }
     } catch (err) {
-      console.error("[codex-adapter] stdout reader error:", err);
+      log.error("codex-adapter", "stdout reader error", {
+        sessionId: this.sessionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       this.connected = false;
       // Clear all pending RPC timers and reject promises so callers don't
@@ -263,14 +269,18 @@ export class StdioTransport implements ICodexTransport {
       try {
         msg = JSON.parse(trimmed);
       } catch {
-        reportProtocolDrift(this.protocolDriftSeen, {
-          backend: "codex",
-          sessionId: this.sessionId,
-          direction: "incoming",
-          messageKind: "parse_error",
-          messageName: "json-rpc",
-          rawPreview: trimmed,
-        });
+        reportProtocolDrift(
+          this.protocolDriftSeen,
+          {
+            backend: "codex",
+            sessionId: this.sessionId,
+            direction: "incoming",
+            messageKind: "parse_error",
+            messageName: "json-rpc",
+            rawPreview: trimmed,
+          },
+          (message) => this.parseErrorCb?.(message),
+        );
         continue;
       }
 
@@ -386,6 +396,11 @@ export class StdioTransport implements ICodexTransport {
   /** Register callback for raw outgoing data (before write). */
   onRawOutgoing(cb: (data: string) => void): void {
     this.rawOutCb = cb;
+  }
+
+  /** Register callback for parse error messages to surface to the browser. */
+  onParseError(cb: (message: string) => void): void {
+    this.parseErrorCb = cb;
   }
 
   private async writeRaw(data: string): Promise<void> {
@@ -556,6 +571,11 @@ export class CodexAdapter implements IBackendAdapter {
       });
     }
 
+    // Surface transport-level parse errors to the browser
+    this.transport.onParseError((message) => {
+      this.browserMessageCb?.({ type: "error", message });
+    });
+
     // Start initialization
     this.initialize();
   }
@@ -671,6 +691,11 @@ export class CodexAdapter implements IBackendAdapter {
         recorder.record(this.sessionId, "out", data.trimEnd(), "cli", "codex", cwd);
       });
     }
+
+    // Re-wire parse error surfacing
+    this.transport.onParseError((message) => {
+      this.browserMessageCb?.({ type: "error", message });
+    });
 
     // Re-run initialization (which will resume the thread if threadId is set)
     this.initialize();
@@ -1409,7 +1434,16 @@ export class CodexAdapter implements IBackendAdapter {
         break;
     }
     } catch (err) {
-      console.error(`[codex-adapter] Error handling notification ${method}:`, err);
+      log.error("codex-adapter", `Error handling notification ${method}`, {
+        sessionId: this.sessionId,
+        method,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      this.browserMessageCb?.({
+        type: "error",
+        message: `Codex notification handler crashed on "${method}". Companion may need an update.`,
+      });
     }
   }
 
@@ -1453,7 +1487,16 @@ export class CodexAdapter implements IBackendAdapter {
           break;
       }
     } catch (err) {
-      console.error(`[codex-adapter] Error handling request ${method}:`, err);
+      log.error("codex-adapter", `Error handling request ${method}`, {
+        sessionId: this.sessionId,
+        method,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      this.browserMessageCb?.({
+        type: "error",
+        message: `Codex request handler crashed on "${method}". Companion may need an update.`,
+      });
     }
   }
 

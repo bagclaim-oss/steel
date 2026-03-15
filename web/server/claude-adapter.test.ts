@@ -260,6 +260,23 @@ describe("Protocol drift handling", () => {
 
     spy.mockRestore();
   });
+
+  it("surfaces parse errors to the browser as error messages", () => {
+    // Parse errors should notify the browser so the user sees something
+    // instead of a silent failure.
+    const spy = vi.spyOn(log, "warn").mockImplementation(() => {});
+
+    adapter.handleRawMessage("{{broken-json}}\n");
+
+    expect(browserMessageCb).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "error",
+        message: expect.stringContaining("parse_error"),
+      }),
+    );
+
+    spy.mockRestore();
+  });
 });
 
 // ─── Connection lifecycle ───────────────────────────────────────────────────
@@ -761,11 +778,15 @@ describe("handleRawMessage() — incoming CLI message routing", () => {
   it("malformed JSON lines are skipped without crashing", () => {
     // If a line in the NDJSON cannot be parsed, it should be skipped
     // and subsequent valid lines should still be processed.
+    // The parse error also surfaces as an error message to the browser.
+    const spy = vi.spyOn(log, "warn").mockImplementation(() => {});
     const raw = "not json\n" + makeAssistantMsg();
     adapter.handleRawMessage(raw);
-    // Only the valid assistant message should have been processed
-    expect(browserMessageCb).toHaveBeenCalledOnce();
-    expect(browserMessageCb.mock.calls[0][0].type).toBe("assistant");
+    // Parse error surfaced + valid assistant message processed
+    const calls = browserMessageCb.mock.calls.map((args: any[]) => args[0].type);
+    expect(calls).toContain("error");
+    expect(calls).toContain("assistant");
+    spy.mockRestore();
   });
 });
 

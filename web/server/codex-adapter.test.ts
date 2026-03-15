@@ -3193,6 +3193,7 @@ describe("CodexAdapter with ICodexTransport", () => {
       onRequest: vi.fn((handler) => { requestHandler = handler; }),
       onRawIncoming: vi.fn(),
       onRawOutgoing: vi.fn(),
+      onParseError: vi.fn(),
       isConnected: vi.fn(() => true),
     };
 
@@ -4428,6 +4429,7 @@ describe("CodexAdapter RPC timeout error surfacing", () => {
       onRequest: vi.fn((h) => { reqHandler = h; }),
       onRawIncoming: vi.fn(),
       onRawOutgoing: vi.fn(),
+      onParseError: vi.fn(),
       isConnected: vi.fn(() => true),
     };
 
@@ -4470,6 +4472,7 @@ describe("CodexAdapter RPC timeout error surfacing", () => {
       onRequest: vi.fn((h) => { reqHandler = h; }),
       onRawIncoming: vi.fn(),
       onRawOutgoing: vi.fn(),
+      onParseError: vi.fn(),
       isConnected: vi.fn(() => true),
     };
 
@@ -4510,6 +4513,7 @@ describe("CodexAdapter RPC timeout error surfacing", () => {
       onRequest: vi.fn((h) => { reqHandler = h; }),
       onRawIncoming: vi.fn(),
       onRawOutgoing: vi.fn(),
+      onParseError: vi.fn(),
       isConnected: vi.fn(() => true),
     };
 
@@ -4549,6 +4553,7 @@ describe("CodexAdapter RPC timeout error surfacing", () => {
       onRequest: vi.fn((h) => { reqHandler = h; }),
       onRawIncoming: vi.fn(),
       onRawOutgoing: vi.fn(),
+      onParseError: vi.fn(),
       isConnected: vi.fn(() => true),
     };
 
@@ -4606,6 +4611,7 @@ describe("CodexAdapter WS reconnection handling", () => {
       onRequest: vi.fn(),
       onRawIncoming: vi.fn(),
       onRawOutgoing: vi.fn(),
+      onParseError: vi.fn(),
       isConnected: vi.fn(() => true),
     };
 
@@ -4654,6 +4660,7 @@ describe("CodexAdapter WS reconnection handling", () => {
       onRequest: vi.fn((h: (m: string, id: number, p: Record<string, unknown>) => void) => { reqHandler = h; }),
       onRawIncoming: vi.fn(),
       onRawOutgoing: vi.fn(),
+      onParseError: vi.fn(),
       isConnected: vi.fn(() => true),
     };
 

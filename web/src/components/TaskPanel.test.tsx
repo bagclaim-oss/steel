@@ -504,7 +504,7 @@ describe("TasksSection (Claude Code sessions)", () => {
     });
     render(<TaskPanel sessionId="s1" />);
     expect(screen.getByText("Tasks")).toBeInTheDocument();
-    expect(screen.getByText("No tasks yet")).toBeInTheDocument();
+    expect(screen.getByText("Tasks will appear here as the agent works")).toBeInTheDocument();
   });
 
   it("renders task list with correct completed count", () => {
@@ -606,17 +606,19 @@ describe("GitBranchSection", () => {
       sessions: new Map([["s1", { backend_type: "claude", git_branch: "feat/my-feature" }]]),
     });
     render(<TaskPanel sessionId="s1" />);
-    expect(screen.getByText("Branch")).toBeInTheDocument();
+    expect(screen.getByText("Git Branch")).toBeInTheDocument();
     expect(screen.getByText("feat/my-feature")).toBeInTheDocument();
   });
 
-  it("renders nothing when no branch info is available", () => {
-    // No git_branch means the section should not appear
+  it("renders nothing inside branch section when no branch info is available", () => {
+    // No git_branch means the section content should be empty (header still renders)
     resetStore({
       sessions: new Map([["s1", { backend_type: "claude" }]]),
     });
     render(<TaskPanel sessionId="s1" />);
-    expect(screen.queryByText("Branch")).not.toBeInTheDocument();
+    // The PanelSection header "Git Branch" renders, but no branch name appears
+    expect(screen.getByText("Git Branch")).toBeInTheDocument();
+    expect(screen.queryByText("feat/my-feature")).not.toBeInTheDocument();
   });
 
   it("shows ahead and behind counts", () => {

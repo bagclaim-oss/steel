@@ -34,6 +34,7 @@ vi.mock("./settings-manager.js", () => ({
 }));
 
 import { ClaudeAdapter } from "./claude-adapter.js";
+import { log } from "./logger.js";
 
 // ─── Mock socket factory ────────────────────────────────────────────────────
 
@@ -211,6 +212,34 @@ afterAll(() => {
   console.log = noop;
   console.warn = noop;
   console.error = noop;
+});
+
+describe("Protocol drift handling", () => {
+  it("logs and surfaces unknown Claude message types", () => {
+    const spy = vi.spyOn(log, "warn").mockImplementation(() => {});
+
+    adapter.handleRawMessage(`${JSON.stringify({ type: "brand_new_message", payload: { x: 1 } })}\n`);
+
+    expect(spy).toHaveBeenCalledWith(
+      "protocol-monitor",
+      "Backend protocol drift detected",
+      expect.objectContaining({
+        backend: "claude",
+        sessionId: "sess-1",
+        direction: "incoming",
+        messageKind: "message",
+        messageName: "brand_new_message",
+      }),
+    );
+    expect(browserMessageCb).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "error",
+        message: expect.stringContaining("brand_new_message"),
+      }),
+    );
+
+    spy.mockRestore();
+  });
 });
 
 // ─── Connection lifecycle ───────────────────────────────────────────────────

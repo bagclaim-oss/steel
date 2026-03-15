@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { CodexAdapter, StdioTransport } from "./codex-adapter.js";
 import type { ICodexTransport } from "./codex-adapter.js";
 import type { BrowserIncomingMessage, BrowserOutgoingMessage } from "./session-types.js";
+import { log } from "./logger.js";
 
 // ─── Mock Subprocess ──────────────────────────────────────────────────────────
 
@@ -3019,11 +3020,11 @@ describe("CodexAdapter", () => {
     expect(rateLimitUpdate!.session.codex_rate_limits!.secondary).toBeDefined();
   });
 
-  // ─── Coverage: unhandled request auto-accept ──────────────────────────────
+  // ─── Coverage: unknown request handling ───────────────────────────────────
 
-  it("auto-accepts unknown JSON-RPC requests", async () => {
-    // When Codex sends a request type the adapter doesn't recognize, it should
-    // auto-accept to avoid blocking the Codex process.
+  it("fails closed on unknown JSON-RPC requests", async () => {
+    // Unknown Codex requests should fail closed so new protocol behavior does
+    // not get silently approved by Companion.
     const messages: BrowserIncomingMessage[] = [];
     const adapter = new CodexAdapter(proc as never, "test-session", { model: "o4-mini" });
     adapter.onBrowserMessage((msg) => messages.push(msg));
@@ -3042,12 +3043,16 @@ describe("CodexAdapter", () => {
       params: { foo: "bar" },
     }) + "\n");
     await new Promise((r) => setTimeout(r, 50));
-
+    const lastWrite = stdin.chunks[stdin.chunks.length - 1] ?? "";
+    expect(lastWrite).toContain('"id":950');
+    expect(lastWrite).toContain("Unsupported Codex request method");
+    const errors = messages.filter((m) => m.type === "error") as Array<{ message: string }>;
+    expect(errors.some((m) => m.message.includes("some/unknown/request"))).toBe(true);
     // Should auto-respond with accept
     const allWritten = stdin.chunks.join("");
     const responseLines = allWritten.split("\n").filter((l: string) => l.includes('"id":950'));
     expect(responseLines.length).toBeGreaterThanOrEqual(1);
-    expect(responseLines[0]).toContain('"decision":"accept"');
+    expect(responseLines[0]).toContain("Unsupported Codex request method");
   });
 
   // ─── Coverage: mcpToolCall item/started ───────────────────────────────────
@@ -3768,13 +3773,26 @@ describe("CodexAdapter with ICodexTransport", () => {
     expect(errors[0].message).toBe("something went wrong");
   });
 
-  it("logs unhandled notification methods", async () => {
-    // Unknown notifications (not under account/ or codex/event/) should be logged
-    const { mock } = await initAdapter();
-    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+  it("logs and surfaces unknown notification methods as protocol drift", async () => {
+    // Unknown notifications should be elevated as compatibility warnings so
+    // backend protocol drift is visible in logs and in the session UI.
+    const { mock, messages } = await initAdapter();
+    const spy = vi.spyOn(log, "warn").mockImplementation(() => {});
     mock.pushNotification("some/unknown/method", { data: 1 });
     await new Promise((r) => setTimeout(r, 20));
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining("Unhandled notification: some/unknown/method"));
+    expect(spy).toHaveBeenCalledWith(
+      "protocol-monitor",
+      "Backend protocol drift detected",
+      expect.objectContaining({
+        backend: "codex",
+        sessionId: "test-session-transport",
+        direction: "incoming",
+        messageKind: "notification",
+        messageName: "some/unknown/method",
+      }),
+    );
+    const errors = messages.filter((m) => m.type === "error") as Array<{ message: string }>;
+    expect(errors.some((e) => e.message.includes("some/unknown/method"))).toBe(true);
     spy.mockRestore();
   });
 
@@ -3805,14 +3823,32 @@ describe("CodexAdapter with ICodexTransport", () => {
     expect((resp!.result as { error: string }).error).toBe("not supported");
   });
 
-  it("auto-accepts unknown request methods", async () => {
-    // Unrecognized request methods should be auto-accepted
-    const { mock } = await initAdapter();
+  it("fails closed on unknown request methods and emits a compatibility error", async () => {
+    // Unknown server requests should not be auto-accepted because that can
+    // silently approve new protocol behavior we do not understand yet.
+    const { mock, messages } = await initAdapter();
+    const spy = vi.spyOn(log, "warn").mockImplementation(() => {});
     mock.pushRequest("some/unknown/method", 77, {});
     await new Promise((r) => setTimeout(r, 20));
     const resp = mock.responses.find((r) => r.id === 77);
     expect(resp).toBeTruthy();
-    expect((resp!.result as { decision: string }).decision).toBe("accept");
+    expect(resp!.result).toEqual(
+      expect.objectContaining({ error: expect.stringContaining("Unsupported Codex request method") }),
+    );
+    expect(spy).toHaveBeenCalledWith(
+      "protocol-monitor",
+      "Backend protocol drift detected",
+      expect.objectContaining({
+        backend: "codex",
+        sessionId: "test-session-transport",
+        direction: "incoming",
+        messageKind: "request",
+        messageName: "some/unknown/method",
+      }),
+    );
+    const errors = messages.filter((m) => m.type === "error") as Array<{ message: string }>;
+    expect(errors.some((e) => e.message.includes("some/unknown/method"))).toBe(true);
+    spy.mockRestore();
   });
 
   // ── handleTurnStarted (collaboration mode) ────────────────────────────

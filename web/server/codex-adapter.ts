@@ -22,6 +22,7 @@ import type {
   McpServerConfig,
 } from "./session-types.js";
 import type { RecorderManager } from "./recorder.js";
+import { reportProtocolDrift } from "./protocol-monitor.js";
 
 // ─── Codex JSON-RPC Types ─────────────────────────────────────────────────────
 
@@ -260,7 +261,14 @@ export class StdioTransport implements ICodexTransport {
       try {
         msg = JSON.parse(trimmed);
       } catch {
-        console.warn("[codex-adapter] Failed to parse JSON-RPC:", trimmed.substring(0, 200));
+        reportProtocolDrift(new Set(), {
+          backend: "codex",
+          sessionId: "transport",
+          direction: "incoming",
+          messageKind: "parse_error",
+          messageName: "json-rpc",
+          rawPreview: trimmed,
+        });
         continue;
       }
 
@@ -463,6 +471,7 @@ export class CodexAdapter implements IBackendAdapter {
     secondary: { usedPercent: number; windowDurationMins: number; resetsAt: number } | null;
   } | null = null;
   private static readonly DYNAMIC_TOOL_CALL_TIMEOUT_MS = 120_000;
+  private protocolDriftSeen = new Set<string>();
 
   private getExecutionCwd(): string {
     return this.options.executionCwd || this.options.cwd || "";
@@ -1393,10 +1402,7 @@ export class CodexAdapter implements IBackendAdapter {
         this.handleWsReconnected();
         break;
       default:
-        // Unknown notification, log for debugging
-        if (!method.startsWith("account/") && !method.startsWith("codex/event/")) {
-          console.log(`[codex-adapter] Unhandled notification: ${method}`);
-        }
+        this.reportProtocolDrift("notification", method, { payload: params });
         break;
     }
     } catch (err) {
@@ -1439,9 +1445,8 @@ export class CodexAdapter implements IBackendAdapter {
           this.transport.respond(id, { error: "not supported" });
           break;
         default:
-          console.log(`[codex-adapter] Unhandled request: ${method}`);
-          // Auto-accept unknown requests
-          this.transport.respond(id, { decision: "accept" });
+          this.reportProtocolDrift("request", method, { payload: params, blockedForSafety: true });
+          this.transport.respond(id, { error: `Unsupported Codex request method: ${method}` });
           break;
       }
     } catch (err) {
@@ -2411,6 +2416,27 @@ export class CodexAdapter implements IBackendAdapter {
 
   private emit(msg: BrowserIncomingMessage): void {
     this.browserMessageCb?.(msg);
+  }
+
+  private reportProtocolDrift(
+    messageKind: "notification" | "request",
+    messageName: string,
+    options?: { payload?: Record<string, unknown>; blockedForSafety?: boolean },
+  ): void {
+    reportProtocolDrift(
+      this.protocolDriftSeen,
+      {
+        backend: "codex",
+        sessionId: this.sessionId,
+        direction: "incoming",
+        messageKind,
+        messageName,
+        keys: options?.payload ? Object.keys(options.payload) : undefined,
+        rawPreview: options?.payload ? JSON.stringify(options.payload) : undefined,
+        blockedForSafety: options?.blockedForSafety,
+      },
+      (message) => this.emit({ type: "error", message }),
+    );
   }
 
   private getParentToolUseIdForThread(threadId?: string): string | null {

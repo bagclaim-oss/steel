@@ -825,38 +825,16 @@ export function HomePage() {
   const canSend = text.trim().length > 0 && !sending;
 
   return (
-    <div className="flex-1 h-full flex flex-col items-center px-3 sm:px-6 pb-6 pb-safe overflow-y-auto overscroll-y-contain">
-      <div className="w-full max-w-[720px] my-auto">
-        {/* Logo + Title — minimal, centered */}
-        <div className="flex flex-col items-center mb-6 sm:mb-10">
-          <img src={logoSrc} alt="The Companion" className="w-10 h-10 sm:w-12 sm:h-12 mb-3" />
-          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-cc-fg">
+    <div className="home-layout flex-1 h-full flex flex-col items-center px-3 sm:px-6 pb-6 pb-safe overflow-hidden">
+      {/* ── HERO ZONE: vertically centered, never shifts ── */}
+      <div className="flex-1 flex flex-col items-center justify-center w-full max-w-[720px] min-h-0 shrink">
+        {/* Logo + Title */}
+        <div className="flex flex-col items-center mb-5 sm:mb-8 shrink-0">
+          <img src={logoSrc} alt="The Companion" className="w-10 h-10 sm:w-12 sm:h-12 mb-2.5 home-logo-entrance" />
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-cc-fg home-title-entrance">
             The Companion
           </h1>
         </div>
-
-        {/* Image thumbnails */}
-        {images.length > 0 && (
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            {images.map((img, i) => (
-              <div key={i} className="relative group">
-                <img
-                  src={`data:${img.mediaType};base64,${img.base64}`}
-                  alt={img.name}
-                  className="w-12 h-12 rounded-lg object-cover border border-cc-border"
-                />
-                <button
-                  onClick={() => removeImage(i)}
-                  className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-cc-error text-white flex items-center justify-center text-[10px] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
-                >
-                  <svg viewBox="0 0 16 16" fill="currentColor" className="w-2.5 h-2.5">
-                    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* Hidden file input */}
         <input
@@ -869,8 +847,8 @@ export function HomePage() {
           aria-label="Attach images"
         />
 
-        {/* Main input card — the hero element */}
-        <div className="relative bg-cc-card border border-cc-border rounded-2xl shadow-sm">
+        {/* Main input card — the immovable hero */}
+        <div className="relative w-full bg-cc-card border border-cc-border rounded-2xl shadow-sm shrink-0 home-card-entrance">
           <MentionMenu
             open={mention.mentionMenuOpen}
             loading={mention.promptsLoading}
@@ -880,23 +858,45 @@ export function HomePage() {
             menuRef={mention.mentionMenuRef}
             className="absolute left-2 right-2 bottom-full mb-1"
           />
-          {selectedLinearIssue && (
-            <div className="px-4 pt-3">
-              <div className="inline-flex max-w-full items-center gap-2 rounded-md border border-cc-border bg-cc-hover/60 px-2.5 py-1.5 text-[11px] text-cc-muted">
-                <span className="shrink-0">Linear</span>
-                <span className="font-mono-code shrink-0">{selectedLinearIssue.identifier}</span>
-                <span className="truncate">{selectedLinearIssue.title}</span>
-                <button
-                  type="button"
-                  onClick={() => handleIssueSelect(null)}
-                  className="shrink-0 rounded px-1 text-cc-muted hover:text-cc-fg hover:bg-cc-active transition-colors cursor-pointer"
-                  title="Remove Linear issue"
-                >
-                  ×
-                </button>
-              </div>
+
+          {/* Context badges (Linear issue, images) — inside the card, fixed slot */}
+          {(selectedLinearIssue || images.length > 0) && (
+            <div className="flex items-center gap-2 px-4 pt-3 flex-wrap">
+              {selectedLinearIssue && (
+                <div className="inline-flex max-w-full items-center gap-2 rounded-md border border-cc-border bg-cc-hover/60 px-2.5 py-1.5 text-[11px] text-cc-muted">
+                  <span className="shrink-0">Linear</span>
+                  <span className="font-mono-code shrink-0">{selectedLinearIssue.identifier}</span>
+                  <span className="truncate">{selectedLinearIssue.title}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleIssueSelect(null)}
+                    className="shrink-0 rounded px-1 text-cc-muted hover:text-cc-fg hover:bg-cc-active transition-colors cursor-pointer"
+                    title="Remove Linear issue"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              {images.map((img, i) => (
+                <div key={i} className="relative group">
+                  <img
+                    src={`data:${img.mediaType};base64,${img.base64}`}
+                    alt={img.name}
+                    className="w-10 h-10 rounded-lg object-cover border border-cc-border"
+                  />
+                  <button
+                    onClick={() => removeImage(i)}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-cc-error text-white flex items-center justify-center text-[10px] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
+                  >
+                    <svg viewBox="0 0 16 16" fill="currentColor" className="w-2.5 h-2.5">
+                      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
             </div>
           )}
+
           <textarea
             ref={textareaRef}
             value={text}
@@ -1218,265 +1218,263 @@ export function HomePage() {
           </div>
         </div>
 
-        {/* ── Below-card controls ── */}
-        <div className="mt-3 sm:mt-4 space-y-2">
-
-          {/* Backend toggle */}
-          {backends.length > 1 && (
-            <div className="flex items-center justify-center">
-              <div className="flex items-center bg-cc-hover/50 rounded-lg p-0.5">
-                {backends.map((b) => (
-                  <button
-                    key={b.id}
-                    onClick={() => b.available && switchBackend(b.id as BackendType)}
-                    disabled={!b.available}
-                    title={b.available ? b.name : `${b.name} CLI not found in PATH`}
-                    className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-md transition-colors ${
-                      !b.available
-                        ? "text-cc-muted/40 cursor-not-allowed"
-                        : backend === b.id
-                          ? "bg-cc-card text-cc-fg font-medium shadow-sm cursor-pointer"
-                          : "text-cc-muted hover:text-cc-fg cursor-pointer"
-                    }`}
-                  >
-                    {b.name}
-                    {!b.available && (
-                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3 text-cc-error/60">
-                        <circle cx="8" cy="8" r="6" />
-                        <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" />
-                      </svg>
-                    )}
-                  </button>
-                ))}
+        {/* ── CONTEXT ZONE: scrollable, below the input card, never pushes it ── */}
+        <div className="w-full mt-3 sm:mt-4 shrink-0 max-h-[40vh] overflow-y-auto overscroll-y-contain home-context-zone">
+          <div className="space-y-2">
+            {/* Backend toggle */}
+            {backends.length > 1 && (
+              <div className="flex items-center justify-center">
+                <div className="flex items-center bg-cc-hover/50 rounded-lg p-0.5">
+                  {backends.map((b) => (
+                    <button
+                      key={b.id}
+                      onClick={() => b.available && switchBackend(b.id as BackendType)}
+                      disabled={!b.available}
+                      title={b.available ? b.name : `${b.name} CLI not found in PATH`}
+                      className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-md transition-colors ${
+                        !b.available
+                          ? "text-cc-muted/40 cursor-not-allowed"
+                          : backend === b.id
+                            ? "bg-cc-card text-cc-fg font-medium shadow-sm cursor-pointer"
+                            : "text-cc-muted hover:text-cc-fg cursor-pointer"
+                      }`}
+                    >
+                      {b.name}
+                      {!b.available && (
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3 text-cc-error/60">
+                          <circle cx="8" cy="8" r="6" />
+                          <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* ── Resume: Branch from session (Claude only) ── */}
-          {backend === "claude" && (
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowBranchingControls((v) => !v)}
-                className={`mx-auto flex items-center gap-1.5 px-2 py-1 text-[11px] sm:text-xs rounded-md transition-colors cursor-pointer ${
-                  showBranchingControls
-                    ? "text-cc-primary"
-                    : "text-cc-muted hover:text-cc-fg"
-                }`}
-                aria-expanded={showBranchingControls}
-                aria-controls="branch-from-session-panel"
-              >
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 opacity-60">
-                  <path d="M5 3.5a2 2 0 110 4 2 2 0 010-4zm6 5a2 2 0 110 4 2 2 0 010-4z" />
-                  <path d="M7 5.5h2.5A1.5 1.5 0 0111 7v1" strokeLinecap="round" />
-                </svg>
-                Branch from session
-                <svg
-                  viewBox="0 0 16 16"
-                  fill="currentColor"
-                  className={`w-3 h-3 opacity-40 transition-transform ${showBranchingControls ? "rotate-180" : ""}`}
+            {/* ── Resume: Branch from session (Claude only) ── */}
+            {backend === "claude" && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowBranchingControls((v) => !v)}
+                  className={`mx-auto flex items-center gap-1.5 px-2 py-1 text-[11px] sm:text-xs rounded-md transition-colors cursor-pointer ${
+                    showBranchingControls
+                      ? "text-cc-primary"
+                      : "text-cc-muted hover:text-cc-fg"
+                  }`}
+                  aria-expanded={showBranchingControls}
+                  aria-controls="branch-from-session-panel"
                 >
-                  <path d="M4 6l4 4 4-4" />
-                </svg>
-              </button>
-
-              {/* Accordion panel for branch-from-session */}
-              <div
-                className="accordion-panel"
-                data-open={showBranchingControls ? "true" : "false"}
-              >
-                <div className="accordion-inner" inert={!showBranchingControls || undefined}>
-                  <div
-                    id="branch-from-session-panel"
-                    className="mt-2 px-1 sm:px-2 py-2 space-y-2 rounded-xl border border-cc-border/20 bg-cc-card/30"
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 opacity-60">
+                    <path d="M5 3.5a2 2 0 110 4 2 2 0 010-4zm6 5a2 2 0 110 4 2 2 0 010-4z" />
+                    <path d="M7 5.5h2.5A1.5 1.5 0 0111 7v1" strokeLinecap="round" />
+                  </svg>
+                  Branch from session
+                  <svg
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    className={`w-3 h-3 opacity-40 transition-transform ${showBranchingControls ? "rotate-180" : ""}`}
                   >
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => void loadResumeCandidates()}
-                            disabled={resumeCandidatesLoading}
-                            className="px-2 py-1 rounded-md text-[11px] bg-cc-hover text-cc-muted hover:text-cc-fg transition-colors disabled:opacity-60 cursor-pointer"
-                          >
-                            {resumeCandidatesLoading ? "Refreshing..." : "Refresh detected sessions"}
-                          </button>
-                          {resumeCandidates.length > 0 && (
-                            <span className="text-[11px] text-cc-muted">
-                              Showing {visibleResumeCandidates.length} of {filteredActiveResumeCandidates.length}{" "}
-                              {normalizedResumeSearchQuery
-                                ? "matching"
-                                : (showingRecentOnly ? "recent" : "detected")} Claude session{filteredActiveResumeCandidates.length !== 1 ? "s" : ""}.
-                            </span>
-                          )}
-                          {!showOlderResumeCandidates && hiddenOlderResumeCount > 0 && recentResumeCandidates.length > 0 && (
+                    <path d="M4 6l4 4 4-4" />
+                  </svg>
+                </button>
+
+                {/* Accordion panel for branch-from-session */}
+                <div
+                  className="accordion-panel"
+                  data-open={showBranchingControls ? "true" : "false"}
+                >
+                  <div className="accordion-inner" inert={!showBranchingControls || undefined}>
+                    <div
+                      id="branch-from-session-panel"
+                      className="mt-2 px-1 sm:px-2 py-2 space-y-2 rounded-xl border border-cc-border/20 bg-cc-card/30"
+                    >
+                          <div className="flex flex-wrap items-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => {
-                                setShowOlderResumeCandidates(true);
-                                setVisibleResumeCandidateRows(INITIAL_VISIBLE_SESSION_ROWS);
-                              }}
-                              className="px-2 py-1 rounded-md text-[11px] bg-cc-hover text-cc-muted hover:text-cc-fg transition-colors cursor-pointer"
+                              onClick={() => void loadResumeCandidates()}
+                              disabled={resumeCandidatesLoading}
+                              className="px-2 py-1 rounded-md text-[11px] bg-cc-hover text-cc-muted hover:text-cc-fg transition-colors disabled:opacity-60 cursor-pointer"
                             >
-                              Include older ({hiddenOlderResumeCount})
+                              {resumeCandidatesLoading ? "Refreshing..." : "Refresh detected sessions"}
                             </button>
-                          )}
-                          {showOlderResumeCandidates && recentResumeCandidates.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowOlderResumeCandidates(false);
-                                setVisibleResumeCandidateRows(INITIAL_VISIBLE_SESSION_ROWS);
-                              }}
-                              className="px-2 py-1 rounded-md text-[11px] bg-cc-hover text-cc-muted hover:text-cc-fg transition-colors cursor-pointer"
-                            >
-                              Recent only
-                            </button>
-                          )}
-                        </div>
-                        <label className="block">
-                          <span className="sr-only">Search sessions</span>
-                          <div className="relative">
-                            <svg
-                              viewBox="0 0 16 16"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="1.5"
-                              className="w-3.5 h-3.5 text-cc-muted absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                            >
-                              <circle cx="7" cy="7" r="4.25" />
-                              <path d="M10.25 10.25L14 14" strokeLinecap="round" />
-                            </svg>
-                            <input
-                              type="text"
-                              value={resumeSearchQuery}
-                              onChange={(e) => setResumeSearchQuery(e.target.value)}
-                              placeholder="Search sessions, branch, folder, or ID"
-                              className="w-full bg-cc-card border border-cc-border rounded-md pl-8 pr-2.5 py-1.5 text-xs text-cc-fg placeholder:text-cc-muted focus:outline-none focus:ring-1 focus:ring-cc-primary/40 focus:border-cc-primary/40"
-                            />
-                          </div>
-                        </label>
-                        <p className="text-[11px] text-cc-muted">
-                          <span className="font-medium text-cc-fg">Fork</span> opens a new session that leaves the original untouched.
-                          <span className="mx-1">•</span>
-                          <span className="font-medium text-cc-fg">Continue</span> opens from the same linear thread.
-                        </p>
-                        {resumeCandidatesError && (
-                          <p className="text-[11px] text-cc-error">{resumeCandidatesError}</p>
-                        )}
-                        {!resumeCandidatesLoading && !resumeCandidatesError && filteredActiveResumeCandidates.length === 0 && (
-                          <p className="text-[11px] text-cc-muted">
-                            {normalizedResumeSearchQuery
-                              ? "No sessions match this search."
-                              : "No Claude sessions detected yet."}
-                          </p>
-                        )}
-                        {visibleResumeCandidates.length > 0 && (
-                          <div className="rounded-md border border-cc-border overflow-hidden bg-cc-card/50">
-                            <div className="hidden sm:grid sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_auto] px-2.5 py-1.5 border-b border-cc-border text-[10px] uppercase tracking-wider text-cc-muted">
-                              <span>Session</span>
-                              <span>Project</span>
-                              <span>Branch</span>
-                              <span>Last active</span>
-                              <span className="text-right">Action</span>
-                            </div>
-                            <div className="divide-y divide-cc-border/50">
-                              {visibleResumeCandidates.map((candidate) => {
-                                const title = getResumeCandidateTitle(candidate);
-                                const project = getResumeCandidateProject(candidate.cwd);
-                                const sourceLabel = candidate.source === "companion" ? "Companion" : "Claude";
-                                const selected = trimmedResumeSessionAt === candidate.resumeSessionId;
-                                return (
-                                  <div
-                                    key={`${candidate.resumeSessionId}-row-${candidate.sessionId}`}
-                                    className="px-2 py-2 sm:px-2.5 sm:py-2.5 grid grid-cols-1 gap-1.5 sm:gap-2 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_auto] sm:items-center"
-                                  >
-                                    <div className="min-w-0">
-                                      <p className={`text-xs truncate ${selected ? "text-cc-primary font-medium" : "text-cc-fg"}`}>
-                                        {title}
-                                      </p>
-                                      <div className="mt-0.5 flex items-center gap-1.5 text-[10px]">
-                                        <span className="font-mono-code text-cc-muted">{shortSessionId(candidate.resumeSessionId)}</span>
-                                        <span className="px-1 py-0.5 rounded bg-cc-hover text-cc-muted">{sourceLabel}</span>
-                                      </div>
-                                    </div>
-                                    <div className="min-w-0 text-[11px] text-cc-muted sm:font-mono-code truncate" title={candidate.cwd}>
-                                      <div className="truncate">{project}</div>
-                                      <div className="mt-0.5 text-[10px] text-cc-muted/70 truncate" title={candidate.cwd}>
-                                        {formatPathTail(candidate.cwd)}
-                                      </div>
-                                    </div>
-                                    <div className="text-[11px] text-cc-muted sm:font-mono-code truncate">
-                                      {candidate.gitBranch || "\u2014"}
-                                    </div>
-                                    <div className="text-[11px] text-cc-muted">
-                                      {formatTimeAgo(candidate.createdAt)}
-                                    </div>
-                                    <div className="sm:text-right flex gap-1.5 sm:justify-end">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setResumeSessionAt(candidate.resumeSessionId);
-                                          setForkSession(true);
-                                          void handleOpenBranchedSession(candidate, true);
-                                        }}
-                                        aria-label={`Fork and open ${title}`}
-                                        className={`px-2 py-1 rounded-md text-[11px] border transition-colors cursor-pointer ${
-                                          selected && forkSession
-                                            ? "border-cc-primary/40 bg-cc-primary/10 text-cc-primary"
-                                            : "border-cc-border bg-cc-card text-cc-muted hover:text-cc-fg hover:bg-cc-hover"
-                                        }`}
-                                        title={`Fork and open now\n${candidate.cwd}${candidate.gitBranch ? ` (${candidate.gitBranch})` : ""}\n${candidate.resumeSessionId}`}
-                                      >
-                                        Fork
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setResumeSessionAt(candidate.resumeSessionId);
-                                          setForkSession(false);
-                                          void handleOpenBranchedSession(candidate, false);
-                                        }}
-                                        aria-label={`Continue and open ${title}`}
-                                        className={`px-2 py-1 rounded-md text-[11px] border transition-colors cursor-pointer ${
-                                          selected && !forkSession
-                                            ? "border-cc-primary/40 bg-cc-primary/10 text-cc-primary"
-                                            : "border-cc-border bg-cc-card text-cc-muted hover:text-cc-fg hover:bg-cc-hover"
-                                        }`}
-                                        title={`Continue and open now\n${candidate.resumeSessionId}`}
-                                      >
-                                        Continue
-                                      </button>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            {hasMoreResumeCandidates && (
-                              <div className="px-2.5 py-2 border-t border-cc-border bg-cc-card/40">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setVisibleResumeCandidateRows((count) =>
-                                      Math.min(count + LOAD_MORE_SESSION_ROWS, filteredActiveResumeCandidates.length)
-                                    )}
-                                  className="px-2 py-1 rounded-md text-[11px] bg-cc-hover text-cc-muted hover:text-cc-fg transition-colors cursor-pointer"
-                                >
-                                  Load more ({filteredActiveResumeCandidates.length - visibleResumeCandidateRows} remaining)
-                                </button>
-                              </div>
+                            {resumeCandidates.length > 0 && (
+                              <span className="text-[11px] text-cc-muted">
+                                Showing {visibleResumeCandidates.length} of {filteredActiveResumeCandidates.length}{" "}
+                                {normalizedResumeSearchQuery
+                                  ? "matching"
+                                  : (showingRecentOnly ? "recent" : "detected")} Claude session{filteredActiveResumeCandidates.length !== 1 ? "s" : ""}.
+                              </span>
+                            )}
+                            {!showOlderResumeCandidates && hiddenOlderResumeCount > 0 && recentResumeCandidates.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowOlderResumeCandidates(true);
+                                  setVisibleResumeCandidateRows(INITIAL_VISIBLE_SESSION_ROWS);
+                                }}
+                                className="px-2 py-1 rounded-md text-[11px] bg-cc-hover text-cc-muted hover:text-cc-fg transition-colors cursor-pointer"
+                              >
+                                Include older ({hiddenOlderResumeCount})
+                              </button>
+                            )}
+                            {showOlderResumeCandidates && recentResumeCandidates.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowOlderResumeCandidates(false);
+                                  setVisibleResumeCandidateRows(INITIAL_VISIBLE_SESSION_ROWS);
+                                }}
+                                className="px-2 py-1 rounded-md text-[11px] bg-cc-hover text-cc-muted hover:text-cc-fg transition-colors cursor-pointer"
+                              >
+                                Recent only
+                              </button>
                             )}
                           </div>
-                        )}
-                        <p className="text-[11px] text-cc-muted">
-                          Fork/Continue opens the session immediately, then you can type directly in chat.
-                          Send from Home still starts a normal new session with your typed prompt.
-                        </p>
+                          <label className="block">
+                            <span className="sr-only">Search sessions</span>
+                            <div className="relative">
+                              <svg
+                                viewBox="0 0 16 16"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                                className="w-3.5 h-3.5 text-cc-muted absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                              >
+                                <circle cx="7" cy="7" r="4.25" />
+                                <path d="M10.25 10.25L14 14" strokeLinecap="round" />
+                              </svg>
+                              <input
+                                type="text"
+                                value={resumeSearchQuery}
+                                onChange={(e) => setResumeSearchQuery(e.target.value)}
+                                placeholder="Search sessions, branch, folder, or ID"
+                                className="w-full bg-cc-card border border-cc-border rounded-md pl-8 pr-2.5 py-1.5 text-xs text-cc-fg placeholder:text-cc-muted focus:outline-none focus:ring-1 focus:ring-cc-primary/40 focus:border-cc-primary/40"
+                              />
+                            </div>
+                          </label>
+                          <p className="text-[11px] text-cc-muted">
+                            <span className="font-medium text-cc-fg">Fork</span> opens a new session that leaves the original untouched.
+                            <span className="mx-1">•</span>
+                            <span className="font-medium text-cc-fg">Continue</span> opens from the same linear thread.
+                          </p>
+                          {resumeCandidatesError && (
+                            <p className="text-[11px] text-cc-error">{resumeCandidatesError}</p>
+                          )}
+                          {!resumeCandidatesLoading && !resumeCandidatesError && filteredActiveResumeCandidates.length === 0 && (
+                            <p className="text-[11px] text-cc-muted">
+                              {normalizedResumeSearchQuery
+                                ? "No sessions match this search."
+                                : "No Claude sessions detected yet."}
+                            </p>
+                          )}
+                          {visibleResumeCandidates.length > 0 && (
+                            <div className="rounded-md border border-cc-border overflow-hidden bg-cc-card/50">
+                              <div className="hidden sm:grid sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_auto] px-2.5 py-1.5 border-b border-cc-border text-[10px] uppercase tracking-wider text-cc-muted">
+                                <span>Session</span>
+                                <span>Project</span>
+                                <span>Branch</span>
+                                <span>Last active</span>
+                                <span className="text-right">Action</span>
+                              </div>
+                              <div className="divide-y divide-cc-border/50">
+                                {visibleResumeCandidates.map((candidate) => {
+                                  const title = getResumeCandidateTitle(candidate);
+                                  const project = getResumeCandidateProject(candidate.cwd);
+                                  const sourceLabel = candidate.source === "companion" ? "Companion" : "Claude";
+                                  const selected = trimmedResumeSessionAt === candidate.resumeSessionId;
+                                  return (
+                                    <div
+                                      key={`${candidate.resumeSessionId}-row-${candidate.sessionId}`}
+                                      className="px-2 py-2 sm:px-2.5 sm:py-2.5 grid grid-cols-1 gap-1.5 sm:gap-2 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_auto] sm:items-center"
+                                    >
+                                      <div className="min-w-0">
+                                        <p className={`text-xs truncate ${selected ? "text-cc-primary font-medium" : "text-cc-fg"}`}>
+                                          {title}
+                                        </p>
+                                        <div className="mt-0.5 flex items-center gap-1.5 text-[10px]">
+                                          <span className="font-mono-code text-cc-muted">{shortSessionId(candidate.resumeSessionId)}</span>
+                                          <span className="px-1 py-0.5 rounded bg-cc-hover text-cc-muted">{sourceLabel}</span>
+                                        </div>
+                                      </div>
+                                      <div className="min-w-0 text-[11px] text-cc-muted sm:font-mono-code truncate" title={candidate.cwd}>
+                                        <div className="truncate">{project}</div>
+                                        <div className="mt-0.5 text-[10px] text-cc-muted/70 truncate" title={candidate.cwd}>
+                                          {formatPathTail(candidate.cwd)}
+                                        </div>
+                                      </div>
+                                      <div className="text-[11px] text-cc-muted sm:font-mono-code truncate">
+                                        {candidate.gitBranch || "\u2014"}
+                                      </div>
+                                      <div className="text-[11px] text-cc-muted">
+                                        {formatTimeAgo(candidate.createdAt)}
+                                      </div>
+                                      <div className="sm:text-right flex gap-1.5 sm:justify-end">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setResumeSessionAt(candidate.resumeSessionId);
+                                            setForkSession(true);
+                                            void handleOpenBranchedSession(candidate, true);
+                                          }}
+                                          aria-label={`Fork and open ${title}`}
+                                          className={`px-2 py-1 rounded-md text-[11px] border transition-colors cursor-pointer ${
+                                            selected && forkSession
+                                              ? "border-cc-primary/40 bg-cc-primary/10 text-cc-primary"
+                                              : "border-cc-border bg-cc-card text-cc-muted hover:text-cc-fg hover:bg-cc-hover"
+                                          }`}
+                                          title={`Fork and open now\n${candidate.cwd}${candidate.gitBranch ? ` (${candidate.gitBranch})` : ""}\n${candidate.resumeSessionId}`}
+                                        >
+                                          Fork
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setResumeSessionAt(candidate.resumeSessionId);
+                                            setForkSession(false);
+                                            void handleOpenBranchedSession(candidate, false);
+                                          }}
+                                          aria-label={`Continue and open ${title}`}
+                                          className={`px-2 py-1 rounded-md text-[11px] border transition-colors cursor-pointer ${
+                                            selected && !forkSession
+                                              ? "border-cc-primary/40 bg-cc-primary/10 text-cc-primary"
+                                              : "border-cc-border bg-cc-card text-cc-muted hover:text-cc-fg hover:bg-cc-hover"
+                                          }`}
+                                          title={`Continue and open now\n${candidate.resumeSessionId}`}
+                                        >
+                                          Continue
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              {hasMoreResumeCandidates && (
+                                <div className="px-2.5 py-2 border-t border-cc-border bg-cc-card/40">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setVisibleResumeCandidateRows((count) =>
+                                        Math.min(count + LOAD_MORE_SESSION_ROWS, filteredActiveResumeCandidates.length)
+                                      )}
+                                    className="px-2 py-1 rounded-md text-[11px] bg-cc-hover text-cc-muted hover:text-cc-fg transition-colors cursor-pointer"
+                                  >
+                                    Load more ({filteredActiveResumeCandidates.length - visibleResumeCandidateRows} remaining)
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          <p className="text-[11px] text-cc-muted">
+                            Fork/Continue opens the session immediately, then you can type directly in chat.
+                            Send from Home still starts a normal new session with your typed prompt.
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-            )}
-
-
+              )}
 
             {/* Onboarding tip — shown once for new users */}
             {showOnboardingTip && (
@@ -1514,70 +1512,71 @@ export function HomePage() {
               onBranchFromIssue={handleBranchFromIssue}
               onConnectionSelect={setSelectedLinearConnectionId}
             />
-          </div>
 
-        {/* Branch behind remote warning */}
-        {pullPrompt && (
-          <div className="mt-3 p-3 rounded-[10px] bg-amber-500/10 border border-amber-500/20">
-            <div className="flex items-start gap-2.5">
-              <svg viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4 text-amber-500 shrink-0 mt-0.5">
-                <path d="M8.982 1.566a1.13 1.13 0 00-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 01-1.1 0L7.1 5.995A.905.905 0 018 5zm.002 6a1 1 0 110 2 1 1 0 010-2z" />
-              </svg>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-cc-fg leading-snug">
-                  <span className="font-mono-code font-medium">{pullPrompt.branchName}</span> is{" "}
-                  <span className="font-semibold text-amber-500">{pullPrompt.behind} commit{pullPrompt.behind !== 1 ? "s" : ""} behind</span>{" "}
-                  remote. Pull before starting?
-                </p>
-                {pullError && (
-                  <div className="mt-2 px-2 py-1.5 rounded-md bg-cc-error/10 border border-cc-error/20 text-[11px] text-cc-error font-mono-code whitespace-pre-wrap">
-                    {pullError}
-                  </div>
-                )}
-                <div className="flex flex-wrap gap-2 mt-2.5">
-                  <button
-                    onClick={handleCancelPull}
-                    disabled={pulling}
-                    className="px-2.5 py-1 text-[11px] font-medium rounded-md bg-cc-hover text-cc-muted hover:text-cc-fg transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSkipPull}
-                    disabled={pulling}
-                    className="px-2.5 py-1 text-[11px] font-medium rounded-md bg-cc-hover text-cc-muted hover:text-cc-fg transition-colors cursor-pointer"
-                  >
-                    Continue anyway
-                  </button>
-                  <button
-                    onClick={handlePullAndContinue}
-                    disabled={pulling}
-                    className="px-2.5 py-1 text-[11px] font-medium rounded-md bg-cc-primary/15 text-cc-primary hover:bg-cc-primary/25 transition-colors cursor-pointer flex items-center gap-1.5"
-                  >
-                    {pulling ? (
-                      <>
-                        <span className="w-3 h-3 border-2 border-cc-primary/30 border-t-cc-primary rounded-full animate-spin" />
-                        Pulling...
-                      </>
-                    ) : (
-                      "Pull and continue"
+            {/* Branch behind remote warning */}
+            {pullPrompt && (
+              <div className="p-3 rounded-[10px] bg-amber-500/10 border border-amber-500/20">
+                <div className="flex items-start gap-2.5">
+                  <svg viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4 text-amber-500 shrink-0 mt-0.5">
+                    <path d="M8.982 1.566a1.13 1.13 0 00-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 01-1.1 0L7.1 5.995A.905.905 0 018 5zm.002 6a1 1 0 110 2 1 1 0 010-2z" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-cc-fg leading-snug">
+                      <span className="font-mono-code font-medium">{pullPrompt.branchName}</span> is{" "}
+                      <span className="font-semibold text-amber-500">{pullPrompt.behind} commit{pullPrompt.behind !== 1 ? "s" : ""} behind</span>{" "}
+                      remote. Pull before starting?
+                    </p>
+                    {pullError && (
+                      <div className="mt-2 px-2 py-1.5 rounded-md bg-cc-error/10 border border-cc-error/20 text-[11px] text-cc-error font-mono-code whitespace-pre-wrap">
+                        {pullError}
+                      </div>
                     )}
-                  </button>
+                    <div className="flex flex-wrap gap-2 mt-2.5">
+                      <button
+                        onClick={handleCancelPull}
+                        disabled={pulling}
+                        className="px-2.5 py-1 text-[11px] font-medium rounded-md bg-cc-hover text-cc-muted hover:text-cc-fg transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSkipPull}
+                        disabled={pulling}
+                        className="px-2.5 py-1 text-[11px] font-medium rounded-md bg-cc-hover text-cc-muted hover:text-cc-fg transition-colors cursor-pointer"
+                      >
+                        Continue anyway
+                      </button>
+                      <button
+                        onClick={handlePullAndContinue}
+                        disabled={pulling}
+                        className="px-2.5 py-1 text-[11px] font-medium rounded-md bg-cc-primary/15 text-cc-primary hover:bg-cc-primary/25 transition-colors cursor-pointer flex items-center gap-1.5"
+                      >
+                        {pulling ? (
+                          <>
+                            <span className="w-3 h-3 border-2 border-cc-primary/30 border-t-cc-primary rounded-full animate-spin" />
+                            Pulling...
+                          </>
+                        ) : (
+                          "Pull and continue"
+                        )}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        {/* Error message */}
-        {error && (
-          <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-cc-error/5 border border-cc-error/20">
-            <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 text-cc-error shrink-0">
-              <path fillRule="evenodd" d="M8 15A7 7 0 108 1a7 7 0 000 14zm1-3a1 1 0 11-2 0 1 1 0 012 0zM7.5 5.5a.5.5 0 011 0v3a.5.5 0 01-1 0v-3z" clipRule="evenodd" />
-            </svg>
-            <p className="text-xs text-cc-error">{error}</p>
+            {/* Error message */}
+            {error && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-cc-error/5 border border-cc-error/20">
+                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 text-cc-error shrink-0">
+                  <path fillRule="evenodd" d="M8 15A7 7 0 108 1a7 7 0 000 14zm1-3a1 1 0 11-2 0 1 1 0 012 0zM7.5 5.5a.5.5 0 011 0v3a.5.5 0 01-1 0v-3z" clipRule="evenodd" />
+                </svg>
+                <p className="text-xs text-cc-error">{error}</p>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Environment manager modal */}

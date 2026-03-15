@@ -119,6 +119,60 @@
   100% { box-shadow: 0 0 0 0 transparent; }
 }
 
+/* ─── Home page entrance animations ──────────────────────────────────────── */
+@keyframes home-logo-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes home-title-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes home-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.home-logo-entrance {
+  animation: home-logo-in 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.home-title-entrance {
+  animation: home-title-in 400ms cubic-bezier(0.16, 1, 0.3, 1) 80ms both;
+}
+
+.home-card-entrance {
+  animation: home-card-in 450ms cubic-bezier(0.16, 1, 0.3, 1) 150ms both;
+}
+
+/* Context zone below the input — fades in after the card */
+.home-context-zone {
+  animation: fadeIn 300ms ease-out 350ms both;
+  /* Subtle top fade to hint at scrollability */
+  mask-image: linear-gradient(to bottom, transparent 0px, black 4px, black calc(100% - 4px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 4px, black calc(100% - 4px), transparent 100%);
+}
+
 /* Accordion reveal — CSS-only smooth expand/collapse using grid rows.
    Apply .accordion-panel to the wrapper, toggle data-open="true" to expand.
    The inner child (.accordion-inner) handles overflow clipping. */

@@ -1485,8 +1485,10 @@ export function HomePage() {
                   <path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM0 8a8 8 0 1116 0A8 8 0 010 8zm6.5-.25A.75.75 0 017.25 7h1a.75.75 0 01.75.75v2.75h.25a.75.75 0 010 1.5h-2a.75.75 0 010-1.5h.25v-2h-.25a.75.75 0 01-.75-.75zM8 6a1 1 0 110-2 1 1 0 010 2z" />
                 </svg>
                 <span className="flex-1">
-                  The toolbar sets where your code lives, which model to use, and how the session runs.{" "}
-                  <strong className="text-cc-fg">Branch from session</strong> below lets you fork or continue a previous Claude session.
+                  The toolbar sets where your code lives, which model to use, and how the session runs.
+                  {backend === "claude" && (
+                    <>{" "}<strong className="text-cc-fg">Branch from session</strong> below lets you fork or continue a previous Claude session.</>
+                  )}
                 </span>
                 <button
                   onClick={() => {

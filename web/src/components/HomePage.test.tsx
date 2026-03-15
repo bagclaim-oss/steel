@@ -1525,5 +1525,19 @@ describe("HomePage", () => {
       expect(screen.queryByText(/sets where your code lives/)).not.toBeInTheDocument();
       expect(localStorage.getItem("cc-onboarding-dismissed")).toBe("true");
     });
+
+    it("does not mention Branch from session when backend is codex", async () => {
+      // The onboarding tip conditionally shows the "Branch from session"
+      // sentence only for Claude backend. Codex users should not see it
+      // since the branching feature is Claude-only.
+      localStorage.setItem("cc-backend", "codex");
+      render(<HomePage />);
+      await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
+
+      // The tip itself should still render (toolbar explanation)
+      expect(screen.getByText(/sets where your code lives/)).toBeInTheDocument();
+      // But the Claude-only sentence should be absent
+      expect(screen.queryByText(/branch from session/i)).not.toBeInTheDocument();
+    });
   });
 });

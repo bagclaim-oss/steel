@@ -825,8 +825,8 @@ export function HomePage() {
   const canSend = text.trim().length > 0 && !sending;
 
   return (
-    <div className="flex-1 h-full flex flex-col items-center justify-center px-3 sm:px-6 pb-6 pb-safe overflow-y-auto overscroll-y-contain">
-      <div className="w-full max-w-[720px]">
+    <div className="flex-1 h-full flex flex-col items-center px-3 sm:px-6 pb-6 pb-safe overflow-y-auto overscroll-y-contain">
+      <div className="w-full max-w-[720px] my-auto">
         {/* Logo + Title — minimal, centered */}
         <div className="flex flex-col items-center mb-6 sm:mb-10">
           <img src={logoSrc} alt="The Companion" className="w-10 h-10 sm:w-12 sm:h-12 mb-3" />

@@ -22,7 +22,7 @@ function shouldReconnectSession(sessionId: string): boolean {
   const sdkSession = store.sdkSessions.find((s) => s.sessionId === sessionId);
   if (sdkSession) return !sdkSession.archived;
   // Fallback for freshly-created sessions that may not be in sdkSessions yet.
-  return store.currentSessionId === sessionId || store.sessions.has(sessionId);
+  return store.currentSessionId === sessionId;
 }
 
 function getReconnectCandidates(): string[] {
@@ -32,7 +32,6 @@ function getReconnectCandidates(): string[] {
     if (!s.archived) ids.add(s.sessionId);
   }
   if (store.currentSessionId) ids.add(store.currentSessionId);
-  for (const id of store.sessions.keys()) ids.add(id);
   return Array.from(ids);
 }
 
@@ -1021,6 +1020,8 @@ export function connectSession(sessionId: string) {
   ws.onmessage = (event) => handleMessage(sessionId, event);
 
   ws.onclose = () => {
+    // Guard against stale close events from a replaced socket.
+    if (sockets.get(sessionId) !== ws) return;
     sockets.delete(sessionId);
     useStore.getState().setConnectionStatus(sessionId, "disconnected");
     scheduleReconnect(sessionId);

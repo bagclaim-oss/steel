@@ -198,6 +198,31 @@ describe("sendToSession", () => {
     expect(payload.type).toBe("interrupt");
     expect(typeof payload.client_msg_id).toBe("string");
   });
+
+  it("queues idempotent messages until the socket is open, then flushes them", () => {
+    wsModule.connectSession("s1");
+    lastWs.readyState = MockWebSocket.CONNECTING;
+
+    wsModule.sendToSession("s1", {
+      type: "user_message",
+      content: "hello from queue",
+    });
+
+    expect(lastWs.send).not.toHaveBeenCalled();
+
+    lastWs.readyState = MockWebSocket.OPEN;
+    lastWs.onopen?.(new Event("open"));
+
+    expect(lastWs.send).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(lastWs.send.mock.calls[0][0])).toEqual({
+      type: "session_subscribe",
+      last_seq: 0,
+    });
+    const payload = JSON.parse(lastWs.send.mock.calls[1][0]);
+    expect(payload.type).toBe("user_message");
+    expect(payload.content).toBe("hello from queue");
+    expect(typeof payload.client_msg_id).toBe("string");
+  });
 });
 
 // ===========================================================================

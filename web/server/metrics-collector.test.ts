@@ -373,6 +373,28 @@ describe("edge cases", () => {
     expect(snap.histograms.turnDurationMs.count).toBe(0);
   });
 
+  it("cleans up orphaned permission timers on session exit", () => {
+    // Record a permission request tied to a session, then exit without resolving
+    collector.recordPermissionRequested("perm-1", "s1");
+    collector.recordPermissionRequested("perm-2", "s1");
+    collector.recordPermissionRequested("perm-3", "s2"); // different session
+
+    companionBus.emit("session:exited", { sessionId: "s1", exitCode: 0 });
+
+    // Resolving perm-1 and perm-2 should NOT record a duration (cleaned up on exit)
+    collector.recordPermissionResolved("perm-1", "allow", false);
+    collector.recordPermissionResolved("perm-2", "deny", false);
+
+    const snap = collector.getSnapshot();
+    // No duration should have been recorded for perm-1/perm-2
+    expect(snap.histograms.permissionDurationMs.count).toBe(0);
+
+    // perm-3 from s2 should still be resolvable
+    collector.recordPermissionResolved("perm-3", "allow", false);
+    const snap2 = collector.getSnapshot();
+    expect(snap2.histograms.permissionDurationMs.count).toBe(1);
+  });
+
   it("handles very large histogram values (overflow bucket)", () => {
     vi.useFakeTimers();
 

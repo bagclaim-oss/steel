@@ -58,6 +58,7 @@ describe("logger", () => {
     it("handles messages without data", () => {
       const spy = vi.spyOn(console, "log").mockImplementation(() => {});
       log.info("server", "Started");
+      expect(spy).toHaveBeenCalledOnce();
       const output = spy.mock.calls[0][0] as string;
       expect(output).toBe("[server] Started");
       spy.mockRestore();
@@ -74,6 +75,7 @@ describe("logger", () => {
     it("outputs valid JSON with required fields", () => {
       const spy = vi.spyOn(console, "log").mockImplementation(() => {});
       log.info("ws-bridge", "CLI connected", { sessionId: "s1" });
+      expect(spy).toHaveBeenCalledOnce();
       const output = spy.mock.calls[0][0] as string;
       const parsed = JSON.parse(output);
       expect(parsed.level).toBe("info");
@@ -81,6 +83,25 @@ describe("logger", () => {
       expect(parsed.msg).toBe("CLI connected");
       expect(parsed.sessionId).toBe("s1");
       expect(parsed.ts).toBeDefined();
+      spy.mockRestore();
+    });
+
+    it("core metadata fields cannot be overwritten by caller data", () => {
+      // Caller-supplied keys with names matching core fields should not
+      // overwrite ts, level, module, or msg.
+      const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+      log.info("real-module", "real message", {
+        level: "error" as any,
+        module: "evil",
+        msg: "overwritten",
+        ts: "tampered",
+      });
+      expect(spy).toHaveBeenCalledOnce();
+      const parsed = JSON.parse(spy.mock.calls[0][0] as string);
+      expect(parsed.level).toBe("info");
+      expect(parsed.module).toBe("real-module");
+      expect(parsed.msg).toBe("real message");
+      expect(parsed.ts).not.toBe("tampered");
       spy.mockRestore();
     });
   });

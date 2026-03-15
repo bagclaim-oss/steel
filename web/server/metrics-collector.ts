@@ -22,7 +22,7 @@ interface Histogram {
   sum: number;
   min: number;
   max: number;
-  /** Cumulative bucket counts. buckets[i] = count of values <= TIMING_BUCKETS_MS[i]. */
+  /** Frequency bucket counts. buckets[i] = count of values in (TIMING_BUCKETS_MS[i-1], TIMING_BUCKETS_MS[i]]. */
   buckets: number[];
 }
 
@@ -117,6 +117,8 @@ export class MetricsCollector {
   private sessionSpawnedAt = new Map<string, number>();
   private turnStartedAt = new Map<string, number>();
   private permissionRequestedAt = new Map<string, number>();
+  /** Maps requestId → sessionId so permission timers can be cleaned up on session exit. */
+  private permissionRequestToSession = new Map<string, string>();
 
   // Event bus unsubscribers (for cleanup in tests)
   private unsubscribers: (() => void)[] = [];
@@ -152,6 +154,14 @@ export class MetricsCollector {
         // Clean up ephemeral timing state
         this.sessionSpawnedAt.delete(sessionId);
         this.turnStartedAt.delete(sessionId);
+
+        // Evict orphaned permission timers for this session
+        for (const [reqId, sid] of this.permissionRequestToSession) {
+          if (sid === sessionId) {
+            this.permissionRequestedAt.delete(reqId);
+            this.permissionRequestToSession.delete(reqId);
+          }
+        }
       }),
 
       companionBus.on("message:result", ({ sessionId }) => {
@@ -190,9 +200,12 @@ export class MetricsCollector {
     this.turnStartedAt.set(sessionId, Date.now());
   }
 
-  recordPermissionRequested(requestId: string): void {
+  recordPermissionRequested(requestId: string, sessionId?: string): void {
     this.permissions.total++;
     this.permissionRequestedAt.set(requestId, Date.now());
+    if (sessionId) {
+      this.permissionRequestToSession.set(requestId, sessionId);
+    }
   }
 
   recordPermissionResolved(requestId: string, behavior: "allow" | "deny", isAutomatic: boolean): void {
@@ -208,6 +221,7 @@ export class MetricsCollector {
     if (requested != null) {
       recordHistogramValue(this.permissionDuration, Date.now() - requested);
       this.permissionRequestedAt.delete(requestId);
+      this.permissionRequestToSession.delete(requestId);
     }
   }
 
@@ -322,6 +336,7 @@ export class MetricsCollector {
     this.sessionSpawnedAt.clear();
     this.turnStartedAt.clear();
     this.permissionRequestedAt.clear();
+    this.permissionRequestToSession.clear();
   }
 
   /** Unsubscribe from all event bus listeners. */

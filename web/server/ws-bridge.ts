@@ -494,7 +494,7 @@ export class WsBridge {
       // -- permission_request: AI validation, add to pending ---------------
       if (msg.type === "permission_request") {
         const perm = msg.request;
-        metricsCollector.recordPermissionRequested(perm.request_id);
+        metricsCollector.recordPermissionRequested(perm.request_id, session.id);
 
         // AI Validation Mode: evaluate the tool call before showing to user
         const aiSettings = getEffectiveAiValidation(session.state);

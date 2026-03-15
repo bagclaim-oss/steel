@@ -82,9 +82,9 @@ export interface HistogramSnapshot {
   count: number;
   /** Sum of all observed values. */
   sum: number;
-  /** Minimum observed value (Infinity if no observations). */
+  /** Minimum observed value (0 if no observations). */
   min: number;
-  /** Maximum observed value (-Infinity if no observations). */
+  /** Maximum observed value (0 if no observations). */
   max: number;
   /** Average (0 if no observations). */
   avg: number;

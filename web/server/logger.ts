@@ -23,11 +23,11 @@ const STRUCTURED = process.env.COMPANION_LOG_FORMAT === "json";
 function formatEntry(level: LogLevel, module: string, msg: string, data?: Record<string, unknown>): string {
   if (STRUCTURED) {
     const entry: LogEntry = {
+      ...data,
       ts: new Date().toISOString(),
       level,
       module,
       msg,
-      ...data,
     };
     return JSON.stringify(entry);
   }

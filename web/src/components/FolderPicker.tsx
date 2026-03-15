@@ -101,6 +101,12 @@ export function FolderPicker({ initialPath, onSelect, onClose }: FolderPickerPro
     };
   }, []);
 
+  const animateClose = useCallback(() => {
+    if (closing) return;
+    setClosing(true);
+    setTimeout(onClose, 150);
+  }, [onClose, closing]);
+
   // ── Global keyboard shortcuts ───────────────────────────────────────────
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -114,12 +120,24 @@ export function FolderPicker({ initialPath, onSelect, onClose }: FolderPickerPro
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [showDirInput]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showDirInput, animateClose]);
 
   // ── Arrow-key navigation in directory list ──────────────────────────────
   useEffect(() => {
     function handleNav(e: KeyboardEvent) {
       if (showDirInput) return;
+
+      // Backspace: go to parent directory (works even with empty dir list)
+      if (e.key === "Backspace" && document.activeElement !== filterRef.current) {
+        if (browsePath && browsePath !== "/") {
+          e.preventDefault();
+          const parent = browsePath.split("/").slice(0, -1).join("/") || "/";
+          loadDirs(parent);
+        }
+        return;
+      }
+
+      // Arrow keys require items in the list
       const len = filteredDirs.length;
       if (len === 0) return;
 
@@ -133,13 +151,6 @@ export function FolderPicker({ initialPath, onSelect, onClose }: FolderPickerPro
         const prev = focusIndex > 0 ? focusIndex - 1 : len - 1;
         setFocusIndex(prev);
         itemRefs.current.get(prev)?.focus();
-      } else if (e.key === "Backspace" && document.activeElement !== filterRef.current) {
-        // Go to parent directory
-        if (browsePath && browsePath !== "/") {
-          e.preventDefault();
-          const parent = browsePath.split("/").slice(0, -1).join("/") || "/";
-          loadDirs(parent);
-        }
       }
     }
     document.addEventListener("keydown", handleNav);
@@ -152,11 +163,6 @@ export function FolderPicker({ initialPath, onSelect, onClose }: FolderPickerPro
       itemRefs.current.get(focusIndex)?.scrollIntoView({ block: "nearest" });
     }
   }, [focusIndex]);
-
-  function animateClose() {
-    setClosing(true);
-    setTimeout(onClose, 150);
-  }
 
   function selectDir(path: string) {
     addRecentDir(path);
@@ -329,7 +335,7 @@ export function FolderPicker({ initialPath, onSelect, onClose }: FolderPickerPro
             </div>
 
             {/* Subdirectories list */}
-            <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto" role="listbox" aria-label="Subdirectories">
+            <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto" aria-label="Subdirectories">
               {browseLoading ? (
                 /* Skeleton loading */
                 <div className="px-4 py-2 space-y-1" aria-busy="true" aria-label="Loading directories">
@@ -386,12 +392,10 @@ export function FolderPicker({ initialPath, onSelect, onClose }: FolderPickerPro
                   )}
                 </div>
               ) : (
-                <ul className="list-none m-0 p-0" role="group">
+                <ul className="list-none m-0 p-0">
                   {filteredDirs.map((d, i) => (
                     <li
                       key={d.path}
-                      role="option"
-                      aria-selected={focusIndex === i}
                       className={`flex items-center transition-colors ${
                         focusIndex === i ? "bg-cc-hover" : "hover:bg-cc-hover"
                       }`}

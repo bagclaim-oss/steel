@@ -168,6 +168,7 @@ export function FolderPicker({ initialPath, onSelect, onClose }: FolderPickerPro
     addRecentDir(path);
     setRecentDirs(getRecentDirs());
     onSelect(path);
+    // Close immediately — no exit animation on selection (instant feedback)
     onClose();
   }
 
@@ -324,13 +325,14 @@ export function FolderPicker({ initialPath, onSelect, onClose }: FolderPickerPro
               <button
                 type="button"
                 onClick={() => selectDir(browsePath)}
+                aria-label={`Select ${currentDirName}`}
                 className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-cc-primary text-white hover:bg-cc-primary-hover transition-colors cursor-pointer"
               >
-                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 shrink-0">
+                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 shrink-0" aria-hidden="true">
                   <path d="M12.416 3.376a.75.75 0 01.208 1.04l-5 7.5a.75.75 0 01-1.154.114l-3-3a.75.75 0 011.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 011.04-.207z" />
                 </svg>
-                <span className="hidden sm:inline">Select</span>
-                <span className="font-mono-code max-w-[100px] truncate">{currentDirName}</span>
+                <span className="hidden sm:inline" aria-hidden="true">Select</span>
+                <span className="font-mono-code max-w-[100px] truncate" aria-hidden="true">{currentDirName}</span>
               </button>
             </div>
 

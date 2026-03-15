@@ -316,14 +316,9 @@ describe("FolderPicker", () => {
       expect(screen.getByText("src")).toBeInTheDocument();
     });
 
-    // The select button contains "Select" text and the dir name "project"
-    // Find the button that contains both the checkmark icon and "project" text
-    const buttons = screen.getAllByRole("button");
-    const selectBtn = buttons.find(
-      (b) => b.textContent?.includes("Select") && b.textContent?.includes("project"),
-    );
-    expect(selectBtn).toBeTruthy();
-    fireEvent.click(selectBtn!);
+    // The primary select button has an aria-label "Select project"
+    const selectBtn = screen.getByLabelText("Select project");
+    fireEvent.click(selectBtn);
 
     expect(mockAddRecentDir).toHaveBeenCalledWith("/home/user/project");
     expect(onSelect).toHaveBeenCalledWith("/home/user/project");

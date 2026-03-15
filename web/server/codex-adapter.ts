@@ -471,6 +471,8 @@ export class CodexAdapter implements IBackendAdapter {
   /** Number of consecutive reconnect-retries for the current user message. */
   private reconnectRetryCount = 0;
   private static readonly MAX_RECONNECT_RETRIES = 5;
+  /** Timer handle for the -32001 overload backoff retry, so we can cancel it on reconnect. */
+  private overloadRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Pending approval requests (Codex sends these as JSON-RPC requests with an id)
   private pendingApprovals = new Map<string, number>(); // request_id -> JSON-RPC id
@@ -666,6 +668,7 @@ export class CodexAdapter implements IBackendAdapter {
     // successful turn/start instead.
     // Clear pending outgoing messages to prevent duplicate sends — each
     // reconnect cycle would otherwise accumulate another copy of the message.
+    if (this.overloadRetryTimer) { clearTimeout(this.overloadRetryTimer); this.overloadRetryTimer = null; }
     this.pendingOutgoing.length = 0;
 
     // After a WS reconnect, Codex requires a fresh initialize/initialized
@@ -686,6 +689,7 @@ export class CodexAdapter implements IBackendAdapter {
    */
   private cleanupAndDisconnect(): void {
     this.connected = false;
+    if (this.overloadRetryTimer) { clearTimeout(this.overloadRetryTimer); this.overloadRetryTimer = null; }
     for (const pending of this.pendingDynamicToolCalls.values()) {
       clearTimeout(pending.timeout);
     }
@@ -732,6 +736,7 @@ export class CodexAdapter implements IBackendAdapter {
     this.planUpdateCountByTurnId.clear();
     this.streamingText = "";
     this.streamingItemId = null;
+    if (this.overloadRetryTimer) { clearTimeout(this.overloadRetryTimer); this.overloadRetryTimer = null; }
     this.pendingOutgoing.length = 0;
 
     // Re-wire handlers on the new transport
@@ -1073,7 +1078,8 @@ export class CodexAdapter implements IBackendAdapter {
       this.initFailed = true;
       this.connected = false;
       // Discard any messages queued during the failed init attempt
-      this.pendingOutgoing.length = 0;
+      if (this.overloadRetryTimer) { clearTimeout(this.overloadRetryTimer); this.overloadRetryTimer = null; }
+    this.pendingOutgoing.length = 0;
       this.emit({ type: "error", message: errorMsg });
       this.initErrorCb?.(errorMsg);
     }
@@ -1155,16 +1161,18 @@ export class CodexAdapter implements IBackendAdapter {
           this.cleanupAndDisconnect();
         } else {
           this.emit({ type: "error", message: "Codex server busy. Retrying your message..." });
-          // Capture the retry counter at scheduling time so we can detect if a
-          // WS reconnect (which resets state) fired during the backoff window.
-          // Without this guard the stale setTimeout closure would re-inject the
-          // message into a freshly reconnected session, causing a phantom turn.
-          const retrySnapshot = this.reconnectRetryCount;
-          setTimeout(() => {
-            if (this.reconnectRetryCount !== retrySnapshot) return; // stale — reconnect occurred
+          // Cancel any previous overload retry timer — we only need one active
+          // retry at a time. Without this, consecutive -32001 errors would
+          // schedule multiple timers and the counter-snapshot guard would
+          // silently drop the earlier messages (Cubic review).
+          if (this.overloadRetryTimer) clearTimeout(this.overloadRetryTimer);
+          this.overloadRetryTimer = setTimeout(() => {
+            this.overloadRetryTimer = null;
+            // If a WS reconnect cleared everything, bail out.
+            if (!this.initialized) return;
             this.pendingOutgoing.unshift(msg);
             this.flushPendingOutgoing();
-          }, 1000 * retrySnapshot); // Linear backoff: 1s, 2s, 3s...
+          }, 1000 * this.reconnectRetryCount); // Linear backoff: 1s, 2s, 3s...
         }
       } else if (errMsg.startsWith("RPC timeout")) {
         this.emit({ type: "error", message: "Codex is not responding. Relaunching session..." });
@@ -1210,17 +1218,20 @@ export class CodexAdapter implements IBackendAdapter {
         this.pendingApprovals.delete(msg.request_id);
 
         if (msg.behavior === "allow") {
+          // Send the response first — only mutate local state if the transport
+          // accepted it. Otherwise the browser would think plan mode is off
+          // while Codex never received the approval (see Greptile review).
+          await this.transport.respond(jsonRpcId, {
+            contentItems: [{ type: "inputText", text: "Plan approved. Exiting plan mode." }],
+            success: true,
+          });
+
           // Exit plan mode: switch collaboration mode back to default
           this.currentCollaborationModeKind = "default";
           this.currentPermissionMode = this.lastNonPlanPermissionMode;
           this.emit({
             type: "session_update",
             session: { permissionMode: this.currentPermissionMode },
-          });
-
-          await this.transport.respond(jsonRpcId, {
-            contentItems: [{ type: "inputText", text: "Plan approved. Exiting plan mode." }],
-            success: true,
           });
         } else {
           await this.transport.respond(jsonRpcId, {

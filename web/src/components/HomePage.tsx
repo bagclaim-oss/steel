@@ -1312,7 +1312,7 @@ export function HomePage() {
                     className="accordion-panel"
                     data-open={showBranchingControls ? "true" : "false"}
                   >
-                    <div className="accordion-inner">
+                    <div className="accordion-inner" inert={!showBranchingControls || undefined}>
                       <div
                         id="branch-from-session-panel"
                         className="px-2 py-2 space-y-2"

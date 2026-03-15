@@ -4971,6 +4971,38 @@ describe("CodexAdapter WS reconnection handling", () => {
       .filter((args: unknown[]) => args[0] === "turn/start");
     expect(turnStartCalls.length).toBeGreaterThanOrEqual(1);
   });
+
+  it("resets overloadRetryCount on companion/wsReconnected", async () => {
+    let notifHandler: ((m: string, p: Record<string, unknown>) => void) | null = null;
+
+    const transport: ICodexTransport = {
+      call: vi.fn(async (method: string) => {
+        if (method === "initialize") return { userAgent: "codex" };
+        if (method === "thread/start" || method === "thread/create") return { thread: { id: "thr_1" } };
+        if (method === "thread/resume") throw new Error("no resume");
+        if (method === "account/rateLimits/read") return {};
+        if (method === "turn/start") return { turn: { id: "turn_1" } };
+        return {};
+      }),
+      notify: vi.fn(async () => {}),
+      respond: vi.fn(async () => {}),
+      onNotification: vi.fn((h) => { notifHandler = h; }),
+      onRequest: vi.fn(),
+      onRawIncoming: vi.fn(),
+      onRawOutgoing: vi.fn(),
+      onParseError: vi.fn(),
+      isConnected: vi.fn(() => true),
+    };
+
+    const adapter = new CodexAdapter(transport, "overload-reset-on-ws-reconnect", { model: "o4-mini", cwd: "/tmp" });
+    await new Promise((r) => setTimeout(r, 100));
+
+    (adapter as any).overloadRetryCount = 4;
+    notifHandler!("companion/wsReconnected", {});
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect((adapter as any).overloadRetryCount).toBe(0);
+  });
 });
 
 // ─── CodexAdapter -32001 (server overloaded) retry handling ─────────────────
@@ -5155,6 +5187,52 @@ describe("CodexAdapter -32001 server overloaded retry", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("resets overloadRetryCount in resetForReconnect", async () => {
+    const transport1: ICodexTransport = {
+      call: vi.fn(async (method: string) => {
+        if (method === "initialize") return { userAgent: "codex" };
+        if (method === "thread/start" || method === "thread/create") return { thread: { id: "thr_1" } };
+        if (method === "account/rateLimits/read") return {};
+        if (method === "turn/start") return { turn: { id: "turn_1" } };
+        return {};
+      }),
+      notify: vi.fn(async () => {}),
+      respond: vi.fn(async () => {}),
+      onNotification: vi.fn(),
+      onRequest: vi.fn(),
+      onRawIncoming: vi.fn(),
+      onRawOutgoing: vi.fn(),
+      onParseError: vi.fn(),
+      isConnected: vi.fn(() => true),
+    };
+
+    const transport2: ICodexTransport = {
+      call: vi.fn(async (method: string) => {
+        if (method === "initialize") return { userAgent: "codex" };
+        if (method === "thread/start" || method === "thread/create") return { thread: { id: "thr_2" } };
+        if (method === "account/rateLimits/read") return {};
+        if (method === "turn/start") return { turn: { id: "turn_2" } };
+        return {};
+      }),
+      notify: vi.fn(async () => {}),
+      respond: vi.fn(async () => {}),
+      onNotification: vi.fn(),
+      onRequest: vi.fn(),
+      onRawIncoming: vi.fn(),
+      onRawOutgoing: vi.fn(),
+      onParseError: vi.fn(),
+      isConnected: vi.fn(() => true),
+    };
+
+    const adapter = new CodexAdapter(transport1, "overload-reset-on-transport-reconnect", { model: "o4-mini", cwd: "/tmp" });
+    await new Promise((r) => setTimeout(r, 100));
+
+    (adapter as any).overloadRetryCount = 5;
+    adapter.resetForReconnect(transport2);
+
+    expect((adapter as any).overloadRetryCount).toBe(0);
   });
 });
 

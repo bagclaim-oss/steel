@@ -671,6 +671,7 @@ export class CodexAdapter implements IBackendAdapter {
     // Clear pending outgoing messages to prevent duplicate sends — each
     // reconnect cycle would otherwise accumulate another copy of the message.
     if (this.overloadRetryTimer) { clearTimeout(this.overloadRetryTimer); this.overloadRetryTimer = null; }
+    this.overloadRetryCount = 0;
     this.pendingOutgoing.length = 0;
 
     // After a WS reconnect, Codex requires a fresh initialize/initialized
@@ -739,6 +740,7 @@ export class CodexAdapter implements IBackendAdapter {
     this.streamingText = "";
     this.streamingItemId = null;
     if (this.overloadRetryTimer) { clearTimeout(this.overloadRetryTimer); this.overloadRetryTimer = null; }
+    this.overloadRetryCount = 0;
     this.pendingOutgoing.length = 0;
 
     // Re-wire handlers on the new transport
@@ -1081,7 +1083,7 @@ export class CodexAdapter implements IBackendAdapter {
       this.connected = false;
       // Discard any messages queued during the failed init attempt
       if (this.overloadRetryTimer) { clearTimeout(this.overloadRetryTimer); this.overloadRetryTimer = null; }
-    this.pendingOutgoing.length = 0;
+      this.pendingOutgoing.length = 0;
       this.emit({ type: "error", message: errorMsg });
       this.initErrorCb?.(errorMsg);
     }

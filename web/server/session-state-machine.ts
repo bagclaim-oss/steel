@@ -64,6 +64,7 @@ export const VALID_TRANSITIONS: ReadonlyMap<
     "streaming",
     new Set<SessionPhase>([
       "ready",
+      "initializing",
       "awaiting_permission",
       "compacting",
       "reconnecting",

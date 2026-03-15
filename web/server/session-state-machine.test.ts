@@ -91,9 +91,11 @@ describe("SessionStateMachine", () => {
     it("ready -> terminated", () =>
       expectValidTransition("ready", "terminated"));
 
-    // streaming -> ready, awaiting_permission, compacting, reconnecting, terminated
+    // streaming -> ready, initializing, awaiting_permission, compacting, reconnecting, terminated
     it("streaming -> ready", () =>
       expectValidTransition("streaming", "ready"));
+    it("streaming -> initializing", () =>
+      expectValidTransition("streaming", "initializing"));
     it("streaming -> awaiting_permission", () =>
       expectValidTransition("streaming", "awaiting_permission"));
     it("streaming -> compacting", () =>
@@ -555,6 +557,27 @@ describe("SessionStateMachine", () => {
         expect(typeof event.timestamp).toBe("number");
         expect(event.timestamp).toBeGreaterThan(0);
       }
+    });
+
+    it("handles early user message: starting -> streaming -> initializing -> ready", () => {
+      // When a user sends a message before the CLI connects, the session
+      // transitions starting -> streaming. When the CLI later connects,
+      // it goes streaming -> initializing, then proceeds normally.
+      const earlyMsg = new SessionStateMachine("early-msg", "starting");
+      const events: SessionTransitionEvent[] = [];
+      earlyMsg.onTransition((e) => events.push(e));
+
+      expect(earlyMsg.transition("streaming", "user_message")).toBe(true);
+      expect(earlyMsg.transition("initializing", "cli_ws_open")).toBe(true);
+      expect(earlyMsg.transition("ready", "system_init")).toBe(true);
+      expect(earlyMsg.transition("streaming", "user_message")).toBe(true);
+
+      expect(events.map((e) => `${e.from}->${e.to}`)).toEqual([
+        "starting->streaming",
+        "streaming->initializing",
+        "initializing->ready",
+        "ready->streaming",
+      ]);
     });
   });
 

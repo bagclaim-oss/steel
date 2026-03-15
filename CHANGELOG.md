@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.85.1](https://github.com/The-Vibe-Company/companion/compare/the-companion-v0.85.0...the-companion-v0.85.1) (2026-03-15)
+
+
+### Bug Fixes
+
+* **codex:** harden connection resilience and error recovery ([#569](https://github.com/The-Vibe-Company/companion/issues/569)) ([b71281e](https://github.com/The-Vibe-Company/companion/commit/b71281e4ded9bc62be52c57b4bc8497a92fc10cc))
+
+## [0.85.0](https://github.com/The-Vibe-Company/companion/compare/the-companion-v0.84.4...the-companion-v0.85.0) (2026-03-15)
+
+
+### Features
+
+* **home:** redesign HomePage selectors into grouped sections ([#566](https://github.com/The-Vibe-Company/companion/issues/566)) ([6c5d255](https://github.com/The-Vibe-Company/companion/commit/6c5d255cfc860f2cb4c8c66357afec34ea3b2f3d))
+
+
+### Bug Fixes
+
+* **codex:** prevent double disconnect callback and increase reconnect retries ([#567](https://github.com/The-Vibe-Company/companion/issues/567)) ([1dbc219](https://github.com/The-Vibe-Company/companion/commit/1dbc219a66f9ec85398c9efcaf5bc7b448bc4942))
+* **codex:** resolve WebSocket reconnect and message sync issues ([#564](https://github.com/The-Vibe-Company/companion/issues/564)) ([f1e0041](https://github.com/The-Vibe-Company/companion/commit/f1e0041fea0502c8679f320ab0d8adb186c8c35e))
+* **test:** stabilize system process expansion assertion ([c73da13](https://github.com/The-Vibe-Company/companion/commit/c73da13c8bbac783d5f5292e9ea31dc838dc63f3))
+
 ## [0.84.4](https://github.com/The-Vibe-Company/companion/compare/the-companion-v0.84.3...the-companion-v0.84.4) (2026-03-15)
 
 

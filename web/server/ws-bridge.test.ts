@@ -1071,6 +1071,94 @@ describe("Browser handlers", () => {
     expect(replay.events[1].message.type).toBe("stream_event");
   });
 
+  it("session_subscribe: sends full message_history on first subscribe even without a replay gap", async () => {
+    // A brand-new browser tab starts with last_seq=0 and needs the persisted
+    // message history, including user messages that are never sequenced in the
+    // event buffer. Without this bootstrap payload, Codex sessions can reopen
+    // without their first user prompt in chat.
+    const session = bridge.getOrCreateSession("s1", "codex");
+    session.messageHistory.push({
+      type: "user_message",
+      id: "user-1",
+      content: "first prompt",
+      timestamp: 1000,
+    });
+    session.messageHistory.push({
+      type: "assistant",
+      message: {
+        id: "assistant-1",
+        type: "message",
+        role: "assistant",
+        model: "gpt-5.4",
+        content: [{ type: "text", text: "reply" }],
+        stop_reason: "end_turn",
+        usage: {
+          input_tokens: 1,
+          output_tokens: 1,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+        },
+      },
+      parent_tool_use_id: null,
+      timestamp: 2000,
+    });
+    session.eventBuffer.push({
+      seq: 1,
+      message: {
+        type: "assistant",
+        message: {
+          id: "assistant-1",
+          type: "message",
+          role: "assistant",
+          model: "gpt-5.4",
+          content: [{ type: "text", text: "reply" }],
+          stop_reason: "end_turn",
+          usage: {
+            input_tokens: 1,
+            output_tokens: 1,
+            cache_creation_input_tokens: 0,
+            cache_read_input_tokens: 0,
+          },
+        },
+        parent_tool_use_id: null,
+        timestamp: 2000,
+      },
+    });
+    session.eventBuffer.push({
+      seq: 2,
+      message: {
+        type: "stream_event",
+        event: {
+          type: "content_block_delta",
+          delta: { type: "text_delta", text: "stream-only" },
+        },
+        parent_tool_use_id: null,
+      },
+    });
+    session.nextEventSeq = 3;
+
+    const browser = makeBrowserSocket("s1");
+    bridge.handleBrowserOpen(browser, "s1");
+    browser.send.mockClear();
+
+    bridge.handleBrowserMessage(browser, JSON.stringify({
+      type: "session_subscribe",
+      last_seq: 0,
+    }));
+
+    const calls = browser.send.mock.calls.map(([arg]: [string]) => JSON.parse(arg));
+    const historyMsg = calls.find((c: any) => c.type === "message_history");
+    expect(historyMsg).toBeDefined();
+    expect(historyMsg.messages).toHaveLength(2);
+    expect(historyMsg.messages.some((m: any) => m.type === "user_message")).toBe(true);
+    expect(historyMsg.messages.some((m: any) => m.type === "assistant")).toBe(true);
+
+    const replayMsg = calls.find((c: any) => c.type === "event_replay");
+    expect(replayMsg).toBeDefined();
+    expect(replayMsg.events).toHaveLength(1);
+    expect(replayMsg.events[0].message.type).toBe("stream_event");
+  });
+
   it("session_subscribe: falls back to message_history when last_seq is older than buffer window", async () => {
     const cli = makeCliSocket("s1");
     bridge.handleCLIOpen(cli, "s1");
@@ -1659,6 +1747,81 @@ describe("Browser message routing", () => {
     const queued = JSON.parse(session.pendingMessages[0]);
     expect(queued.type).toBe("user_message");
     expect(queued.content).toBe("retry this");
+  });
+
+  it("flushes bridge-queued messages once backend becomes connected", () => {
+    const browser = makeBrowserSocket("codex-s1");
+    bridge.handleBrowserOpen(browser, "codex-s1");
+
+    bridge.handleBrowserMessage(browser, JSON.stringify({
+      type: "user_message",
+      content: "hello queued before connect",
+    }));
+
+    const session = bridge.getSession("codex-s1")!;
+    expect(session.pendingMessages).toHaveLength(1);
+
+    let connected = false;
+    const send = vi.fn((msg: any) => connected);
+    const adapter = {
+      isConnected: () => connected,
+      send,
+      disconnect: async () => {},
+      onBrowserMessage: () => {},
+      onSessionMeta: () => {},
+      onDisconnect: () => {},
+      onInitError: () => {},
+    };
+
+    bridge.attachBackendAdapter("codex-s1", adapter as any, "codex");
+
+    // Initial attach flush is attempted but backend still disconnected,
+    // so the queued message must remain pending.
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(session.pendingMessages).toHaveLength(1);
+
+    connected = true;
+    bridge.handleBrowserMessage(browser, JSON.stringify({ type: "mcp_get_status" }));
+
+    // Queued user message flushes first, then current message is dispatched.
+    expect(session.pendingMessages).toHaveLength(0);
+    expect(send).toHaveBeenCalledTimes(3);
+    const messageTypes = send.mock.calls.map(([msg]: [any]) => msg.type);
+    expect(messageTypes).toEqual(["user_message", "user_message", "mcp_get_status"]);
+  });
+
+  it("preserves FIFO when queued flush is interrupted before sending current message", () => {
+    const session = bridge.getSession("s1")!;
+    session.pendingMessages.push(JSON.stringify({
+      type: "user_message",
+      content: "older queued",
+    }));
+
+    const send = vi.fn((msg: any) => {
+      if (msg.type === "user_message" && msg.content === "older queued" && send.mock.calls.length === 1) {
+        return false;
+      }
+      return true;
+    });
+
+    session.backendAdapter = {
+      isConnected: () => true,
+      send,
+      disconnect: async () => {},
+      onBrowserMessage: () => {},
+      onSessionMeta: () => {},
+      onDisconnect: () => {},
+    } as any;
+
+    // First dispatch tries to flush the older queued message, fails, and must
+    // queue the current message instead of sending it out-of-order.
+    bridge.handleBrowserMessage(browser, JSON.stringify({ type: "mcp_get_status" }));
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][0]).toMatchObject({ type: "user_message", content: "older queued" });
+    expect(session.pendingMessages).toHaveLength(2);
+    expect(JSON.parse(session.pendingMessages[0])).toMatchObject({ type: "user_message", content: "older queued" });
+    expect(JSON.parse(session.pendingMessages[1])).toMatchObject({ type: "mcp_get_status" });
   });
 
   it("permission_response: does not re-queue when backend send fails", async () => {

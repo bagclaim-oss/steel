@@ -1,6 +1,8 @@
 // Formal session state machine for the Companion server.
 // Centralizes session phase definitions and validates transitions.
 
+import { metricsCollector } from "./metrics-collector.js";
+
 /**
  * The formal phases a session can be in.
  *
@@ -117,6 +119,7 @@ export class SessionStateMachine {
 
     const allowed = VALID_TRANSITIONS.get(this._phase);
     if (!allowed || !allowed.has(to)) {
+      metricsCollector.recordError("invalid_state_transition");
       console.warn(
         `[state-machine] Blocked invalid transition for session ${this._sessionId}: ` +
           `${this._phase} -> ${to} (trigger: ${trigger})`,

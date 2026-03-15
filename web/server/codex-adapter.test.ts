@@ -3822,7 +3822,7 @@ describe("CodexAdapter with ICodexTransport", () => {
   });
 
   it("accepts legacy codex/event notifications without protocol drift", async () => {
-    const { mock } = await initAdapter();
+    const { mock, messages } = await initAdapter();
     const warnSpy = vi.spyOn(log, "warn").mockImplementation(() => {});
 
     const legacyNotifications: Array<{ method: string; params: Record<string, unknown> }> = [
@@ -3883,6 +3883,12 @@ describe("CodexAdapter with ICodexTransport", () => {
         expect.objectContaining({ messageName: notification.method }),
       );
     }
+    // Legacy streaming deltas are intentionally ignored to avoid duplicate
+    // rendering when canonical item/* deltas are also emitted.
+    const textDeltaEvents = messages.filter(
+      (m) => m.type === "stream_event" && (m.event as { type?: string } | undefined)?.type === "content_block_delta",
+    );
+    expect(textDeltaEvents.length).toBe(0);
     warnSpy.mockRestore();
   });
 

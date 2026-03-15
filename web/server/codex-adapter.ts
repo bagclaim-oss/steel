@@ -1414,29 +1414,13 @@ export class CodexAdapter implements IBackendAdapter {
       case "codex/event/token_count":
         this.handleLegacyTokenCount(params);
         break;
-      case "codex/event/agent_message_delta":
-      case "codex/event/agent_message_content_delta": {
-        const legacy = this.asRecord(params.msg);
-        const delta = typeof legacy?.delta === "string" ? legacy.delta : "";
-        if (!delta) break;
-        const normalized: Record<string, unknown> = { delta };
-        if (typeof legacy?.thread_id === "string") {
-          normalized.threadId = legacy.thread_id;
-        }
-        this.handleAgentMessageDelta(normalized);
-        break;
-      }
-      case "codex/event/reasoning_content_delta": {
-        const legacy = this.asRecord(params.msg);
-        const itemId = typeof legacy?.item_id === "string" ? legacy.item_id : null;
-        const delta = typeof legacy?.delta === "string" ? legacy.delta : null;
-        if (!itemId || !delta) break;
-        this.handleReasoningDelta({ itemId, delta });
-        break;
-      }
       // Legacy codex/event/* notifications forwarded by newer Codex runtimes.
-      // These are either duplicates of canonical v2 notifications we already
-      // handle (item/*, turn/*, thread/*) or metadata not needed for the UI.
+      // token_count is still useful for metrics, but these streaming deltas
+      // are often duplicated by canonical item/* deltas in the same session.
+      // Ignore duplicated legacy streams to avoid double-emitting text.
+      case "codex/event/agent_message_delta":
+      case "codex/event/agent_message_content_delta":
+      case "codex/event/reasoning_content_delta":
       case "codex/event/agent_message":
       case "codex/event/item_started":
       case "codex/event/item_completed":
@@ -1455,6 +1439,7 @@ export class CodexAdapter implements IBackendAdapter {
       case "codex/event/agent_reasoning":
       case "codex/event/agent_reasoning_delta":
       case "codex/event/agent_reasoning_section_break":
+        // Duplicates of canonical v2 events — silently ignore.
         break;
       case "codex/event/stream_error": {
         const msg = params.msg as { message?: string } | undefined;

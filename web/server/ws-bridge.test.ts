@@ -1632,6 +1632,28 @@ describe("Browser message routing", () => {
     expect(queued.content).toBe("queued message");
   });
 
+  it("user_message: re-queues when backend send fails despite adapter connected", () => {
+    const session = bridge.getSession("s1")!;
+    session.backendAdapter = {
+      isConnected: () => true,
+      send: () => false,
+      disconnect: async () => {},
+      onBrowserMessage: () => {},
+      onSessionMeta: () => {},
+      onDisconnect: () => {},
+    } as any;
+
+    bridge.handleBrowserMessage(browser, JSON.stringify({
+      type: "user_message",
+      content: "retry this",
+    }));
+
+    expect(session.pendingMessages).toHaveLength(1);
+    const queued = JSON.parse(session.pendingMessages[0]);
+    expect(queued.type).toBe("user_message");
+    expect(queued.content).toBe("retry this");
+  });
+
   it("user_message: deduplicates repeated client_msg_id", () => {
     const payload = {
       type: "user_message",

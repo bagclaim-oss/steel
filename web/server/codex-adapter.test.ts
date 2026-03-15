@@ -4031,6 +4031,29 @@ describe("CodexAdapter with ICodexTransport", () => {
     expect(true).toBe(true);
   });
 
+  it("coerces non-string reasoning payloads without crashing", async () => {
+    const { mock, messages } = await initAdapter();
+
+    // Codex can return structured arrays/objects for summary/content.
+    mock.pushNotification("item/completed", {
+      item: {
+        id: "reason-structured",
+        type: "reasoning",
+        summary: [{ text: "alpha" }],
+        content: [{ summary: "beta" }],
+      },
+    });
+    await new Promise((r) => setTimeout(r, 20));
+
+    const assistantMsgs = messages.filter((m) => m.type === "assistant") as Array<{
+      message: { content: Array<{ type: string; thinking?: string }> };
+    }>;
+    const thinking = assistantMsgs
+      .flatMap((m) => m.message.content)
+      .find((b) => b.type === "thinking");
+    expect(thinking?.thinking).toContain("alpha");
+  });
+
   // ── Unhandled item types in item/started and item/completed ───────────
 
   it("logs unhandled item/started type", async () => {

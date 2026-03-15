@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.84.0](https://github.com/The-Vibe-Company/companion/compare/the-companion-v0.83.0...the-companion-v0.84.0) (2026-03-15)
+
+
+### Features
+
+* **server:** add log file persistence with automatic rotation ([#554](https://github.com/The-Vibe-Company/companion/issues/554)) ([52d1cc0](https://github.com/The-Vibe-Company/companion/commit/52d1cc036561e6a9b4c9044f6391293c2c43b0c4))
+
+## [0.83.0](https://github.com/The-Vibe-Company/companion/compare/the-companion-v0.82.2...the-companion-v0.83.0) (2026-03-15)
+
+
+### Features
+
+* **server:** add runtime observability and reliability metrics ([#550](https://github.com/The-Vibe-Company/companion/issues/550)) ([4fdadd3](https://github.com/The-Vibe-Company/companion/commit/4fdadd3013503a882482c0c16e7f82008201cf0b))
+
+## [0.82.2](https://github.com/The-Vibe-Company/companion/compare/the-companion-v0.82.1...the-companion-v0.82.2) (2026-03-15)
+
+
+### Bug Fixes
+
+* **ws:** address greptile reconnect race feedback ([#549](https://github.com/The-Vibe-Company/companion/issues/549)) ([ea76aab](https://github.com/The-Vibe-Company/companion/commit/ea76aabb8a848068f6cfba3a5993a12bbf980079))
+
 ## [0.82.1](https://github.com/The-Vibe-Company/companion/compare/the-companion-v0.82.0...the-companion-v0.82.1) (2026-03-15)
 
 

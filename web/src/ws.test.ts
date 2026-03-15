@@ -144,6 +144,7 @@ describe("connectSession", () => {
     expect(second.send).toHaveBeenCalled();
   });
 
+
   it("sends session_subscribe with last_seq on open", () => {
     localStorage.setItem("companion:last-seq:s1", "12");
     wsModule.connectSession("s1");
@@ -215,6 +216,20 @@ describe("disconnectSession", () => {
     // Sending after disconnect should be a no-op
     wsModule.sendToSession("s1", { type: "interrupt" });
     expect(ws.send).not.toHaveBeenCalled();
+  });
+
+  it("ignores stale onclose fired after disconnect cleanup", () => {
+    wsModule.connectSession("s1");
+    const ws = lastWs;
+
+    wsModule.disconnectSession("s1");
+
+    // Simulate async close callback arriving after socket map cleanup.
+    ws.onclose?.();
+    vi.advanceTimersByTime(5_000);
+
+    expect(lastWs).toBe(ws);
+    expect(useStore.getState().connectionStatus.get("s1")).toBe("disconnected");
   });
 });
 

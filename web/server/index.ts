@@ -23,6 +23,7 @@ import { COMPANION_HOME } from "./paths.js";
 import { TerminalManager } from "./terminal-manager.js";
 import { PRPoller } from "./pr-poller.js";
 import { RecorderManager } from "./recorder.js";
+import { initLogFile, closeLogFile } from "./logger.js";
 import { CronScheduler } from "./cron-scheduler.js";
 import { AgentExecutor } from "./agent-executor.js";
 import { SessionOrchestrator } from "./session-orchestrator.js";
@@ -95,6 +96,12 @@ orchestrator.initialize();
 console.log(`[server] Session persistence: ${sessionStore.directory}`);
 if (recorder.isGloballyEnabled()) {
   console.log(`[server] Recording enabled (dir: ${recorder.getRecordingsDir()}, max: ${recorder.getMaxLines()} lines)`);
+}
+
+// ── Log file persistence — writes all log output to ~/.companion/logs/ ───────
+const logFileWriter = initLogFile();
+if (logFileWriter) {
+  console.log(`[server] Log file enabled (dir: ${logFileWriter.getLogsDir()}, max: ${logFileWriter.getMaxLines()} lines, file: ${logFileWriter.filePath})`);
 }
 
 const app = new Hono();
@@ -346,29 +353,42 @@ if (isRunningAsService()) {
   console.log("[server] Running as background service (auto-update available)");
 }
 
-// ── Memory diagnostics ───────────────────────────────────────────────────────
-const MEMORY_LOG_INTERVAL_MS = 5 * 60_000; // every 5 minutes
+// ── Runtime diagnostics ──────────────────────────────────────────────────────
+import { log } from "./logger.js";
+import { metricsCollector } from "./metrics-collector.js";
+
+const DIAGNOSTICS_INTERVAL_MS = 5 * 60_000; // every 5 minutes
 setInterval(() => {
-  const mem = process.memoryUsage();
+  const snap = metricsCollector.getSnapshot(wsBridge);
+  const mem = snap.gauges.memory;
   const mb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1);
   const sessionStats = wsBridge.getSessionMemoryStats();
-  const totalHistory = sessionStats.reduce((sum, s) => sum + s.historyLen, 0);
   const topSessions = sessionStats
     .sort((a, b) => b.historyLen - a.historyLen)
     .slice(0, 3)
     .map((s) => `${s.id.slice(0, 8)}(h=${s.historyLen},b=${s.browsers})`)
     .join(", ");
-  console.log(
-    `[mem] rss=${mb(mem.rss)}MB heap=${mb(mem.heapUsed)}/${mb(mem.heapTotal)}MB ` +
-    `ext=${mb(mem.external)}MB | ${sessionStats.length} sessions, ${totalHistory} history msgs | top: ${topSessions || "none"}`,
-  );
-}, MEMORY_LOG_INTERVAL_MS);
+
+  log.info("diagnostics", "Runtime snapshot", {
+    rss: `${mb(mem.rss)}MB`,
+    heap: `${mb(mem.heapUsed)}/${mb(mem.heapTotal)}MB`,
+    external: `${mb(mem.external)}MB`,
+    sessions: snap.gauges.totalActiveSessions,
+    browsers: snap.gauges.connectedBrowsers,
+    historyMsgs: snap.gauges.totalHistoryMessages,
+    pendingMsgs: snap.gauges.totalPendingMessages,
+    eventBuffer: snap.gauges.totalEventBufferSize,
+    errors: Object.values(snap.counters.errors).reduce((a, b) => a + b, 0),
+    topSessions: topSessions || "none",
+  });
+}, DIAGNOSTICS_INTERVAL_MS);
 
 // ── Graceful shutdown — persist container state ──────────────────────────────
 function gracefulShutdown() {
   console.log("[server] Persisting container state before shutdown...");
   containerManager.persistState(CONTAINER_STATE_PATH);
   cleanupTailscaleFunnel(port);
+  closeLogFile();
   process.exit(0);
 }
 process.on("SIGTERM", gracefulShutdown);

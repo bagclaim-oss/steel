@@ -4020,6 +4020,7 @@ describe("CodexAdapter with ICodexTransport", () => {
   it("accumulates reasoning delta text", async () => {
     // item/reasoning/delta should accumulate reasoning text
     const { mock, messages } = await initAdapter();
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
 
     // Start a reasoning item first
     mock.pushNotification("item/started", {
@@ -4044,6 +4045,10 @@ describe("CodexAdapter with ICodexTransport", () => {
     // No assertion on messages specifically, just verifying the code paths execute
     // without errors (coverage is the goal)
     expect(true).toBe(true);
+    expect(spy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Unhandled notification: item/reasoning/delta"),
+    );
+    spy.mockRestore();
   });
 
   it("coerces non-string reasoning payloads without crashing", async () => {

@@ -1315,6 +1315,7 @@ export class CodexAdapter implements IBackendAdapter {
         // Streaming file change output. Same as above.
         break;
       case "item/reasoning/textDelta":
+      case "item/reasoning/delta":
       case "item/reasoning/summaryTextDelta":
       case "item/reasoning/summaryPartAdded":
         this.handleReasoningDelta(params);

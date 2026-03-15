@@ -16,14 +16,16 @@
 
 import {
   mkdirSync,
-  appendFileSync,
+  openSync,
+  writeSync,
+  closeSync,
   readdirSync,
   statSync,
   unlinkSync,
-  readFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import { COMPANION_HOME } from "./paths.js";
+import { countFileLines } from "./fs-utils.js";
 
 type LogLevel = "info" | "warn" | "error";
 
@@ -65,20 +67,6 @@ function formatEntry(level: LogLevel, module: string, msg: string, data?: Record
 const DEFAULT_LOG_MAX_LINES = 2_000_000;
 const LOG_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
-/** Count newlines in a file. Fast: reads raw buffer, counts 0x0A bytes. */
-function countFileLines(path: string): number {
-  try {
-    const buf = readFileSync(path);
-    let count = 0;
-    for (let i = 0; i < buf.length; i++) {
-      if (buf[i] === 0x0a) count++;
-    }
-    return count;
-  } catch {
-    return 0;
-  }
-}
-
 /**
  * Writes log lines to a file under ~/.companion/logs/ with automatic rotation.
  * A new log file is created each time the server starts. When total lines across
@@ -90,7 +78,7 @@ export class LogFileWriter {
   readonly filePath: string;
   private logsDir: string;
   private maxLines: number;
-  private lineCount = 0;
+  private fd: number;
   private dirCreated = false;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -102,16 +90,15 @@ export class LogFileWriter {
 
     this.ensureDir();
 
-    // Create a new log file for this server run
+    // Create a new log file for this server run and keep the fd open
     const ts = new Date().toISOString().replace(/:/g, "-");
     const pid = process.pid;
     this.filePath = join(this.logsDir, `companion_${ts}_${pid}.log`);
+    this.fd = openSync(this.filePath, "a");
 
-    // Touch the file so it exists immediately (cleanup skips it by path)
-    appendFileSync(this.filePath, "");
-
-    // Run cleanup at startup and periodically
-    this.cleanup();
+    // Defer initial cleanup so it doesn't block the event loop at startup
+    const initialDelay = setTimeout(() => this.cleanup(), 2000);
+    if (initialDelay.unref) initialDelay.unref();
     this.cleanupTimer = setInterval(() => this.cleanup(), LOG_CLEANUP_INTERVAL_MS);
     if (this.cleanupTimer.unref) this.cleanupTimer.unref();
   }
@@ -137,8 +124,7 @@ export class LogFileWriter {
 
   write(line: string): void {
     try {
-      appendFileSync(this.filePath, line + "\n");
-      this.lineCount++;
+      writeSync(this.fd, line + "\n");
     } catch {
       // Never throw — logging must not disrupt normal operation
     }
@@ -204,6 +190,7 @@ export class LogFileWriter {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = null;
     }
+    try { closeSync(this.fd); } catch { /* ignore */ }
   }
 
   private ensureDir(): void {

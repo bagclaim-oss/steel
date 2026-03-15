@@ -206,6 +206,8 @@ describe("LogFileWriter", () => {
       // gets deleted bringing total to 5 which is <= 8.
       const writer = new LogFileWriter({ logsDir: tmpDir, maxLines: 8 });
       try {
+        // Initial cleanup is deferred — run it explicitly for the test
+        writer.cleanup();
         const files = readdirSync(tmpDir).filter((f) => f.endsWith(".log"));
         // oldFile1 should have been deleted by cleanup, oldFile2 and current remain
         expect(files).toHaveLength(2);
@@ -256,7 +258,8 @@ describe("LogFileWriter", () => {
       // maxLines = 5 means we need to delete at least 2 old files
       const writer = new LogFileWriter({ logsDir: tmpDir, maxLines: 5 });
       try {
-        // cleanup() ran at construction, check file count
+        // Initial cleanup is deferred — run it explicitly for the test
+        writer.cleanup();
         const files = readdirSync(tmpDir).filter((f) => f.endsWith(".log"));
         // At most the newest old file + current file should remain
         expect(files.length).toBeLessThanOrEqual(2);
@@ -307,6 +310,7 @@ describe("initLogFile / closeLogFile", () => {
   let tmpDir: string;
 
   const origLogFile = process.env.COMPANION_LOG_FILE;
+  const origLogFormat = process.env.COMPANION_LOG_FORMAT;
 
   beforeEach(async () => {
     vi.resetModules();
@@ -331,6 +335,11 @@ describe("initLogFile / closeLogFile", () => {
       delete process.env.COMPANION_LOG_FILE;
     } else {
       process.env.COMPANION_LOG_FILE = origLogFile;
+    }
+    if (origLogFormat === undefined) {
+      delete process.env.COMPANION_LOG_FORMAT;
+    } else {
+      process.env.COMPANION_LOG_FORMAT = origLogFormat;
     }
   });
 

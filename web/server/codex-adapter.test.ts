@@ -4884,7 +4884,8 @@ describe("CodexAdapter WS reconnection handling", () => {
 
     // Simulate that server lost initialization state when WS reconnected.
     initializedOnServer = false;
-    notifHandler?.("companion/wsReconnected", {});
+    expect(notifHandler).not.toBeNull();
+    notifHandler!("companion/wsReconnected", {});
     await new Promise((r) => setTimeout(r, 50));
 
     adapter.sendBrowserMessage({ type: "user_message", content: "after reconnect" });

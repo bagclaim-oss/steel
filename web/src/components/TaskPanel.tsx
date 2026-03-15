@@ -14,16 +14,23 @@ import { SectionErrorBoundary } from "./SectionErrorBoundary.js";
 const EMPTY_TASKS: TaskItem[] = [];
 const COUNTDOWN_REFRESH_MS = 30_000;
 
-/** O(1) SDK session lookup using a cached Map selector. */
+/** Shared SDK session Map — rebuilt only when the sdkSessions array reference changes. */
+let _cachedSdkArr: unknown = null;
+let _cachedSdkMap: Map<string, SdkSessionInfo> = new Map();
+
+function getSdkMap(sdkSessions: SdkSessionInfo[]): Map<string, SdkSessionInfo> {
+  if (sdkSessions !== _cachedSdkArr) {
+    _cachedSdkArr = sdkSessions;
+    _cachedSdkMap = new Map(sdkSessions.map((s) => [s.sessionId, s]));
+  }
+  return _cachedSdkMap;
+}
+
+/** O(1) SDK session lookup via a shared Map that is rebuilt once per store change. */
 function useSdkSession(sessionId: string): SdkSessionInfo | undefined {
   return useStore(
     useCallback(
-      (s) => {
-        for (const x of s.sdkSessions) {
-          if (x.sessionId === sessionId) return x;
-        }
-        return undefined;
-      },
+      (s) => getSdkMap(s.sdkSessions).get(sessionId),
       [sessionId],
     ),
   );

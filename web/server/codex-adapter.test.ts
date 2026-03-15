@@ -5101,6 +5101,61 @@ describe("CodexAdapter -32001 server overloaded retry", () => {
 
     expect(disconnectCb).not.toHaveBeenCalled();
   });
+
+  it("uses an overload-only retry budget after a transport reconnect retry", async () => {
+    // A preceding "Transport reconnected" error should not consume the
+    // overload (-32001) retry budget or delay its first retry.
+    vi.useFakeTimers();
+    try {
+      let turnStartAttempts = 0;
+      const transport: ICodexTransport = {
+        call: vi.fn(async (method: string) => {
+          if (method === "initialize") return { userAgent: "codex" };
+          if (method === "thread/start" || method === "thread/create") return { thread: { id: "thr_1" } };
+          if (method === "account/rateLimits/read") return {};
+          if (method === "turn/start") {
+            turnStartAttempts++;
+            if (turnStartAttempts === 1) throw new Error("Transport reconnected");
+            if (turnStartAttempts === 2) {
+              const err = new Error("Server overloaded") as Error & { code: number };
+              err.code = -32001;
+              throw err;
+            }
+            return { turn: { id: "turn_1" } };
+          }
+          return {};
+        }),
+        notify: vi.fn(async () => {}),
+        respond: vi.fn(async () => {}),
+        onNotification: vi.fn(),
+        onRequest: vi.fn(),
+        onRawIncoming: vi.fn(),
+        onRawOutgoing: vi.fn(),
+        onParseError: vi.fn(),
+        isConnected: vi.fn(() => true),
+      };
+
+      const adapter = new CodexAdapter(transport, "overload-budget-split-test", { model: "o4-mini", cwd: "/tmp" });
+
+      await vi.advanceTimersByTimeAsync(200);
+      adapter.sendBrowserMessage({ type: "user_message", content: "hello" });
+      await vi.advanceTimersByTimeAsync(10);
+
+      // 1st attempt: Transport reconnected
+      // 2nd attempt: -32001 and schedules overload retry after 1s
+      let turnCalls = (transport.call as ReturnType<typeof vi.fn>).mock.calls
+        .filter((args: unknown[]) => args[0] === "turn/start");
+      expect(turnCalls.length).toBe(2);
+
+      // With split counters, first overload retry fires after 1s.
+      await vi.advanceTimersByTimeAsync(1000);
+      turnCalls = (transport.call as ReturnType<typeof vi.fn>).mock.calls
+        .filter((args: unknown[]) => args[0] === "turn/start");
+      expect(turnCalls.length).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 // ─── CodexAdapter streaming state reset on WS reconnect ─────────────────────

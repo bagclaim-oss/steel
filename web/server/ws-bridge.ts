@@ -1079,6 +1079,14 @@ export class WsBridge {
     if (session.backendAdapter?.isConnected()) {
       if (session.pendingMessages.length > 0) {
         this.flushQueuedBrowserMessages(session, session.backendAdapter, "backend_connected_send");
+        // Preserve FIFO ordering: if flush was interrupted and left pending
+        // messages, queue this incoming message behind them instead of sending
+        // it immediately (which could overtake older queued work).
+        if (session.pendingMessages.length > 0) {
+          session.pendingMessages.push(JSON.stringify(msg));
+          this.persistSession(session);
+          return;
+        }
       }
       const sent = session.backendAdapter.send(msg);
       // Codex can be "adapter-connected" while its underlying transport is in a

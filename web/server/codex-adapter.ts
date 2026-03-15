@@ -470,6 +470,8 @@ export class CodexAdapter implements IBackendAdapter {
   private pendingOutgoing: BrowserOutgoingMessage[] = [];
   /** Number of consecutive reconnect-retries for the current user message. */
   private reconnectRetryCount = 0;
+  /** Number of consecutive overload (-32001) retries for the current user message. */
+  private overloadRetryCount = 0;
   private static readonly MAX_RECONNECT_RETRIES = 5;
   /** Timer handle for the -32001 overload backoff retry, so we can cancel it on reconnect. */
   private overloadRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1133,6 +1135,7 @@ export class CodexAdapter implements IBackendAdapter {
 
       this.currentTurnId = result.turn.id;
       this.reconnectRetryCount = 0; // Reset on success
+      this.overloadRetryCount = 0; // Reset overload budget on success
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       if (errMsg === "Transport reconnected") {
@@ -1154,9 +1157,9 @@ export class CodexAdapter implements IBackendAdapter {
       } else if ((err as Record<string, unknown>)?.code === -32001) {
         // Codex server overloaded (channel capacity 128 exceeded) — transient,
         // retry after a short delay rather than relaunching the whole session.
-        this.reconnectRetryCount++;
-        if (this.reconnectRetryCount > CodexAdapter.MAX_RECONNECT_RETRIES) {
-          this.reconnectRetryCount = 0;
+        this.overloadRetryCount++;
+        if (this.overloadRetryCount > CodexAdapter.MAX_RECONNECT_RETRIES) {
+          this.overloadRetryCount = 0;
           this.emit({ type: "error", message: "Codex server overloaded after multiple retries. Relaunching session..." });
           this.cleanupAndDisconnect();
         } else {
@@ -1172,7 +1175,7 @@ export class CodexAdapter implements IBackendAdapter {
             if (!this.initialized) return;
             this.pendingOutgoing.unshift(msg);
             this.flushPendingOutgoing();
-          }, 1000 * this.reconnectRetryCount); // Linear backoff: 1s, 2s, 3s...
+          }, 1000 * this.overloadRetryCount); // Linear backoff: 1s, 2s, 3s...
         }
       } else if (errMsg.startsWith("RPC timeout")) {
         this.emit({ type: "error", message: "Codex is not responding. Relaunching session..." });

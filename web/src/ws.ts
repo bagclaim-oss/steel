@@ -58,6 +58,7 @@ if (typeof document !== "undefined") {
       pageHidden = false;
       // Page is visible again — reconnect all known active sessions.
       for (const sessionId of getReconnectCandidates()) {
+        // Re-check in case sdkSessions changed after candidate collection.
         if (!shouldReconnectSession(sessionId)) continue;
         const ws = sockets.get(sessionId);
         if (!isSocketUsable(ws)) {
@@ -1058,6 +1059,7 @@ export function disconnectSession(sessionId: string) {
     ws.close();
     sockets.delete(sessionId);
   }
+  useStore.getState().setConnectionStatus(sessionId, "disconnected");
   processedToolUseIds.delete(sessionId);
   pendingBackgroundBash.delete(sessionId);
   taskCounters.delete(sessionId);

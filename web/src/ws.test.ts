@@ -206,10 +206,12 @@ describe("disconnectSession", () => {
   it("closes the WebSocket and cleans up", () => {
     wsModule.connectSession("s1");
     const ws = lastWs;
+    useStore.getState().setConnectionStatus("s1", "connected");
 
     wsModule.disconnectSession("s1");
 
     expect(ws.close).toHaveBeenCalled();
+    expect(useStore.getState().connectionStatus.get("s1")).toBe("disconnected");
     // Sending after disconnect should be a no-op
     wsModule.sendToSession("s1", { type: "interrupt" });
     expect(ws.send).not.toHaveBeenCalled();

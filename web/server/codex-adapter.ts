@@ -1910,12 +1910,15 @@ export class CodexAdapter implements IBackendAdapter {
 
   private handleThreadStatusChanged(params: Record<string, unknown>): void {
     const raw = params.status;
-    const status = typeof raw === "string"
+    const statusRaw = typeof raw === "string"
       ? raw
       : (raw && typeof raw === "object" && typeof (raw as Record<string, unknown>).type === "string")
         ? ((raw as Record<string, unknown>).type as string)
         : null;
-    this.emit({ type: "status_change", status: status === "idle" ? null : status });
+    const status = statusRaw === "running" || statusRaw === "compacting"
+      ? statusRaw
+      : null;
+    this.emit({ type: "status_change", status });
   }
 
   private extractPlanTodos(params: Record<string, unknown>, turnId: string): PlanTodo[] {

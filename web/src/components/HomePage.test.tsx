@@ -1492,7 +1492,7 @@ describe("HomePage", () => {
   describe("onboarding tip", () => {
     it("renders the onboarding tip when cc-onboarding-dismissed is not set", async () => {
       // First-time users should see the onboarding tip explaining
-      // Workspace, Runtime, and Resume sections.
+      // the toolbar controls and Branch from session.
       render(<HomePage />);
       await screen.findByPlaceholderText("Fix a bug, build a feature, refactor code...");
 

@@ -930,6 +930,8 @@ export class CliLauncher {
 
       // Kill the other process too — if the proxy exits, kill Codex and vice versa.
       // This prevents orphaned processes lingering after a partial crash.
+      // Note: The SIGTERM will cause the sibling to exit, which fires its own
+      // exit handler, but the `exitHandled` guard above ensures it's a no-op.
       if (source === "proxy") {
         try { proc.kill("SIGTERM"); } catch {}
       } else {

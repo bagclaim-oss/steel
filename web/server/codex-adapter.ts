@@ -978,6 +978,7 @@ export class CodexAdapter implements IBackendAdapter {
       // Bail if a newer init cycle superseded us while we were awaiting
       if (myEpoch !== this.initEpoch) {
         console.warn(`[codex-adapter] Session ${this.sessionId}: init epoch ${myEpoch} superseded by ${this.initEpoch}, aborting stale init`);
+        this.initInProgress = false;
         return;
       }
 
@@ -998,6 +999,7 @@ export class CodexAdapter implements IBackendAdapter {
         // Bail out early if superseded by a newer init cycle
         if (myEpoch !== this.initEpoch) {
           console.warn(`[codex-adapter] Session ${this.sessionId}: init epoch ${myEpoch} superseded during thread start, aborting`);
+          this.initInProgress = false;
           return;
         }
         // Bail out early if the transport went away between retries
@@ -1210,11 +1212,14 @@ export class CodexAdapter implements IBackendAdapter {
           this.emit({ type: "error", message: "Connection briefly interrupted. Retrying your message..." });
           // Prepend (not push) so the original message preserves ordering if
           // a new browser message arrived in the meantime. Guard against
-          // duplicate re-queuing: if a user_message is already in the queue
-          // (from a prior reconnect cycle), skip the unshift to avoid sending
-          // the same message to Codex multiple times.
-          const alreadyQueued = msg.type === "user_message"
-            && this.pendingOutgoing.some((m) => m.type === "user_message" && m.content === msg.content);
+          // duplicate re-queuing: if a message with the same client_msg_id is
+          // already in the queue (from a prior reconnect cycle), skip the
+          // unshift to avoid sending the same message to Codex multiple times.
+          // Uses client_msg_id (stable unique ID per send) instead of content
+          // comparison to avoid silently dropping legitimate repeat messages.
+          const clientId = "client_msg_id" in msg ? msg.client_msg_id : undefined;
+          const alreadyQueued = clientId != null
+            && this.pendingOutgoing.some((m) => "client_msg_id" in m && m.client_msg_id === clientId);
           if (!alreadyQueued) {
             this.pendingOutgoing.unshift(msg);
           }

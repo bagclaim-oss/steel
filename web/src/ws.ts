@@ -774,7 +774,7 @@ function handleParsedMessage(
         id: data.id || nextId(),
         role: "user",
         content: data.content,
-        timestamp: data.timestamp,
+        timestamp: data.timestamp || Date.now(),
       });
       break;
     }

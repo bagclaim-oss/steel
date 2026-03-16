@@ -126,7 +126,7 @@ describe("OAuth state nonce (CSRF protection)", () => {
   });
 
   it("preserves returnTo path in state", () => {
-    const state = generateOAuthState("/#/setup/linear-agent");
+    const state = generateOAuthState({ returnTo: "/#/setup/linear-agent" });
     const result = validateOAuthState(state);
     expect(result).toEqual({ valid: true, returnTo: "/#/setup/linear-agent" });
   });

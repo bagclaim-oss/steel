@@ -5,7 +5,7 @@ interface WizardStepCredentialsProps {
   onNext: () => void;
   onBack: () => void;
   credentialsSaved: boolean;
-  onCredentialsSaved: () => void;
+  onCredentialsSaved: (stagingId: string) => void;
 }
 
 export function WizardStepCredentials({ onNext, onBack, credentialsSaved, onCredentialsSaved }: WizardStepCredentialsProps) {
@@ -30,13 +30,14 @@ export function WizardStepCredentials({ onNext, onBack, credentialsSaved, onCred
     setError("");
 
     try {
-      await api.updateSettings({
-        linearOAuthClientId: trimmedId,
-        linearOAuthClientSecret: trimmedSecret,
-        linearOAuthWebhookSecret: trimmedWebhook,
+      // Create a per-wizard staging slot instead of writing to global settings
+      const result = await api.createLinearStaging({
+        clientId: trimmedId,
+        clientSecret: trimmedSecret,
+        webhookSecret: trimmedWebhook,
       });
       setSaved(true);
-      onCredentialsSaved();
+      onCredentialsSaved(result.stagingId);
       setClientId("");
       setClientSecret("");
       setWebhookSecret("");

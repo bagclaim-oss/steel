@@ -928,6 +928,14 @@ export class CliLauncher {
       // pending promises and stop accepting messages immediately.
       adapter.handleTransportClose();
 
+      // Kill the other process too — if the proxy exits, kill Codex and vice versa.
+      // This prevents orphaned processes lingering after a partial crash.
+      if (source === "proxy") {
+        try { proc.kill("SIGTERM"); } catch {}
+      } else {
+        try { proxyProc.kill("SIGTERM"); } catch {}
+      }
+
       const session = this.sessions.get(sessionId);
       if (session) {
         session.state = "exited";

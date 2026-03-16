@@ -466,6 +466,8 @@ export class WsBridge {
         if (!alreadyPersisted) {
           this.appendHistory(session, msg);
           this.persistSession(session);
+        } else {
+          return;
         }
       }
 

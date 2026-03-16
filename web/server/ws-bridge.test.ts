@@ -1938,6 +1938,44 @@ describe("Browser message routing", () => {
     expect(session.pendingMessages).toHaveLength(0);
   });
 
+  it("does not rebroadcast a backend-echoed user_message when it is already in history", () => {
+    const browser = makeBrowserSocket("codex-echo-dedupe");
+    bridge.handleBrowserOpen(browser, "codex-echo-dedupe");
+
+    let onBrowserMessage: ((msg: any) => void) | undefined;
+    const adapter = {
+      isConnected: () => true,
+      send: vi.fn(() => true),
+      disconnect: async () => {},
+      onBrowserMessage: (cb: (msg: any) => void) => {
+        onBrowserMessage = cb;
+      },
+      onSessionMeta: () => {},
+      onDisconnect: () => {},
+      onInitError: () => {},
+    };
+
+    bridge.attachBackendAdapter("codex-echo-dedupe", adapter as any, "codex");
+
+    const session = bridge.getSession("codex-echo-dedupe")!;
+    session.messageHistory.push({
+      type: "user_message",
+      id: "cmsg-existing-1",
+      content: "existing message",
+      timestamp: 1000,
+    });
+
+    const sendsBefore = browser.send.mock.calls.length;
+    onBrowserMessage?.({
+      type: "user_message",
+      id: "cmsg-existing-1",
+      content: "existing message",
+      timestamp: 1000,
+    });
+
+    expect(browser.send.mock.calls.length).toBe(sendsBefore);
+  });
+
   it("preserves FIFO when queued flush is interrupted before sending current message", () => {
     const session = bridge.getSession("s1")!;
     session.pendingMessages.push(JSON.stringify({

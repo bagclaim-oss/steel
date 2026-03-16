@@ -774,7 +774,11 @@ function handleParsedMessage(
         id: data.id || nextId(),
         role: "user",
         content: data.content,
+<<<<<<< HEAD
         timestamp: data.timestamp || Date.now(),
+=======
+        timestamp: data.timestamp,
+>>>>>>> 88eb550 (fix(codex): persist first message and replay key events)
       });
       break;
     }

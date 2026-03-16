@@ -1244,7 +1244,7 @@ export const api = {
   createLinearStaging: (creds: { clientId: string; clientSecret: string; webhookSecret: string }) =>
     post<{ stagingId: string }>("/linear/oauth/staging", creds),
   getLinearStagingStatus: (id: string) =>
-    get<{ exists: boolean; hasAccessToken: boolean; hasClientId: boolean }>(`/linear/oauth/staging/${encodeURIComponent(id)}/status`),
+    get<{ exists: boolean; hasAccessToken: boolean; hasClientId: boolean; hasClientSecret: boolean }>(`/linear/oauth/staging/${encodeURIComponent(id)}/status`),
   deleteLinearStaging: (id: string) =>
     del(`/linear/oauth/staging/${encodeURIComponent(id)}`),
 

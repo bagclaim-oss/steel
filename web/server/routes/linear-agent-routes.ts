@@ -97,8 +97,15 @@ export function registerLinearAgentWebhookRoute(
     const redirectUri = `${baseUrl}/api/linear/oauth/callback`;
 
     // Determine which credentials to use for token exchange:
-    // prefer staging slot if present, fall back to global settings
+    // prefer staging slot if present, fall back to global settings only when no stagingId was expected
     const stagingSlot = stateResult.stagingId ? staging.getSlot(stateResult.stagingId) : null;
+
+    // If a stagingId was in the state but the slot is gone (expired/deleted), don't silently
+    // fall back to global settings — that would use the wrong OAuth app's credentials
+    if (stateResult.stagingId && !stagingSlot) {
+      return c.redirect(`${redirectBase}?oauth_error=${encodeURIComponent("staging_slot_expired")}`);
+    }
+
     const clientId = stagingSlot?.clientId || settings.linearOAuthClientId;
     const clientSecret = stagingSlot?.clientSecret || settings.linearOAuthClientSecret;
 
@@ -158,12 +165,13 @@ export function registerLinearAgentProtectedRoutes(api: Hono): void {
     const id = c.req.param("id");
     const slot = staging.getSlot(id);
     if (!slot) {
-      return c.json({ exists: false, hasAccessToken: false, hasClientId: false });
+      return c.json({ exists: false, hasAccessToken: false, hasClientId: false, hasClientSecret: false });
     }
     return c.json({
       exists: true,
       hasAccessToken: !!slot.accessToken,
       hasClientId: !!slot.clientId,
+      hasClientSecret: !!slot.clientSecret,
     });
   });
 

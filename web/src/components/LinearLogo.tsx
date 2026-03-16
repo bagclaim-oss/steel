@@ -9,7 +9,7 @@ interface LinearLogoProps {
 export function LinearLogo({ className }: LinearLogoProps) {
   return (
     <svg
-      viewBox="0 0 100 100"
+      viewBox="0 0 100 104"
       fill="none"
       aria-hidden="true"
       className={className}

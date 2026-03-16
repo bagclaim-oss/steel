@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, rmSync, readdirSync } from "node:fs";
+import { mkdirSync, rmSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -151,6 +151,126 @@ describe("linear-staging", () => {
       staging.consumeSlot(id1);
       expect(staging.getSlot(id1)).toBeNull();
       expect(staging.getSlot(id2)).not.toBeNull();
+    });
+  });
+
+  describe("TTL / expiry", () => {
+    // Slots have a 30-minute TTL. After that window, getSlot should treat
+    // them as expired and return null (also cleaning up the file).
+    it("getSlot returns null for a slot whose createdAt is older than 30 minutes", () => {
+      const id = staging.createSlot({
+        clientId: "cid",
+        clientSecret: "csecret",
+        webhookSecret: "wsecret",
+      });
+
+      // Backdate createdAt to 31 minutes ago so it exceeds the 30-min TTL
+      const filePath = join(TEST_HOME, "staging", `${id}.json`);
+      const slot = JSON.parse(readFileSync(filePath, "utf-8"));
+      slot.createdAt = Date.now() - 31 * 60 * 1000;
+      writeFileSync(filePath, JSON.stringify(slot, null, 2));
+
+      // The slot should now be treated as expired
+      expect(staging.getSlot(id)).toBeNull();
+    });
+  });
+
+  describe("pruneExpired", () => {
+    // pruneExpired should remove all slot files whose createdAt exceeds
+    // the 30-minute TTL, leaving fresh slots untouched.
+    it("removes stale files from the staging directory", () => {
+      // Create two slots: one will be backdated (expired), one stays fresh
+      const expiredId = staging.createSlot({
+        clientId: "old-client",
+        clientSecret: "old-secret",
+        webhookSecret: "old-webhook",
+      });
+      const freshId = staging.createSlot({
+        clientId: "new-client",
+        clientSecret: "new-secret",
+        webhookSecret: "new-webhook",
+      });
+
+      // Backdate the first slot to 31 minutes ago
+      const expiredPath = join(TEST_HOME, "staging", `${expiredId}.json`);
+      const expiredSlot = JSON.parse(readFileSync(expiredPath, "utf-8"));
+      expiredSlot.createdAt = Date.now() - 31 * 60 * 1000;
+      writeFileSync(expiredPath, JSON.stringify(expiredSlot, null, 2));
+
+      // Run pruneExpired explicitly
+      staging.pruneExpired();
+
+      // The expired slot file should be gone
+      const remaining = readdirSync(join(TEST_HOME, "staging"));
+      expect(remaining).not.toContain(`${expiredId}.json`);
+
+      // The fresh slot should still be present
+      expect(remaining).toContain(`${freshId}.json`);
+    });
+  });
+
+  describe("updateSlotTokens on expired slot", () => {
+    // updateSlotTokens delegates to getSlot internally, so if the slot is
+    // expired it should return false and not persist any token update.
+    it("returns false when the slot has expired", () => {
+      const id = staging.createSlot({
+        clientId: "cid",
+        clientSecret: "csecret",
+        webhookSecret: "wsecret",
+      });
+
+      // Backdate createdAt to 31 minutes ago
+      const filePath = join(TEST_HOME, "staging", `${id}.json`);
+      const slot = JSON.parse(readFileSync(filePath, "utf-8"));
+      slot.createdAt = Date.now() - 31 * 60 * 1000;
+      writeFileSync(filePath, JSON.stringify(slot, null, 2));
+
+      // Attempting to update tokens on an expired slot should fail
+      const result = staging.updateSlotTokens(id, {
+        accessToken: "at_new",
+        refreshToken: "rt_new",
+      });
+      expect(result).toBe(false);
+    });
+  });
+
+  describe("path traversal protection", () => {
+    // The internal slotPath helper validates IDs against /^[0-9a-f]{32}$/.
+    // Any ID that doesn't match (e.g. containing "../") is rejected.
+    // Public functions that wrap slotPath in try/catch safely return
+    // null/false instead of throwing, but the key invariant is that
+    // no file outside the staging directory is ever accessed.
+
+    const maliciousIds = [
+      "../settings",
+      "../../etc/passwd",
+      "../staging/legit",
+      "a".repeat(31) + "/",   // wrong length + slash
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0", // uppercase hex — regex requires lowercase
+    ];
+
+    it("getSlot safely rejects malicious IDs (returns null)", () => {
+      // getSlot wraps slotPath in a try/catch, so the invalid-ID error
+      // is caught and the function returns null — no file access occurs.
+      for (const id of maliciousIds) {
+        expect(staging.getSlot(id)).toBeNull();
+      }
+    });
+
+    it("deleteSlot safely rejects malicious IDs (returns false)", () => {
+      // deleteSlot wraps unlinkSync(slotPath(id)) in a try/catch,
+      // so the invalid-ID error causes it to return false.
+      for (const id of maliciousIds) {
+        expect(staging.deleteSlot(id)).toBe(false);
+      }
+    });
+
+    it("consumeSlot safely rejects malicious IDs (returns null)", () => {
+      // consumeSlot delegates to getSlot first, which returns null
+      // for invalid IDs, so consumeSlot returns null immediately.
+      for (const id of maliciousIds) {
+        expect(staging.consumeSlot(id)).toBeNull();
+      }
     });
   });
 });

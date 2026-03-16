@@ -191,7 +191,7 @@ export function AgentsPage({ route }: Props) {
     // Check OAuth status — use staging slot if available, else global
     const statusPromise = persistedStagingId
       ? api.getLinearStagingStatus(persistedStagingId)
-          .then((s) => ({ hasAccessToken: s.hasAccessToken, hasClientId: s.hasClientId, hasClientSecret: s.exists, configured: s.hasAccessToken && s.hasClientId }))
+          .then((s) => ({ hasAccessToken: s.hasAccessToken, hasClientId: s.hasClientId, hasClientSecret: s.hasClientSecret, configured: s.hasAccessToken && s.hasClientId }))
       : api.getLinearOAuthStatus();
 
     statusPromise.then((serverStatus) => {

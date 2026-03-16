@@ -38,6 +38,9 @@ function ensureDir(): void {
 }
 
 function slotPath(id: string): string {
+  if (!/^[0-9a-f]{32}$/.test(id)) {
+    throw new Error(`Invalid staging slot ID: ${id}`);
+  }
   return join(STAGING_DIR, `${id}.json`);
 }
 

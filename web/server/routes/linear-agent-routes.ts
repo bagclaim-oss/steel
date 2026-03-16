@@ -197,6 +197,13 @@ export function registerLinearAgentProtectedRoutes(api: Hono): void {
 
     // Use staging slot's clientId if provided, fall back to global settings
     const slot = stagingId ? staging.getSlot(stagingId) : null;
+
+    // If a stagingId was provided but the slot is expired/missing, fail early
+    // rather than generating a URL that will fail at callback time
+    if (stagingId && !slot) {
+      return c.json({ error: "Staging slot expired or not found" }, 404);
+    }
+
     const clientId = slot?.clientId || settings.linearOAuthClientId;
 
     const result = linearAgent.getOAuthAuthorizeUrl(clientId, redirectUri, {

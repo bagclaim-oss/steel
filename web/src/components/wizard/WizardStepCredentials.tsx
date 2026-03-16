@@ -123,7 +123,9 @@ export function WizardStepCredentials({ onNext, onBack, credentialsSaved, onCred
           Back
         </button>
         <div className="flex gap-2">
-          {!saved && (
+          {/* Show Save button when credentials haven't been saved yet, or when the user
+              has typed new values (allowing corrections after the first save) */}
+          {(!saved || (clientId.trim() && clientSecret.trim() && webhookSecret.trim())) && (
             <button
               onClick={handleSave}
               disabled={saving || !clientId.trim() || !clientSecret.trim() || !webhookSecret.trim()}
@@ -133,7 +135,7 @@ export function WizardStepCredentials({ onNext, onBack, credentialsSaved, onCred
                   : "bg-cc-primary hover:bg-cc-primary-hover text-white cursor-pointer"
               }`}
             >
-              {saving ? "Saving..." : "Save Credentials"}
+              {saving ? "Saving..." : saved ? "Update Credentials" : "Save Credentials"}
             </button>
           )}
           {saved && (

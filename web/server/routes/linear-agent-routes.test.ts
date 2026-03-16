@@ -647,28 +647,21 @@ describe("GET /linear/oauth/authorize-url — with stagingId", () => {
     );
   });
 
-  it("falls back to global clientId when staging slot doesn't exist", async () => {
-    // If stagingId is provided but the slot is gone, the route falls back to
-    // the global linearOAuthClientId from settings.
+  it("returns 404 when staging slot doesn't exist (expired or deleted)", async () => {
+    // If stagingId is provided but the slot is expired/missing, the endpoint
+    // should return 404 immediately rather than generating a URL that will
+    // fail at callback time with staging_slot_expired.
     vi.mocked(staging.getSlot).mockReturnValue(null);
-    vi.mocked(linearAgent.getOAuthAuthorizeUrl).mockReturnValue({
-      url: "https://linear.app/oauth/authorize?client_id=client-id&state=abc",
-      state: "abc",
-    });
 
     const res = await app.request(
       "/linear/oauth/authorize-url?stagingId=deadbeefdeadbeefdeadbeefdeadbeef",
     );
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(404);
     const body = await res.json();
-    expect(body.url).toContain("linear.app/oauth/authorize");
+    expect(body.error).toContain("Staging slot expired");
 
-    // Should fall back to global client-id from the mocked settings
-    expect(linearAgent.getOAuthAuthorizeUrl).toHaveBeenCalledWith(
-      "client-id",
-      expect.stringContaining("/api/linear/oauth/callback"),
-      { returnTo: undefined, stagingId: "deadbeefdeadbeefdeadbeefdeadbeef" },
-    );
+    // Should not have attempted to generate an authorize URL
+    expect(linearAgent.getOAuthAuthorizeUrl).not.toHaveBeenCalled();
   });
 });

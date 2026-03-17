@@ -296,7 +296,7 @@ function ContentBlockRenderer({
     }
     return (
       <div className="rounded-lg bg-cc-code-bg overflow-hidden">
-        <pre className={`text-[12px] font-mono-code px-3 py-2 whitespace-pre-wrap leading-relaxed ${
+        <pre className={`text-[12px] font-mono-code px-3 py-2 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto ${
           isError ? "text-cc-error" : "text-cc-code-fg/60"
         }`}>
           {content}

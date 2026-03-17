@@ -9,7 +9,10 @@ import {
   ToolIcon,
 } from "./ToolBlock.js";
 import type { ChatMessage, ContentBlock, SdkSessionInfo } from "../types.js";
+import type { ToolActivityEntry } from "../store/tasks-slice.js";
 import { formatElapsed, formatTokenCount } from "../utils/format.js";
+import { ToolExecutionBar } from "./ToolExecutionBar.js";
+import { ToolTurnSummary } from "./ToolTurnSummary.js";
 
 const FEED_PAGE_SIZE = 100;
 const RESUME_HISTORY_PAGE_SIZE = 40;
@@ -371,7 +374,7 @@ function ToolMessageGroup({ group }: { group: ToolMsgGroup }) {
   );
 }
 
-function FeedEntries({ entries }: { entries: FeedEntry[] }) {
+function FeedEntries({ entries, toolActivity }: { entries: FeedEntry[]; toolActivity?: ToolActivityEntry[] }) {
   return (
     <>
       {entries.map((entry, i) => {
@@ -381,10 +384,30 @@ function FeedEntries({ entries }: { entries: FeedEntry[] }) {
         if (entry.kind === "subagent") {
           return <SubagentContainer key={entry.taskToolUseId} group={entry} />;
         }
-        return <MessageBubble key={entry.msg.id} message={entry.msg} />;
+        const msg = entry.msg;
+        const toolUseIds = getToolUseIdsFromMessage(msg);
+        const matchingActivity = toolActivity && toolUseIds.length > 0
+          ? toolActivity.filter((a) => toolUseIds.includes(a.toolUseId))
+          : [];
+        // Show turn summary after assistant messages with completed tool calls
+        const allComplete = matchingActivity.length > 0 && matchingActivity.every((a) => a.completedAt);
+        return (
+          <div key={msg.id}>
+            <MessageBubble message={msg} />
+            {allComplete && <ToolTurnSummary entries={matchingActivity} />}
+          </div>
+        );
       })}
     </>
   );
+}
+
+/** Extract tool_use IDs from a message's content blocks. */
+function getToolUseIdsFromMessage(msg: ChatMessage): string[] {
+  if (!msg.contentBlocks?.length) return [];
+  return msg.contentBlocks
+    .filter((b): b is ContentBlock & { type: "tool_use"; id: string } => b.type === "tool_use")
+    .map((b) => b.id);
 }
 
 function normalizeSubagentStatus(status?: string): {
@@ -575,6 +598,7 @@ export function MessageFeed({ sessionId }: { sessionId: string }) {
   );
   const sessionStatus = useStore((s) => s.sessionStatus.get(sessionId));
   const toolProgress = useStore((s) => s.toolProgress.get(sessionId));
+  const toolActivity = useStore((s) => s.toolActivity.get(sessionId));
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isNearBottom = useRef(true);
@@ -968,20 +992,11 @@ export function MessageFeed({ sessionId }: { sessionId: string }) {
               </button>
             </div>
           )}
-          <FeedEntries entries={visibleEntries} />
+          <FeedEntries entries={visibleEntries} toolActivity={toolActivity} />
 
           {/* Tool progress indicator */}
           {toolProgress && toolProgress.size > 0 && !hasStreamingAssistant && (
-            <div className="flex items-center gap-2 text-[11px] text-cc-muted font-mono-code pl-10 stats-glow py-1">
-              <span className="inline-block w-2 h-2 rounded-full bg-cc-primary animate-[typing-breathe_1.5s_ease-in-out_infinite]" />
-              {Array.from(toolProgress.values()).map((p, i) => (
-                <span key={i} className="flex items-center gap-1">
-                  {i > 0 && <span className="text-cc-muted/30">|</span>}
-                  <span className="text-cc-fg/70">{getToolLabel(p.toolName)}</span>
-                  <span className="text-cc-muted/50 tabular-nums">{p.elapsedSeconds}s</span>
-                </span>
-              ))}
-            </div>
+            <ToolExecutionBar tools={Array.from(toolProgress.values())} />
           )}
 
           {/* Compacting context indicator */}

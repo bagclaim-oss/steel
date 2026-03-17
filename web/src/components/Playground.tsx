@@ -24,6 +24,9 @@ import type {
 } from "../types.js";
 import { AiValidationBadge } from "./AiValidationBadge.js";
 import { AiValidationToggle } from "./AiValidationToggle.js";
+import { ToolExecutionBar } from "./ToolExecutionBar.js";
+import { ToolTurnSummary } from "./ToolTurnSummary.js";
+import type { ToolActivityEntry } from "../store/tasks-slice.js";
 import type { TaskItem } from "../types.js";
 import type {
   UpdateInfo,
@@ -470,6 +473,21 @@ const MOCK_SUBAGENT_TOOL_ITEMS = [
     name: "Grep",
     input: { pattern: "session.userId", path: "src/" },
   },
+];
+
+// Tool Activity mock data
+const MOCK_TOOL_ACTIVITY_OK: ToolActivityEntry[] = [
+  { toolUseId: "ta-1", toolName: "Bash", preview: "bun run test", startedAt: Date.now() - 7200, completedAt: Date.now() - 400, elapsedSeconds: 6.8, isError: false },
+  { toolUseId: "ta-2", toolName: "Read", preview: "src/ws.ts", startedAt: Date.now() - 500, completedAt: Date.now() - 400, elapsedSeconds: 0.1, isError: false },
+  { toolUseId: "ta-3", toolName: "Edit", preview: "src/ws.ts", startedAt: Date.now() - 400, completedAt: Date.now() - 100, elapsedSeconds: 1.4, isError: false },
+];
+const MOCK_TOOL_ACTIVITY_ERROR: ToolActivityEntry[] = [
+  { toolUseId: "ta-4", toolName: "Bash", preview: "npm run build", startedAt: Date.now() - 5000, completedAt: Date.now() - 1000, elapsedSeconds: 4.0, isError: true },
+  { toolUseId: "ta-5", toolName: "Read", preview: "package.json", startedAt: Date.now() - 900, completedAt: Date.now() - 800, elapsedSeconds: 0.1, isError: false },
+];
+const MOCK_TOOL_ACTIVITY_RUNNING: ToolActivityEntry[] = [
+  { toolUseId: "ta-6", toolName: "Bash", preview: "bun run test", startedAt: Date.now() - 3000, elapsedSeconds: 3.0, isError: false },
+  { toolUseId: "ta-7", toolName: "Grep", preview: "TODO", startedAt: Date.now() - 1000, completedAt: Date.now() - 500, elapsedSeconds: 0.5, isError: false },
 ];
 
 // GitHub PR mock data
@@ -2746,6 +2764,49 @@ export function Playground() {
                 <div className="flex-1 flex items-center justify-center text-xs text-cc-muted">
                   noVNC iframe would render here
                 </div>
+              </div>
+            </Card>
+          </div>
+        </Section>
+
+        {/* ─── Tool Activity ──────────────────────────────── */}
+        <Section
+          title="Tool Activity"
+          description="Live execution bar and post-turn summary strip"
+        >
+          <div className="space-y-6">
+            <Card label="ToolExecutionBar — 1 tool running">
+              <div className="bg-cc-bg p-2 rounded">
+                <ToolExecutionBar tools={[{ toolName: "Bash", elapsedSeconds: 3 }]} />
+              </div>
+            </Card>
+            <Card label="ToolExecutionBar — 3 tools running">
+              <div className="bg-cc-bg p-2 rounded">
+                <ToolExecutionBar tools={[
+                  { toolName: "Bash", elapsedSeconds: 7 },
+                  { toolName: "Read", elapsedSeconds: 1 },
+                  { toolName: "Edit", elapsedSeconds: 4 },
+                ]} />
+              </div>
+            </Card>
+            <Card label="ToolExecutionBar — empty (renders nothing)">
+              <div className="bg-cc-bg p-2 rounded min-h-[24px]">
+                <ToolExecutionBar tools={[]} />
+              </div>
+            </Card>
+            <Card label="ToolTurnSummary — collapsed (3 tools, no errors)">
+              <div className="bg-cc-bg p-2 rounded">
+                <ToolTurnSummary entries={MOCK_TOOL_ACTIVITY_OK} />
+              </div>
+            </Card>
+            <Card label="ToolTurnSummary — collapsed (with error)">
+              <div className="bg-cc-bg p-2 rounded">
+                <ToolTurnSummary entries={MOCK_TOOL_ACTIVITY_ERROR} />
+              </div>
+            </Card>
+            <Card label="ToolTurnSummary — collapsed (with running tool)">
+              <div className="bg-cc-bg p-2 rounded">
+                <ToolTurnSummary entries={MOCK_TOOL_ACTIVITY_RUNNING} />
               </div>
             </Card>
           </div>

@@ -2,6 +2,7 @@ import { useStore } from "./store.js";
 import type { BrowserIncomingMessage, BrowserOutgoingMessage, ContentBlock, ChatMessage, TaskItem, ProcessItem, ProcessStatus, SdkSessionInfo, McpServerConfig } from "./types.js";
 import { generateUniqueSessionName } from "./utils/names.js";
 import { playNotificationSound } from "./utils/notification-sound.js";
+import { getPreview } from "./components/ToolBlock.js";
 
 const WS_RECONNECT_DELAY_MS = 2000;
 const sockets = new Map<string, WebSocket>();
@@ -318,10 +319,16 @@ const streamingBlocksBySession = new Map<string, { thinking: string; text: strin
 function setStreamingDraftMessage(sessionId: string, content: string, phase?: "thinking" | "text") {
   const store = useStore.getState();
   const existing = store.messages.get(sessionId) || [];
-  const messages = [...existing];
   const existingDraftId = streamingDraftMessageIdBySession.get(sessionId);
-  let draftIndex = -1;
 
+  // Remove ALL orphaned streaming drafts (messages with isStreaming that aren't
+  // the tracked draft). This prevents duplicates when message_history merges or
+  // reconnects leave stale drafts in the array.
+  let messages = existing.filter(
+    (m) => !m.isStreaming || m.id === existingDraftId,
+  );
+
+  let draftIndex = -1;
   if (existingDraftId) {
     draftIndex = messages.findIndex((m) => m.id === existingDraftId);
     if (draftIndex === -1) {
@@ -332,15 +339,16 @@ function setStreamingDraftMessage(sessionId: string, content: string, phase?: "t
   if (draftIndex === -1) {
     const id = `stream-${sessionId}-${nextId()}`;
     streamingDraftMessageIdBySession.set(sessionId, id);
-    messages.push({
+    messages = [...messages, {
       id,
-      role: "assistant",
+      role: "assistant" as const,
       content,
       timestamp: Date.now(),
       isStreaming: true,
       streamingPhase: phase,
-    });
+    }];
   } else {
+    messages = [...messages];
     const prev = messages[draftIndex];
     messages[draftIndex] = {
       ...prev,
@@ -355,17 +363,16 @@ function setStreamingDraftMessage(sessionId: string, content: string, phase?: "t
 }
 
 function clearStreamingDraftMessage(sessionId: string) {
-  const draftId = streamingDraftMessageIdBySession.get(sessionId);
-  if (!draftId) return;
+  streamingDraftMessageIdBySession.delete(sessionId);
 
+  // Remove ALL streaming draft messages, not just the tracked one.
+  // This guards against orphaned drafts from reconnects or message_history merges.
   const store = useStore.getState();
   const existing = store.messages.get(sessionId) || [];
-  const next = existing.filter((m) => m.id !== draftId);
+  const next = existing.filter((m) => !m.isStreaming);
   if (next.length !== existing.length) {
     store.setMessages(sessionId, next);
   }
-
-  streamingDraftMessageIdBySession.delete(sessionId);
 }
 
 function nextClientMsgId(): string {
@@ -438,23 +445,43 @@ function extractTextFromBlocks(blocks: ContentBlock[]): string {
     .join("\n");
 }
 
+/** Stable dedup key for a content block — ignores mutable metadata like `signature`. */
+function contentBlockKey(block: ContentBlock): string {
+  if (block.type === "thinking") return `thinking:${block.thinking}`;
+  if (block.type === "text") return `text:${block.text}`;
+  if (block.type === "tool_use") return `tool_use:${block.id}`;
+  if (block.type === "tool_result") return `tool_result:${block.tool_use_id}`;
+  return JSON.stringify(block);
+}
+
 function mergeContentBlocks(prev?: ContentBlock[], next?: ContentBlock[]): ContentBlock[] | undefined {
   const prevBlocks = prev || [];
   const nextBlocks = next || [];
   if (prevBlocks.length === 0 && nextBlocks.length === 0) return undefined;
 
+  // Build a map of next blocks for in-place replacement of matching prev blocks.
+  const nextByKey = new Map<string, ContentBlock>();
+  for (const block of nextBlocks) {
+    nextByKey.set(contentBlockKey(block), block);
+  }
+
   const merged: ContentBlock[] = [];
   const seen = new Set<string>();
 
-  const pushUnique = (block: ContentBlock) => {
-    const key = JSON.stringify(block);
-    if (seen.has(key)) return;
+  // Prev blocks first (preserves chronological order), replaced by next if matching.
+  for (const block of prevBlocks) {
+    const key = contentBlockKey(block);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(nextByKey.get(key) || block);
+  }
+  // Append any next blocks not already covered by prev.
+  for (const block of nextBlocks) {
+    const key = contentBlockKey(block);
+    if (seen.has(key)) continue;
     seen.add(key);
     merged.push(block);
-  };
-
-  for (const block of prevBlocks) pushUnique(block);
-  for (const block of nextBlocks) pushUnique(block);
+  }
   return merged;
 }
 
@@ -569,6 +596,9 @@ function handleParsedMessage(
       upsertAssistantMessage(sessionId, chatMsg);
       store.setStreaming(sessionId, null);
       streamingPhaseBySession.delete(sessionId);
+      // Reset streaming text accumulators so subsequent deltas in the same
+      // turn don't re-show content that was already committed in the real
+      // assistant message (prevents the "3-4 duplicate lines" streaming bug).
       streamingBlocksBySession.delete(sessionId);
       // Clear progress only for completed tools (tool_result blocks), not all tools.
       // Blanket clear would cause flickering during concurrent tool execution.
@@ -584,6 +614,30 @@ function handleParsedMessage(
       // Start timer if not already started (for non-streaming tool calls)
       if (!store.streamingStartedAt.has(sessionId)) {
         store.setStreamingStats(sessionId, { startedAt: Date.now() });
+      }
+
+      // Track tool activity for execution timeline
+      if (msg.content?.length) {
+        for (const block of msg.content) {
+          if (block.type === "tool_use") {
+            const input = (block as { input?: Record<string, unknown> }).input || {};
+            store.addToolActivity(sessionId, {
+              toolUseId: block.id,
+              toolName: block.name,
+              preview: getPreview(block.name, input),
+              startedAt: Date.now(),
+              elapsedSeconds: 0,
+              isError: false,
+              parentToolUseId: data.parent_tool_use_id || undefined,
+            });
+          }
+          if (block.type === "tool_result") {
+            store.updateToolActivity(sessionId, block.tool_use_id, {
+              completedAt: Date.now(),
+              isError: Boolean(block.is_error),
+            });
+          }
+        }
       }
 
       // Extract tasks and changed files from tool_use content blocks
@@ -747,6 +801,10 @@ function handleParsedMessage(
     case "tool_progress": {
       store.setToolProgress(sessionId, data.tool_use_id, {
         toolName: data.tool_name,
+        elapsedSeconds: data.elapsed_time_seconds,
+      });
+      // Also update tool activity elapsed time
+      store.updateToolActivity(sessionId, data.tool_use_id, {
         elapsedSeconds: data.elapsed_time_seconds,
       });
       break;
@@ -1109,6 +1167,7 @@ export function disconnectSession(sessionId: string) {
   taskCounters.delete(sessionId);
   streamingPhaseBySession.delete(sessionId);
   streamingDraftMessageIdBySession.delete(sessionId);
+  streamingBlocksBySession.delete(sessionId);
   lastSeqBySession.delete(sessionId);
   pendingOutgoingBySession.delete(sessionId);
 }

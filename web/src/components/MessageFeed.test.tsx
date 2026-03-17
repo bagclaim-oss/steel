@@ -41,6 +41,7 @@ vi.mock("../store.js", () => ({
       streamingOutputTokens: mockStoreValues.streamingOutputTokens ?? new Map(),
       sessionStatus: mockStoreValues.sessionStatus ?? new Map(),
       toolProgress: mockStoreValues.toolProgress ?? new Map(),
+      toolActivity: mockStoreValues.toolActivity ?? new Map(),
       chatTabReentryTickBySession:
         mockStoreValues.chatTabReentryTickBySession ?? new Map(),
       sdkSessions: mockStoreValues.sdkSessions ?? [],
@@ -109,6 +110,7 @@ function resetStore() {
   mockStoreValues.streamingOutputTokens = new Map();
   mockStoreValues.sessionStatus = new Map();
   mockStoreValues.toolProgress = new Map();
+  mockStoreValues.toolActivity = new Map();
   mockStoreValues.chatTabReentryTickBySession = new Map();
   mockStoreValues.sdkSessions = [];
 }

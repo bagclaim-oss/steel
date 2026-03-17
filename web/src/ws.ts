@@ -614,6 +614,12 @@ function handleParsedMessage(
           const delta = evt.delta as Record<string, unknown> | undefined;
           if (delta?.type === "text_delta" && typeof delta.text === "string") {
             const parts = streamingBlocksBySession.get(sessionId) || { thinking: "", text: "" };
+            // Reset thinking accumulator on phase transition so that if
+            // thinking resumes later it starts fresh (avoids showing stale
+            // concatenated thinking from a previous block).
+            if (streamingPhaseBySession.get(sessionId) === "thinking") {
+              parts.thinking = "";
+            }
             parts.text += delta.text;
             streamingBlocksBySession.set(sessionId, parts);
             streamingPhaseBySession.set(sessionId, "text");
@@ -747,9 +753,21 @@ function handleParsedMessage(
     }
 
     case "tool_use_summary": {
-      // Intentionally not rendered — the tool_use content blocks in the
-      // assistant message already render the tool call via ToolBlock/EditBlock.
-      // Showing the summary as a separate system message would duplicate info.
+      // For Claude Code, tool_use content blocks in the assistant message
+      // already render the tool call via ToolBlock/EditBlock — rendering a
+      // duplicate system message would be redundant.
+      // For Codex, tool_use blocks may not be present, so we still render.
+      const backend = store.sdkSessions.find(
+        (s) => s.sessionId === sessionId,
+      )?.backendType;
+      if (backend !== "claude") {
+        store.appendMessage(sessionId, {
+          id: nextId(),
+          role: "system",
+          content: data.summary,
+          timestamp: Date.now(),
+        });
+      }
       break;
     }
 

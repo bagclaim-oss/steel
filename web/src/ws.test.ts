@@ -736,8 +736,9 @@ describe("handleMessage: stream_event content_block_delta", () => {
       parent_tool_use_id: null,
     });
 
-    // Thinking text accumulates separately — "AC" (A + C)
-    expect(useStore.getState().streaming.get("s1")).toBe("AC");
+    // Thinking resets on phase transition — only shows "C" (not "AC")
+    // because the text_delta ("B") cleared the thinking accumulator.
+    expect(useStore.getState().streaming.get("s1")).toBe("C");
   });
 });
 
@@ -1751,7 +1752,11 @@ describe("handleMessage: tool_progress", () => {
 // handleMessage: tool_use_summary
 // ===========================================================================
 describe("handleMessage: tool_use_summary", () => {
-  it("does not create a visible system message (tool_use blocks already render the tool call)", () => {
+  it("does not create a visible system message for Claude Code sessions", () => {
+    // Set up sdkSessions so the handler recognises this as a Claude Code session
+    useStore.setState({
+      sdkSessions: [{ sessionId: "s1", backendType: "claude", cwd: "/test", state: "running", createdAt: Date.now() }],
+    });
     wsModule.connectSession("s1");
     fireMessage({ type: "session_init", session: makeSession("s1") });
 
@@ -1762,9 +1767,29 @@ describe("handleMessage: tool_use_summary", () => {
     });
 
     const msgs = useStore.getState().messages.get("s1") || [];
-    // tool_use_summary is intentionally not rendered as a system message
+    // Claude Code sessions already render tool_use blocks — summary is redundant
     const systemMsg = msgs.find((m) => m.role === "system" && m.content === "Ran 3 tools: Bash, Read, Grep");
     expect(systemMsg).toBeUndefined();
+  });
+
+  it("renders a system message for Codex sessions", () => {
+    // Set up sdkSessions so the handler recognises this as a Codex session
+    useStore.setState({
+      sdkSessions: [{ sessionId: "s1", backendType: "codex", cwd: "/test", state: "running", createdAt: Date.now() }],
+    });
+    wsModule.connectSession("s1");
+    fireMessage({ type: "session_init", session: makeSession("s1") });
+
+    fireMessage({
+      type: "tool_use_summary",
+      summary: "Ran 3 tools: Bash, Read, Grep",
+      tool_use_ids: ["tu-1", "tu-2", "tu-3"],
+    });
+
+    const msgs = useStore.getState().messages.get("s1") || [];
+    // Codex may not include tool_use content blocks, so the summary is needed
+    const systemMsg = msgs.find((m) => m.role === "system" && m.content === "Ran 3 tools: Bash, Read, Grep");
+    expect(systemMsg).toBeDefined();
   });
 });
 

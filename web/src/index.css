@@ -388,7 +388,10 @@ select {
   display: none;
 }
 .diff-compact .diff-hunk-header {
-  display: none;
+  font-size: 10px;
+  opacity: 0.4;
+  padding: 1px 4px;
+  font-style: italic;
 }
 .diff-full {
   overflow-y: auto;

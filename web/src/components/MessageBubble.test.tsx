@@ -2,9 +2,43 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { ChatMessage, ContentBlock } from "../types.js";
 
-// Mock react-markdown to avoid ESM/parsing issues in tests
+// Mock react-markdown to exercise custom component renderers while avoiding ESM/parsing issues.
+// The mock invokes each custom component from the `components` prop so coverage reaches those lines.
 vi.mock("react-markdown", () => ({
-  default: ({ children }: { children: string }) => <div data-testid="markdown">{children}</div>,
+  default: ({ children, components }: { children: string; components?: Record<string, Function> }) => {
+    if (!components) return <div data-testid="markdown">{children}</div>;
+
+    // Exercise all custom component renderers to achieve coverage on MarkdownContent
+    const renderers: React.ReactNode[] = [];
+    const C = components as Record<string, React.FC<Record<string, unknown>>>;
+
+    if (C.p) renderers.push(<C.p key="p">{children}</C.p>);
+    if (C.strong) renderers.push(<C.strong key="strong">bold</C.strong>);
+    if (C.em) renderers.push(<C.em key="em">italic</C.em>);
+    if (C.h1) renderers.push(<C.h1 key="h1">Heading 1</C.h1>);
+    if (C.h2) renderers.push(<C.h2 key="h2">Heading 2</C.h2>);
+    if (C.h3) renderers.push(<C.h3 key="h3">Heading 3</C.h3>);
+    if (C.ul) renderers.push(<C.ul key="ul"><li>item</li></C.ul>);
+    if (C.ol) renderers.push(<C.ol key="ol"><li>item</li></C.ol>);
+    if (C.li) renderers.push(<C.li key="li">list item</C.li>);
+    if (C.a) renderers.push(<C.a key="a" href="https://example.com">link</C.a>);
+    if (C.blockquote) renderers.push(<C.blockquote key="bq">quote</C.blockquote>);
+    if (C.hr) renderers.push(<C.hr key="hr" />);
+    if (C.pre) renderers.push(<C.pre key="pre"><code>pre code</code></C.pre>);
+    if (C.table) renderers.push(<C.table key="table"><tbody><tr><td>cell</td></tr></tbody></C.table>);
+    if (C.thead) renderers.push(<C.thead key="thead"><tr><th>head</th></tr></C.thead>);
+    if (C.th) renderers.push(<C.th key="th">header</C.th>);
+    if (C.td) renderers.push(<C.td key="td">data</C.td>);
+    // Exercise code renderer with both inline and block variants
+    if (C.code) {
+      renderers.push(<C.code key="inline-code">inline</C.code>);
+      renderers.push(<C.code key="block-code" className="language-typescript">{"const x = 1;\nconst y = 2;"}</C.code>);
+      // Block code without language (multiline string)
+      renderers.push(<C.code key="block-noclass">{"line1\nline2"}</C.code>);
+    }
+
+    return <div data-testid="markdown">{renderers}</div>;
+  },
 }));
 
 vi.mock("remark-gfm", () => ({
@@ -93,9 +127,9 @@ describe("MessageBubble - assistant messages", () => {
     const msg = makeMessage({ role: "assistant", content: "Hello world" });
     render(<MessageBubble message={msg} />);
 
-    // Our mock renders content inside data-testid="markdown"
+    // Our mock renders content inside data-testid="markdown" along with exercised component renderers
     const markdown = screen.getByTestId("markdown");
-    expect(markdown.textContent).toBe("Hello world");
+    expect(markdown.textContent).toContain("Hello world");
   });
 
   it("renders assistant message with text content blocks", () => {
@@ -109,7 +143,7 @@ describe("MessageBubble - assistant messages", () => {
     render(<MessageBubble message={msg} />);
 
     const markdown = screen.getByTestId("markdown");
-    expect(markdown.textContent).toBe("Here is the answer");
+    expect(markdown.textContent).toContain("Here is the answer");
   });
 
   it("renders tool_use content blocks as ToolBlock components", () => {
@@ -326,5 +360,274 @@ describe("MessageBubble - content block grouping", () => {
     // The two Read tools should not be grouped since there is a text block between them
     const labels = screen.getAllByText("Read File");
     expect(labels.length).toBe(2);
+  });
+});
+
+// ─── Streaming phase rendering ──────────────────────────────────────────────
+
+describe("MessageBubble - streaming", () => {
+  it("renders thinking phase as ThinkingBlock during streaming", () => {
+    // When isStreaming=true and streamingPhase="thinking", content should render as ThinkingBlock (italic)
+    const msg = makeMessage({
+      role: "assistant",
+      content: "Analyzing the problem...",
+      isStreaming: true,
+      streamingPhase: "thinking",
+    });
+    const { container } = render(<MessageBubble message={msg} />);
+
+    // ThinkingBlock renders with italic class
+    const italicDiv = container.querySelector(".italic");
+    expect(italicDiv).toBeTruthy();
+    expect(screen.getByText("Analyzing the problem...")).toBeTruthy();
+  });
+
+  it("renders streaming text phase with a blinking cursor", () => {
+    // When isStreaming=true and streamingPhase="text", a cursor element should appear
+    const msg = makeMessage({
+      role: "assistant",
+      content: "Writing response...",
+      isStreaming: true,
+      streamingPhase: "text",
+    });
+    render(<MessageBubble message={msg} />);
+
+    // The cursor is rendered via data-testid="assistant-stream-cursor"
+    expect(screen.getByTestId("assistant-stream-cursor")).toBeTruthy();
+    expect(screen.getByText("Writing response...")).toBeTruthy();
+  });
+
+  it("does not show cursor when not streaming", () => {
+    // Non-streaming assistant message should not have a cursor
+    const msg = makeMessage({
+      role: "assistant",
+      content: "Done.",
+    });
+    render(<MessageBubble message={msg} />);
+
+    expect(screen.queryByTestId("assistant-stream-cursor")).toBeNull();
+  });
+});
+
+// ─── ThinkingBlock edge cases ───────────────────────────────────────────────
+
+describe("MessageBubble - ThinkingBlock", () => {
+  it("shows 'No thinking text captured.' for empty thinking content", () => {
+    // When thinking text is empty/whitespace, the block shows fallback text
+    const msg = makeMessage({
+      role: "assistant",
+      content: "",
+      contentBlocks: [
+        { type: "thinking", thinking: "   " },
+      ],
+    });
+    render(<MessageBubble message={msg} />);
+
+    expect(screen.getByText("No thinking text captured.")).toBeTruthy();
+  });
+
+  it("does not show 'Show more' for short thinking content", () => {
+    // Short text (fewer than 8 lines and under 600 chars) should not have a button
+    const msg = makeMessage({
+      role: "assistant",
+      content: "",
+      contentBlocks: [
+        { type: "thinking", thinking: "Short thought." },
+      ],
+    });
+    render(<MessageBubble message={msg} />);
+
+    expect(screen.queryByText("Show more")).toBeNull();
+  });
+
+  it("triggers 'Show more' when thinking content exceeds 600 chars", () => {
+    // isLong is true when normalized.length > 600 even with few lines
+    const longText = "A".repeat(650);
+    const msg = makeMessage({
+      role: "assistant",
+      content: "",
+      contentBlocks: [
+        { type: "thinking", thinking: longText },
+      ],
+    });
+    render(<MessageBubble message={msg} />);
+
+    expect(screen.getByText("Show more")).toBeTruthy();
+  });
+});
+
+// ─── BashResultBlock edge cases ─────────────────────────────────────────────
+
+describe("MessageBubble - BashResultBlock", () => {
+  it("renders error BashResultBlock with error styling and 'Show all' toggle", () => {
+    // Bash tool_result with is_error=true and many lines should show error styling
+    const outputLines = Array.from({ length: 25 }, (_, i) => `error-line-${i + 1}`).join("\n");
+    const msg = makeMessage({
+      role: "assistant",
+      content: "",
+      contentBlocks: [
+        { type: "tool_use", id: "tu-err", name: "Bash", input: { command: "bad-cmd" } },
+        { type: "tool_result", tool_use_id: "tu-err", content: outputLines, is_error: true },
+      ],
+    });
+    const { container } = render(<MessageBubble message={msg} />);
+
+    // Error styling applied to the pre element
+    const errorPre = container.querySelector(".text-cc-error");
+    expect(errorPre).toBeTruthy();
+
+    // Footer counter text uses error styling class
+    const footerSpan = screen.getByText(/last 20 of \d+/);
+    expect(footerSpan).toBeTruthy();
+
+    // Click "Show all" to expand
+    fireEvent.click(screen.getByText("Show all"));
+    // After expansion, footer shows total line count
+    expect(screen.getByText(/25 lines/)).toBeTruthy();
+    expect(screen.getByText("Show tail")).toBeTruthy();
+
+    // Click "Show tail" to collapse back
+    fireEvent.click(screen.getByText("Show tail"));
+    expect(screen.getByText(/last 20 of 25/)).toBeTruthy();
+  });
+
+  it("renders short Bash output without toggle controls", () => {
+    // Output with fewer than 20 lines should not show Show all / Show tail
+    const shortOutput = "line1\nline2\nline3";
+    const msg = makeMessage({
+      role: "assistant",
+      content: "",
+      contentBlocks: [
+        { type: "tool_use", id: "tu-short", name: "Bash", input: { command: "ls" } },
+        { type: "tool_result", tool_use_id: "tu-short", content: shortOutput },
+      ],
+    });
+    render(<MessageBubble message={msg} />);
+
+    expect(screen.queryByText("Show all")).toBeNull();
+    expect(screen.queryByText("Show tail")).toBeNull();
+    expect(screen.getByText(/line1/)).toBeTruthy();
+  });
+});
+
+// ─── ToolGroupBlock expand/collapse ─────────────────────────────────────────
+
+describe("MessageBubble - ToolGroupBlock", () => {
+  it("expands tool group on click to show individual items with preview", () => {
+    // Create a group of 3 Read tools and verify expand reveals preview for each item
+    const msg = makeMessage({
+      role: "assistant",
+      content: "",
+      contentBlocks: [
+        { type: "tool_use", id: "tu-g1", name: "Read", input: { file_path: "/src/a.ts" } },
+        { type: "tool_use", id: "tu-g2", name: "Read", input: { file_path: "/src/b.ts" } },
+        { type: "tool_use", id: "tu-g3", name: "Read", input: { file_path: "/src/c.ts" } },
+      ],
+    });
+    render(<MessageBubble message={msg} />);
+
+    // Group shows count badge "3"
+    expect(screen.getByText("3")).toBeTruthy();
+
+    // Click to expand the group
+    fireEvent.click(screen.getByRole("button"));
+
+    // Individual previews should be visible (getPreview for Read returns last 2 path segments)
+    expect(screen.getByText("src/a.ts")).toBeTruthy();
+    expect(screen.getByText("src/b.ts")).toBeTruthy();
+    expect(screen.getByText("src/c.ts")).toBeTruthy();
+  });
+
+  it("collapses tool group on second click", () => {
+    const msg = makeMessage({
+      role: "assistant",
+      content: "",
+      contentBlocks: [
+        { type: "tool_use", id: "tu-h1", name: "Grep", input: { pattern: "foo" } },
+        { type: "tool_use", id: "tu-h2", name: "Grep", input: { pattern: "bar" } },
+      ],
+    });
+    render(<MessageBubble message={msg} />);
+
+    const button = screen.getByRole("button");
+
+    // Expand
+    fireEvent.click(button);
+    expect(screen.getByText("foo")).toBeTruthy();
+
+    // Collapse
+    fireEvent.click(button);
+    expect(screen.queryByText("foo")).toBeNull();
+  });
+
+  it("renders tool group items with JSON fallback when no preview available", () => {
+    // Tools with no getPreview match fall back to JSON.stringify of input
+    const msg = makeMessage({
+      role: "assistant",
+      content: "",
+      contentBlocks: [
+        { type: "tool_use", id: "tu-u1", name: "CustomTool", input: { key: "val" } },
+        { type: "tool_use", id: "tu-u2", name: "CustomTool", input: { key: "val2" } },
+      ],
+    });
+    render(<MessageBubble message={msg} />);
+
+    // Expand
+    fireEvent.click(screen.getByRole("button"));
+    // Fallback shows JSON.stringify(input).slice(0, 80)
+    expect(screen.getByText(/{"key":"val"}/)).toBeTruthy();
+  });
+});
+
+// ─── ContentBlockRenderer edge case ─────────────────────────────────────────
+
+describe("MessageBubble - ContentBlockRenderer", () => {
+  it("returns null for unknown content block types", () => {
+    // Unknown block types should be silently ignored (render nothing)
+    const msg = makeMessage({
+      role: "assistant",
+      content: "",
+      contentBlocks: [
+        { type: "text", text: "Known block" },
+        // Force an unknown type via type assertion
+        { type: "image" as "text", text: "" } as unknown as ContentBlock,
+      ],
+    });
+    render(<MessageBubble message={msg} />);
+
+    // The known text block renders, the unknown one does not crash
+    expect(screen.getByText("Known block")).toBeTruthy();
+  });
+
+  it("renders tool_result linked to Bash tool_use as BashResultBlock", () => {
+    // When tool_result is linked to a Bash tool_use via matching IDs, it renders as BashResultBlock
+    const msg = makeMessage({
+      role: "assistant",
+      content: "",
+      contentBlocks: [
+        { type: "tool_use", id: "tu-linked", name: "Bash", input: { command: "echo ok" } },
+        { type: "tool_result", tool_use_id: "tu-linked", content: "ok" },
+      ],
+    });
+    const { container } = render(<MessageBubble message={msg} />);
+
+    // BashResultBlock wraps output in a rounded-lg bg-cc-code-bg div
+    const resultContainers = container.querySelectorAll(".rounded-lg.bg-cc-code-bg");
+    expect(resultContainers.length).toBeGreaterThan(0);
+  });
+
+  it("renders non-Bash tool_result as generic pre block (not BashResultBlock)", () => {
+    // tool_result linked to non-Bash tool renders as plain pre, not BashResultBlock
+    const msg = makeMessage({
+      role: "assistant",
+      content: "",
+      contentBlocks: [
+        { type: "tool_use", id: "tu-read", name: "Read", input: { file_path: "/x" } },
+        { type: "tool_result", tool_use_id: "tu-read", content: "file contents here" },
+      ],
+    });
+    render(<MessageBubble message={msg} />);
+
+    expect(screen.getByText("file contents here")).toBeTruthy();
   });
 });

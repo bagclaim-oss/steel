@@ -1183,6 +1183,10 @@ export class WsBridge {
         queueSize: session.pendingMessages.length,
         droppedPreview: dropped?.substring(0, 80),
       });
+      this.broadcastToBrowsers(session, {
+        type: "error",
+        message: "Message queue full: the oldest queued message was discarded.",
+      });
     }
     session.pendingMessages.push(raw);
   }

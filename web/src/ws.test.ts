@@ -631,6 +631,43 @@ describe("handleMessage: assistant", () => {
 
     expect(useStore.getState().changedFilesTick.get("s1")).toBe(1);
   });
+
+  it("deduplicates tool activity when the same tool_use id is replayed", () => {
+    wsModule.connectSession("s1");
+    fireMessage({ type: "session_init", session: makeSession("s1") });
+
+    const assistantMessage = {
+      type: "assistant" as const,
+      message: {
+        id: "msg-tool-dedupe",
+        type: "message" as const,
+        role: "assistant" as const,
+        model: "claude-opus-4-20250514",
+        content: [
+          {
+            type: "tool_use" as const,
+            id: "tool-dup-1",
+            name: "Bash",
+            input: { command: "ls" },
+          },
+        ],
+        stop_reason: "tool_use",
+        usage: { input_tokens: 10, output_tokens: 5, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+      },
+      parent_tool_use_id: null,
+      timestamp: 1000,
+    };
+
+    fireMessage(assistantMessage);
+    fireMessage(assistantMessage);
+
+    expect(useStore.getState().toolActivity.get("s1")).toEqual([
+      expect.objectContaining({
+        toolUseId: "tool-dup-1",
+        startedAt: 1000,
+      }),
+    ]);
+  });
 });
 
 // ===========================================================================
@@ -1299,6 +1336,68 @@ describe("handleMessage: message_history", () => {
     expect(msgs[1].timestamp).toBe(43000);
   });
 
+  it("rebuilds tool activity from assistant tool_use and tool_result history", () => {
+    wsModule.connectSession("s1");
+    fireMessage({ type: "session_init", session: makeSession("s1") });
+
+    useStore.getState().addToolActivity("s1", {
+      toolUseId: "stale-tool",
+      toolName: "Read",
+      preview: "old.txt",
+      startedAt: 1,
+      elapsedSeconds: 1,
+      isError: false,
+    });
+
+    fireMessage({
+      type: "message_history",
+      messages: [
+        {
+          type: "assistant",
+          message: {
+            id: "msg-tool-history-1",
+            type: "message",
+            role: "assistant",
+            model: "claude-opus-4-20250514",
+            content: [
+              { type: "tool_use", id: "tool-hist-1", name: "Bash", input: { command: "bun test" } },
+            ],
+            stop_reason: "tool_use",
+            usage: { input_tokens: 5, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+          },
+          parent_tool_use_id: null,
+          timestamp: 2000,
+        },
+        {
+          type: "assistant",
+          message: {
+            id: "msg-tool-history-2",
+            type: "message",
+            role: "assistant",
+            model: "claude-opus-4-20250514",
+            content: [
+              { type: "tool_result", tool_use_id: "tool-hist-1", content: "done" },
+            ],
+            stop_reason: "end_turn",
+            usage: { input_tokens: 5, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+          },
+          parent_tool_use_id: null,
+          timestamp: 5000,
+        },
+      ],
+    });
+
+    expect(useStore.getState().toolActivity.get("s1")).toEqual([
+      expect.objectContaining({
+        toolUseId: "tool-hist-1",
+        toolName: "Bash",
+        startedAt: 2000,
+        completedAt: 5000,
+        elapsedSeconds: 3,
+      }),
+    ]);
+  });
+
   it("reconstructs persisted system events from history and skips hook_progress", () => {
     wsModule.connectSession("s1");
     fireMessage({ type: "session_init", session: makeSession("s1") });
@@ -1790,6 +1889,21 @@ describe("handleMessage: tool_use_summary", () => {
     // Codex may not include tool_use content blocks, so the summary is needed
     const systemMsg = msgs.find((m) => m.role === "system" && m.content === "Ran 3 tools: Bash, Read, Grep");
     expect(systemMsg).toBeDefined();
+  });
+
+  it("does not render a summary system message when backend is still unknown", () => {
+    wsModule.connectSession("s1");
+    fireMessage({ type: "session_init", session: makeSession("s1") });
+
+    fireMessage({
+      type: "tool_use_summary",
+      summary: "Ran 3 tools: Bash, Read, Grep",
+      tool_use_ids: ["tu-1", "tu-2", "tu-3"],
+    });
+
+    const msgs = useStore.getState().messages.get("s1") || [];
+    const systemMsg = msgs.find((m) => m.role === "system" && m.content === "Ran 3 tools: Bash, Read, Grep");
+    expect(systemMsg).toBeUndefined();
   });
 });
 

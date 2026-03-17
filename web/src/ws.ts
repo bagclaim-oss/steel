@@ -3,6 +3,7 @@ import type { BrowserIncomingMessage, BrowserOutgoingMessage, ContentBlock, Chat
 import { generateUniqueSessionName } from "./utils/names.js";
 import { playNotificationSound } from "./utils/notification-sound.js";
 import { getPreview } from "./components/ToolBlock.js";
+import type { ToolActivityEntry } from "./store/tasks-slice.js";
 
 const WS_RECONNECT_DELAY_MS = 2000;
 const sockets = new Map<string, WebSocket>();
@@ -485,6 +486,24 @@ function mergeContentBlocks(prev?: ContentBlock[], next?: ContentBlock[]): Conte
   return merged;
 }
 
+function buildToolActivityEntry(
+  toolUseId: string,
+  toolName: string,
+  input: Record<string, unknown>,
+  startedAt: number,
+  parentToolUseId?: string | null,
+): ToolActivityEntry {
+  return {
+    toolUseId,
+    toolName,
+    preview: getPreview(toolName, input),
+    startedAt,
+    elapsedSeconds: 0,
+    isError: false,
+    parentToolUseId: parentToolUseId || undefined,
+  };
+}
+
 function mergeAssistantMessage(previous: ChatMessage, incoming: ChatMessage): ChatMessage {
   const mergedBlocks = mergeContentBlocks(previous.contentBlocks, incoming.contentBlocks);
   const mergedContent = mergedBlocks && mergedBlocks.length > 0
@@ -621,15 +640,13 @@ function handleParsedMessage(
         for (const block of msg.content) {
           if (block.type === "tool_use") {
             const input = (block as { input?: Record<string, unknown> }).input || {};
-            store.addToolActivity(sessionId, {
-              toolUseId: block.id,
-              toolName: block.name,
-              preview: getPreview(block.name, input),
-              startedAt: Date.now(),
-              elapsedSeconds: 0,
-              isError: false,
-              parentToolUseId: data.parent_tool_use_id || undefined,
-            });
+            store.addToolActivity(sessionId, buildToolActivityEntry(
+              block.id,
+              block.name,
+              input,
+              data.timestamp || Date.now(),
+              data.parent_tool_use_id,
+            ));
           }
           if (block.type === "tool_result") {
             store.updateToolActivity(sessionId, block.tool_use_id, {
@@ -818,7 +835,7 @@ function handleParsedMessage(
       const backend = store.sdkSessions.find(
         (s) => s.sessionId === sessionId,
       )?.backendType;
-      if (backend !== "claude") {
+      if (backend === "codex") {
         store.appendMessage(sessionId, {
           id: nextId(),
           role: "system",
@@ -954,6 +971,7 @@ function handleParsedMessage(
 
     case "message_history": {
       const chatMessages: ChatMessage[] = [];
+      const toolActivityById = new Map<string, ToolActivityEntry>();
       for (let i = 0; i < data.messages.length; i++) {
         const histMsg = data.messages[i];
         if (histMsg.type === "user_message") {
@@ -987,6 +1005,37 @@ function handleParsedMessage(
             extractTasksFromBlocks(sessionId, msg.content);
             extractChangedFilesFromBlocks(sessionId, msg.content);
             extractProcessesFromBlocks(sessionId, msg.content);
+            const baseTimestamp = histMsg.timestamp || Date.now();
+            for (const block of msg.content) {
+              if (block.type === "tool_use") {
+                const input = (block as { input?: Record<string, unknown> }).input || {};
+                const existing = toolActivityById.get(block.id);
+                toolActivityById.set(
+                  block.id,
+                  existing ?? buildToolActivityEntry(
+                    block.id,
+                    block.name,
+                    input,
+                    baseTimestamp,
+                    histMsg.parent_tool_use_id,
+                  ),
+                );
+              }
+              if (block.type === "tool_result") {
+                const existing = toolActivityById.get(block.tool_use_id);
+                if (existing) {
+                  toolActivityById.set(block.tool_use_id, {
+                    ...existing,
+                    completedAt: baseTimestamp,
+                    isError: existing.isError || Boolean(block.is_error),
+                    elapsedSeconds: Math.max(
+                      existing.elapsedSeconds,
+                      existing.completedAt ? existing.elapsedSeconds : Math.max(0, (baseTimestamp - existing.startedAt) / 1000),
+                    ),
+                  });
+                }
+              }
+            }
           }
         } else if (histMsg.type === "result") {
           const r = histMsg.data;
@@ -1055,6 +1104,7 @@ function handleParsedMessage(
           store.setMessages(sessionId, merged);
         }
       }
+      store.setToolActivity(sessionId, Array.from(toolActivityById.values()).sort((a, b) => a.startedAt - b.startedAt));
       // Fix: if the last history message is a `result`, the session's last turn
       // is complete. Clear any stale streaming state that event_replay might not
       // correct (e.g. when `result` was pruned from the 600-event buffer).

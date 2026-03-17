@@ -32,6 +32,7 @@ export interface TasksSlice {
   setGitChangedFilesCount: (sessionId: string, count: number) => void;
   setToolProgress: (sessionId: string, toolUseId: string, data: { toolName: string; elapsedSeconds: number }) => void;
   clearToolProgress: (sessionId: string, toolUseId?: string) => void;
+  setToolActivity: (sessionId: string, entries: ToolActivityEntry[]) => void;
   addToolActivity: (sessionId: string, entry: ToolActivityEntry) => void;
   updateToolActivity: (sessionId: string, toolUseId: string, updates: Partial<ToolActivityEntry>) => void;
 }
@@ -145,10 +146,35 @@ export const createTasksSlice: StateCreator<AppState, [], [], TasksSlice> = (set
       return { toolProgress };
     }),
 
+  setToolActivity: (sessionId, entries) =>
+    set((s) => {
+      const toolActivity = new Map(s.toolActivity);
+      if (entries.length === 0) {
+        toolActivity.delete(sessionId);
+      } else {
+        toolActivity.set(sessionId, entries);
+      }
+      return { toolActivity };
+    }),
+
   addToolActivity: (sessionId, entry) =>
     set((s) => {
       const toolActivity = new Map(s.toolActivity);
-      const entries = [...(toolActivity.get(sessionId) || []), entry];
+      const entries = [...(toolActivity.get(sessionId) || [])];
+      const existingIndex = entries.findIndex((e) => e.toolUseId === entry.toolUseId);
+      if (existingIndex >= 0) {
+        const existing = entries[existingIndex];
+        entries[existingIndex] = {
+          ...existing,
+          ...entry,
+          startedAt: existing.startedAt,
+          completedAt: entry.completedAt ?? existing.completedAt,
+          elapsedSeconds: Math.max(existing.elapsedSeconds, entry.elapsedSeconds),
+          isError: existing.isError || entry.isError,
+        };
+      } else {
+        entries.push(entry);
+      }
       toolActivity.set(sessionId, entries);
       return { toolActivity };
     }),

@@ -3631,10 +3631,10 @@ describe("CodexAdapter with ICodexTransport", () => {
     expect(lastError.message).not.toBe("Transport closed");
   });
 
-  it("re-queues mcp_get_status for retry when Transport closed instead of emitting error", async () => {
+  it("triggers cleanup on mcp_get_status Transport closed instead of emitting error", async () => {
     // When mcpServerStatus/list fails with "Transport closed", the adapter
-    // should silently re-queue the request and trigger cleanupAndDisconnect
-    // so the bridge sees the adapter as disconnected immediately.
+    // should trigger cleanupAndDisconnect so the bridge sees the adapter as
+    // disconnected immediately, instead of showing a user-visible error.
     const mock = createMockTransport();
     const messages: BrowserIncomingMessage[] = [];
     let disconnected = false;

@@ -1449,13 +1449,11 @@ export class CodexAdapter implements IBackendAdapter {
       const errMsg = err instanceof Error ? err.message : String(err);
       if (errMsg === "Transport closed") {
         // Transient disconnect (e.g. page refresh, WS proxy reconnection).
-        // Re-queue (deduplicated) so it retries after re-initialization,
-        // and trigger cleanup so the bridge sees the adapter as disconnected
-        // immediately — same race fix as sendBrowserMessage line 842.
-        console.log(`[codex-adapter] Session ${this.sessionId}: mcp_get_status failed (transport closed), re-queuing for retry`);
-        if (!this.pendingOutgoing.some((m) => m.type === "mcp_get_status")) {
-          this.pendingOutgoing.push({ type: "mcp_get_status" });
-        }
+        // Trigger cleanup so the bridge sees the adapter as disconnected
+        // immediately and can relaunch — same race fix as sendBrowserMessage.
+        // No re-queue needed: the browser will re-send mcp_get_status when
+        // the new adapter emits cli_connected after relaunch.
+        console.log(`[codex-adapter] Session ${this.sessionId}: mcp_get_status failed (transport closed), triggering cleanup`);
         this.cleanupAndDisconnect();
       } else {
         this.emit({ type: "error", message: `Failed to get MCP status: ${err}` });

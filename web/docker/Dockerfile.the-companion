@@ -61,13 +61,8 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:$PATH"
 
 # ── Layer 7: Docker (full engine for Docker-in-Docker) ───────────────────────
+# get.docker.com installs dockerd, docker CLI, containerd, and docker-compose-plugin
 RUN curl -fsSL https://get.docker.com | sh
-# Install Docker Compose plugin
-RUN mkdir -p /usr/local/lib/docker/cli-plugins \
-    && ARCH=$(dpkg --print-architecture) \
-    && curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-${ARCH}" \
-    -o /usr/local/lib/docker/cli-plugins/docker-compose \
-    && chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 # ── Layer 8: GitHub CLI ──────────────────────────────────────────────────────
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
@@ -124,7 +119,8 @@ RUN cat > /usr/local/bin/entrypoint.sh <<'ENTRY'
 set -e
 
 # Start Docker daemon in background (requires --privileged)
-if [ -e /var/run/docker.sock ] || command -v dockerd &>/dev/null; then
+# Only start if dockerd is installed and no socket already exists (e.g. host-mounted)
+if command -v dockerd &>/dev/null && [ ! -e /var/run/docker.sock ]; then
     dockerd &>/var/log/dockerd.log &
     # Wait until Docker is responsive (max 30s)
     for i in $(seq 1 30); do

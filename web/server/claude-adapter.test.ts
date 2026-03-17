@@ -333,10 +333,9 @@ describe("Known non-standard CLI message types", () => {
       "Backend protocol drift detected",
       expect.anything(),
     );
-    // Should NOT emit to browser — all user echoes are dropped
-    expect(browserMessageCb).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: "user_message" }),
-    );
+    // Should NOT emit anything to browser — all user echoes are silently
+    // dropped with no callback fired at all.
+    expect(browserMessageCb).not.toHaveBeenCalled();
 
     spy.mockRestore();
   });
@@ -367,10 +366,10 @@ describe("Known non-standard CLI message types", () => {
       "Backend protocol drift detected",
       expect.anything(),
     );
-    // Should NOT emit to browser — tool_result echoes are dropped too
-    expect(browserMessageCb).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: "user_message" }),
-    );
+    // Should NOT emit anything to browser — the case "user" handler does
+    // nothing at all, so no callback should fire (not just user_message,
+    // but any event type).
+    expect(browserMessageCb).not.toHaveBeenCalled();
 
     spy.mockRestore();
   });

@@ -279,6 +279,98 @@ describe("Protocol drift handling", () => {
   });
 });
 
+// ─── Known non-standard CLI message types ────────────────────────────────────
+
+describe("Known non-standard CLI message types", () => {
+  it("rate_limit_event is silently consumed without protocol drift warning", () => {
+    // The CLI sends rate_limit_event messages with throttle/allow status.
+    // These should be silently consumed and NOT trigger protocol drift logs.
+    const spy = vi.spyOn(log, "warn").mockImplementation(() => {});
+    const ws = createMockSocket("sess-1");
+    adapter.attachWebSocket(ws);
+
+    adapter.handleRawMessage(
+      JSON.stringify({
+        type: "rate_limit_event",
+        rate_limit_info: { is_rate_limited: false, resets_at: null },
+        uuid: "rl-uuid-1",
+      }) + "\n",
+    );
+
+    // Should NOT produce a protocol drift warning
+    expect(spy).not.toHaveBeenCalledWith(
+      "protocol-monitor",
+      "Backend protocol drift detected",
+      expect.anything(),
+    );
+    // Should NOT emit an error to the browser
+    expect(browserMessageCb).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "error" }),
+    );
+
+    spy.mockRestore();
+  });
+
+  it("user echo message emits user_message to browser", () => {
+    // CLI echoes back user messages (including subagent tool_result blocks).
+    // These should be forwarded to the browser as user_message events.
+    const spy = vi.spyOn(log, "warn").mockImplementation(() => {});
+    const ws = createMockSocket("sess-1");
+    adapter.attachWebSocket(ws);
+
+    adapter.handleRawMessage(
+      JSON.stringify({
+        type: "user",
+        message: { role: "user", content: "Hello from subagent" },
+        uuid: "user-echo-1",
+        session_id: "cli-123",
+      }) + "\n",
+    );
+
+    // Should NOT produce a protocol drift warning
+    expect(spy).not.toHaveBeenCalledWith(
+      "protocol-monitor",
+      "Backend protocol drift detected",
+      expect.anything(),
+    );
+    // Should emit a user_message to the browser
+    expect(browserMessageCb).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "user_message",
+        content: "Hello from subagent",
+      }),
+    );
+
+    spy.mockRestore();
+  });
+
+  it("user echo with non-string content serializes to JSON", () => {
+    // When the user echo content is an array (e.g. tool_result blocks),
+    // it should be JSON-stringified before sending to the browser.
+    const ws = createMockSocket("sess-1");
+    adapter.attachWebSocket(ws);
+
+    const complexContent = [
+      { type: "tool_result", tool_use_id: "t1", content: "result" },
+    ];
+    adapter.handleRawMessage(
+      JSON.stringify({
+        type: "user",
+        message: { role: "user", content: complexContent },
+        uuid: "user-echo-2",
+        session_id: "cli-123",
+      }) + "\n",
+    );
+
+    expect(browserMessageCb).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "user_message",
+        content: JSON.stringify(complexContent),
+      }),
+    );
+  });
+});
+
 // ─── Connection lifecycle ───────────────────────────────────────────────────
 
 describe("Connection lifecycle", () => {

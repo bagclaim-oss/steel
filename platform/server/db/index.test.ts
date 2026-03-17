@@ -8,13 +8,13 @@ import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
  * ensures each test starts with a fresh singleton.
  */
 
-// Mock @neondatabase/serverless to avoid real HTTP calls.
-vi.mock("@neondatabase/serverless", () => ({
-  neon: vi.fn(() => vi.fn()),
+// Mock postgres to avoid real TCP connections.
+vi.mock("postgres", () => ({
+  default: vi.fn(() => vi.fn()),
 }));
 
-// Mock drizzle-orm/neon-http to return a fake db instance.
-vi.mock("drizzle-orm/neon-http", () => ({
+// Mock drizzle-orm/postgres-js to return a fake db instance.
+vi.mock("drizzle-orm/postgres-js", () => ({
   drizzle: vi.fn(() => ({ __drizzle: true })),
 }));
 

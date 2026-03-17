@@ -1399,15 +1399,15 @@ describe("SessionOrchestrator", () => {
       expect(deps.launcher.relaunch).toHaveBeenCalledWith("s1");
     });
 
-    it("skips relaunch for containerized session when container is running and CLI connected", async () => {
+    it("skips relaunch for containerized session when container is still running", async () => {
       // For non-exited containerized sessions, use container liveness instead
-      // of PID check. If the container is running AND CLI is connected, skip
-      // relaunch. We need isCliConnected to return false initially (to pass
-      // the first gate) and then true for the container liveness check.
+      // of PID check. If the container is running, skip relaunch to let the
+      // CLI reconnect on its own. Use state "starting" to bypass the earlier
+      // connected/running guard and actually exercise the container check path.
       vi.mocked(containerManager.isContainerAlive).mockReturnValue("running" as any);
       deps.launcher.getSession
         .mockReturnValueOnce({ archived: false } as any) // check archived
-        .mockReturnValueOnce({ state: "connected", containerId: "cid-abc", pid: 99999 } as any); // after grace
+        .mockReturnValueOnce({ state: "starting", containerId: "cid-abc", pid: 99999 } as any); // after grace
       deps.wsBridge.isCliConnected.mockReturnValue(false);
       orchestrator.initialize();
 
@@ -1415,8 +1415,7 @@ describe("SessionOrchestrator", () => {
       await vi.advanceTimersByTimeAsync(15_000);
       await vi.advanceTimersByTimeAsync(0);
 
-      // state=connected is caught by the earlier guard (line 736), so relaunch
-      // is skipped without even reaching the container check.
+      expect(containerManager.isContainerAlive).toHaveBeenCalledWith("cid-abc");
       expect(deps.launcher.relaunch).not.toHaveBeenCalled();
     });
 

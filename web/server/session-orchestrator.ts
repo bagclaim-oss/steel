@@ -746,7 +746,7 @@ export class SessionOrchestrator {
     if (freshInfo && freshInfo.state !== "exited") {
       if (freshInfo.containerId) {
         const containerState = containerManager.isContainerAlive(freshInfo.containerId);
-        if (containerState === "running" && this.wsBridge.isCliConnected(sessionId)) {
+        if (containerState === "running") {
           this.relaunchingSet.delete(sessionId);
           return;
         }

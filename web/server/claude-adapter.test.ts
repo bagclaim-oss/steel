@@ -311,9 +311,10 @@ describe("Known non-standard CLI message types", () => {
     spy.mockRestore();
   });
 
-  it("user echo message emits user_message to browser", () => {
-    // CLI echoes back user messages (including subagent tool_result blocks).
-    // These should be forwarded to the browser as user_message events.
+  it("user echo with plain string content is silently dropped to avoid duplicates", () => {
+    // Plain string echoes are duplicates of messages the browser already has
+    // (the browser sends user_message → ws-bridge stores it → CLI echoes it
+    // back). Silently drop them to prevent duplicate messages in the UI.
     const spy = vi.spyOn(log, "warn").mockImplementation(() => {});
     const ws = createMockSocket("sess-1");
     adapter.attachWebSocket(ws);
@@ -321,7 +322,7 @@ describe("Known non-standard CLI message types", () => {
     adapter.handleRawMessage(
       JSON.stringify({
         type: "user",
-        message: { role: "user", content: "Hello from subagent" },
+        message: { role: "user", content: "Hello from browser" },
         uuid: "user-echo-1",
         session_id: "cli-123",
       }) + "\n",
@@ -333,12 +334,9 @@ describe("Known non-standard CLI message types", () => {
       "Backend protocol drift detected",
       expect.anything(),
     );
-    // Should emit a user_message to the browser
-    expect(browserMessageCb).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "user_message",
-        content: "Hello from subagent",
-      }),
+    // Should NOT emit to browser — plain string echoes are dropped
+    expect(browserMessageCb).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "user_message" }),
     );
 
     spy.mockRestore();

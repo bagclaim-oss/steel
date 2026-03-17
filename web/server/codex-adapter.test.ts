@@ -3633,11 +3633,14 @@ describe("CodexAdapter with ICodexTransport", () => {
 
   it("re-queues mcp_get_status for retry when Transport closed instead of emitting error", async () => {
     // When mcpServerStatus/list fails with "Transport closed", the adapter
-    // should silently re-queue the request instead of showing a user-visible error.
+    // should silently re-queue the request and trigger cleanupAndDisconnect
+    // so the bridge sees the adapter as disconnected immediately.
     const mock = createMockTransport();
     const messages: BrowserIncomingMessage[] = [];
+    let disconnected = false;
     const adapter = new CodexAdapter(mock.transport, "test-session-transport", { model: "o4-mini" });
     adapter.onBrowserMessage((msg) => messages.push(msg));
+    adapter.onDisconnect(() => { disconnected = true; });
 
     // Complete init
     await new Promise((r) => setTimeout(r, 50));
@@ -3664,6 +3667,10 @@ describe("CodexAdapter with ICodexTransport", () => {
     const errors = messages.filter((m) => m.type === "error") as Array<{ message: string }>;
     const mcpError = errors.find((e) => e.message.includes("MCP") || e.message.includes("Connection to Codex lost"));
     expect(mcpError).toBeUndefined();
+
+    // Should have triggered cleanupAndDisconnect so the bridge stops flushing
+    expect(adapter.isConnected()).toBe(false);
+    expect(disconnected).toBe(true);
   });
 
   it("flushes queued messages only when transport is connected", async () => {

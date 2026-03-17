@@ -23,13 +23,11 @@ export function ChatView({ sessionId }: { sessionId: string }) {
   const [reconnectError, setReconnectError] = useState<string | null>(null);
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Clear stale error state whenever the CLI successfully reconnects
+  // Clear stale error when switching sessions or when CLI reconnects
   useEffect(() => {
-    if (cliConnected) {
-      setReconnectError(null);
-      clearTimeout(errorTimerRef.current);
-    }
-  }, [cliConnected]);
+    setReconnectError(null);
+    clearTimeout(errorTimerRef.current);
+  }, [sessionId, cliConnected]);
 
   // Clean up error auto-clear timer on unmount
   useEffect(() => () => clearTimeout(errorTimerRef.current), []);

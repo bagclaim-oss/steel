@@ -164,6 +164,8 @@ export class ContainerManager {
     const args: string[] = [
       "docker", "create",
       "--name", name,
+      // Enable Docker-in-Docker and access to container services (PostgreSQL, etc.)
+      "--privileged",
       // Ensure host.docker.internal resolves (automatic on Mac/Win Docker
       // Desktop, but required explicitly on Linux)
       "--add-host=host.docker.internal:host-gateway",

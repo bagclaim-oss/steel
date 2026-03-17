@@ -213,7 +213,8 @@ describe("ToolIcon", () => {
 // ─── ToolBlock component ─────────────────────────────────────────────────────
 
 describe("ToolBlock", () => {
-  it("renders with correct label and preview", () => {
+  // Bash uses a borderless inline design — command is always visible, no toggle
+  it("renders Bash command directly with $ prefix (no toggle)", () => {
     render(
       <ToolBlock
         name="Bash"
@@ -221,11 +222,24 @@ describe("ToolBlock", () => {
         toolUseId="tool-1"
       />
     );
-    expect(screen.getByText("Terminal")).toBeTruthy();
-    // Preview text appears in the header button area
-    const previewSpan = screen.getByText("echo hello");
-    expect(previewSpan).toBeTruthy();
-    expect(previewSpan.className).toContain("truncate");
+    // Command is always visible in a pre block
+    const preElement = screen.getByText("echo hello").closest("pre");
+    expect(preElement).toBeTruthy();
+    // $ prefix rendered as a span
+    const dollarSpan = preElement?.querySelector("span");
+    expect(dollarSpan?.textContent).toBe("$ ");
+  });
+
+  it("renders Bash description when provided", () => {
+    render(
+      <ToolBlock
+        name="Bash"
+        input={{ command: "ls -la", description: "List files" }}
+        toolUseId="tool-1b"
+      />
+    );
+    expect(screen.getByText("List files")).toBeTruthy();
+    expect(screen.getByText("ls -la")).toBeTruthy();
   });
 
   it("renders with label only when no preview is available", () => {
@@ -239,23 +253,24 @@ describe("ToolBlock", () => {
     expect(screen.getByText("Web Fetch")).toBeTruthy();
   });
 
-  it("is collapsed by default (does not show details)", () => {
+  // Non-Bash tools still use the card design with toggle
+  it("is collapsed by default for non-Bash tools (does not show details)", () => {
     render(
       <ToolBlock
-        name="Bash"
-        input={{ command: "ls -la" }}
+        name="Read"
+        input={{ file_path: "/home/user/test.txt" }}
         toolUseId="tool-3"
       />
     );
     // The expanded detail area should not be present
-    expect(screen.queryByText("$")).toBeNull();
+    expect(screen.queryByText("/home/user/test.txt")).toBeNull();
   });
 
-  it("expands on click to show input details", () => {
+  it("expands non-Bash tool on click to show input details", () => {
     render(
       <ToolBlock
-        name="Bash"
-        input={{ command: "ls -la" }}
+        name="Read"
+        input={{ file_path: "/home/user/test.txt" }}
         toolUseId="tool-4"
       />
     );
@@ -264,35 +279,31 @@ describe("ToolBlock", () => {
     const button = screen.getByRole("button");
     fireEvent.click(button);
 
-    // After expanding, the detail area should be visible with a pre element
-    const allLsLa = screen.getAllByText("ls -la");
-    // One is the preview in the header, the other is in the expanded pre block
-    expect(allLsLa.length).toBe(2);
-    const preElement = allLsLa.find((el) => el.closest("pre"))?.closest("pre");
-    expect(preElement).toBeTruthy();
+    // After expanding, the full file path should be visible
+    expect(screen.getByText("/home/user/test.txt")).toBeTruthy();
   });
 
-  it("collapses on second click", () => {
-    const { container } = render(
+  it("collapses non-Bash tool on second click", () => {
+    render(
       <ToolBlock
-        name="Bash"
-        input={{ command: "ls -la" }}
+        name="Read"
+        input={{ file_path: "/home/user/test.txt" }}
         toolUseId="tool-5"
       />
     );
 
     const button = screen.getByRole("button");
 
-    // Expand - the detail area with the border-t class should appear
+    // Expand
     fireEvent.click(button);
-    expect(container.querySelector(".border-t")).toBeTruthy();
+    expect(screen.getByText("/home/user/test.txt")).toBeTruthy();
 
-    // Collapse - the detail area should disappear
+    // Collapse
     fireEvent.click(button);
-    expect(container.querySelector(".border-t")).toBeNull();
+    expect(screen.queryByText("/home/user/test.txt")).toBeNull();
   });
 
-  it("renders Bash command with $ prefix when expanded", () => {
+  it("renders Bash command always visible without needing expand", () => {
     render(
       <ToolBlock
         name="Bash"
@@ -301,19 +312,15 @@ describe("ToolBlock", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button"));
-
-    // When expanded, the command appears in both the preview header and the code block.
-    // Find the pre element containing the $ prefix.
-    const allMatches = screen.getAllByText("npm install");
-    const preElement = allMatches.find((el) => el.closest("pre"))?.closest("pre");
+    // Command is immediately visible — no click needed
+    const preElement = screen.getByText("npm install").closest("pre");
     expect(preElement).toBeTruthy();
-    // Check the $ prefix is rendered as a span inside the pre
     const dollarSpan = preElement?.querySelector("span");
     expect(dollarSpan?.textContent).toBe("$ ");
   });
 
-  it("renders Edit diff view when expanded", () => {
+  it("renders Edit inline with diff (no toggle, no card)", () => {
+    // Edit renders always visible — no toggle needed
     const { container } = render(
       <ToolBlock
         name="Edit"
@@ -326,16 +333,16 @@ describe("ToolBlock", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button"));
-
-    // DiffViewer renders file header with basename
+    // Header shows "Edit" label and filename once
+    expect(screen.getByText("Edit")).toBeTruthy();
     expect(screen.getByText("app.ts")).toBeTruthy();
-    // DiffViewer renders del/add lines
+    // DiffViewer renders del/add lines inline
     expect(container.querySelector(".diff-line-del")).toBeTruthy();
     expect(container.querySelector(".diff-line-add")).toBeTruthy();
   });
 
   it("renders Codex-style Edit changes list when diff strings are absent", () => {
+    // Edit renders always visible with inline design
     render(
       <ToolBlock
         name="Edit"
@@ -350,11 +357,12 @@ describe("ToolBlock", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button"));
+    // Changes always visible — no click needed
     expect(screen.getByText("update")).toBeTruthy();
     expect(screen.getByText("create")).toBeTruthy();
-    expect(screen.getAllByText("/repo/src/foo.ts").length).toBeGreaterThan(0);
-    expect(screen.getByText("/repo/src/bar.ts")).toBeTruthy();
+    // Header shows foo.ts, changes list shows basenames
+    expect(screen.getAllByText("foo.ts").length).toBeGreaterThan(0);
+    expect(screen.getByText("bar.ts")).toBeTruthy();
   });
 
   it("renders Read file path when expanded", () => {

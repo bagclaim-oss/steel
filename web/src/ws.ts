@@ -312,7 +312,10 @@ function flushQueuedOutgoing(sessionId: string, ws: WebSocket) {
   }
 }
 
-function setStreamingDraftMessage(sessionId: string, content: string) {
+/** Accumulated streaming content per session — thinking and text tracked separately */
+const streamingBlocksBySession = new Map<string, { thinking: string; text: string }>();
+
+function setStreamingDraftMessage(sessionId: string, content: string, phase?: "thinking" | "text") {
   const store = useStore.getState();
   const existing = store.messages.get(sessionId) || [];
   const messages = [...existing];
@@ -335,6 +338,7 @@ function setStreamingDraftMessage(sessionId: string, content: string) {
       content,
       timestamp: Date.now(),
       isStreaming: true,
+      streamingPhase: phase,
     });
   } else {
     const prev = messages[draftIndex];
@@ -343,29 +347,11 @@ function setStreamingDraftMessage(sessionId: string, content: string) {
       role: "assistant",
       content,
       isStreaming: true,
+      streamingPhase: phase,
     };
   }
 
   store.setMessages(sessionId, messages);
-}
-
-function finalizeStreamingDraftMessage(sessionId: string, finalMessage: ChatMessage): boolean {
-  const draftId = streamingDraftMessageIdBySession.get(sessionId);
-  if (!draftId) return false;
-
-  const store = useStore.getState();
-  const existing = store.messages.get(sessionId) || [];
-  const draftIndex = existing.findIndex((m) => m.id === draftId);
-  if (draftIndex === -1) {
-    streamingDraftMessageIdBySession.delete(sessionId);
-    return false;
-  }
-
-  const messages = [...existing];
-  messages[draftIndex] = finalMessage;
-  store.setMessages(sessionId, messages);
-  streamingDraftMessageIdBySession.delete(sessionId);
-  return true;
 }
 
 function clearStreamingDraftMessage(sessionId: string) {
@@ -574,12 +560,16 @@ function handleParsedMessage(
         model: msg.model,
         stopReason: msg.stop_reason,
       };
-      const replacedDraft = finalizeStreamingDraftMessage(sessionId, chatMsg);
-      if (!replacedDraft) {
-        upsertAssistantMessage(sessionId, chatMsg);
-      }
+      // Clear any streaming draft first, then upsert the real message.
+      // Using clearStreamingDraftMessage + upsertAssistantMessage instead of
+      // finalizeStreamingDraftMessage avoids duplicates when the CLI sends
+      // multiple assistant messages for the same turn (e.g. thinking → text →
+      // tool_use) and streaming deltas create new drafts between them.
+      clearStreamingDraftMessage(sessionId);
+      upsertAssistantMessage(sessionId, chatMsg);
       store.setStreaming(sessionId, null);
       streamingPhaseBySession.delete(sessionId);
+      streamingBlocksBySession.delete(sessionId);
       // Clear progress only for completed tools (tool_result blocks), not all tools.
       // Blanket clear would cause flickering during concurrent tool execution.
       if (msg.content?.length) {
@@ -612,6 +602,7 @@ function handleParsedMessage(
         // message_start → mark generation start time
         if (evt.type === "message_start") {
           streamingPhaseBySession.delete(sessionId);
+          streamingBlocksBySession.delete(sessionId);
           clearStreamingDraftMessage(sessionId);
           if (!store.streamingStartedAt.has(sessionId)) {
             store.setStreamingStats(sessionId, { startedAt: Date.now(), outputTokens: 0 });
@@ -622,28 +613,22 @@ function handleParsedMessage(
         if (evt.type === "content_block_delta") {
           const delta = evt.delta as Record<string, unknown> | undefined;
           if (delta?.type === "text_delta" && typeof delta.text === "string") {
-            let current = store.streaming.get(sessionId) || "";
-            const thinkingPrefix = "Thinking:\n";
-            const responsePrefix = "\n\nResponse:\n";
-            if (streamingPhaseBySession.get(sessionId) === "thinking" && !current.includes(responsePrefix)) {
-              current += responsePrefix;
-            }
+            const parts = streamingBlocksBySession.get(sessionId) || { thinking: "", text: "" };
+            parts.text += delta.text;
+            streamingBlocksBySession.set(sessionId, parts);
             streamingPhaseBySession.set(sessionId, "text");
-            const nextText = current + delta.text;
-            store.setStreaming(sessionId, nextText);
-            setStreamingDraftMessage(sessionId, nextText);
+            // Show only the response text in the streaming draft
+            store.setStreaming(sessionId, parts.text);
+            setStreamingDraftMessage(sessionId, parts.text, "text");
           }
           if (delta?.type === "thinking_delta" && typeof delta.thinking === "string") {
-            const current = store.streaming.get(sessionId) || "";
-            const prefix = "Thinking:\n";
-            const phase = streamingPhaseBySession.get(sessionId);
-            const base = phase === "thinking"
-              ? (current.startsWith(prefix) ? current : prefix)
-              : prefix;
+            const parts = streamingBlocksBySession.get(sessionId) || { thinking: "", text: "" };
+            parts.thinking += delta.thinking;
+            streamingBlocksBySession.set(sessionId, parts);
             streamingPhaseBySession.set(sessionId, "thinking");
-            const nextText = base + delta.thinking;
-            store.setStreaming(sessionId, nextText);
-            setStreamingDraftMessage(sessionId, nextText);
+            // Show thinking text directly as faded inline text
+            store.setStreaming(sessionId, parts.thinking);
+            setStreamingDraftMessage(sessionId, parts.thinking, "thinking");
           }
         }
 
@@ -761,12 +746,9 @@ function handleParsedMessage(
     }
 
     case "tool_use_summary": {
-      store.appendMessage(sessionId, {
-        id: nextId(),
-        role: "system",
-        content: data.summary,
-        timestamp: Date.now(),
-      });
+      // Intentionally not rendered — the tool_use content blocks in the
+      // assistant message already render the tool call via ToolBlock/EditBlock.
+      // Showing the summary as a separate system message would duplicate info.
       break;
     }
 

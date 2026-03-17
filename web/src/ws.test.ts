@@ -672,7 +672,8 @@ describe("handleMessage: stream_event content_block_delta", () => {
       parent_tool_use_id: null,
     });
 
-    expect(useStore.getState().streaming.get("s1")).toBe("Thinking:\nAnalyzing context");
+    // Thinking text streams without any prefix — rendered inline as faded text via streamingPhase
+    expect(useStore.getState().streaming.get("s1")).toBe("Analyzing context");
   });
 
   it("separates thinking and response text when both delta types stream", () => {
@@ -691,10 +692,11 @@ describe("handleMessage: stream_event content_block_delta", () => {
       parent_tool_use_id: null,
     });
 
-    expect(useStore.getState().streaming.get("s1")).toBe("Thinking:\nPlanning...\n\nResponse:\nFinal answer");
+    // When text_delta arrives, streaming shows the text portion
+    expect(useStore.getState().streaming.get("s1")).toBe("Final answer");
   });
 
-  it("does not wedge prior text into thinking section when thinking arrives after text", () => {
+  it("shows thinking text when thinking arrives after text", () => {
     wsModule.connectSession("s1");
     fireMessage({ type: "session_init", session: makeSession("s1") });
 
@@ -710,10 +712,11 @@ describe("handleMessage: stream_event content_block_delta", () => {
       parent_tool_use_id: null,
     });
 
-    expect(useStore.getState().streaming.get("s1")).toBe("Thinking:\nPlan");
+    // When thinking resumes, streaming shows the thinking portion
+    expect(useStore.getState().streaming.get("s1")).toBe("Plan");
   });
 
-  it("resets to a new thinking section if thinking resumes after response text", () => {
+  it("shows latest thinking when thinking resumes after response text", () => {
     wsModule.connectSession("s1");
     fireMessage({ type: "session_init", session: makeSession("s1") });
 
@@ -733,7 +736,8 @@ describe("handleMessage: stream_event content_block_delta", () => {
       parent_tool_use_id: null,
     });
 
-    expect(useStore.getState().streaming.get("s1")).toBe("Thinking:\nC");
+    // Thinking text accumulates separately — "AC" (A + C)
+    expect(useStore.getState().streaming.get("s1")).toBe("AC");
   });
 });
 
@@ -1747,7 +1751,7 @@ describe("handleMessage: tool_progress", () => {
 // handleMessage: tool_use_summary
 // ===========================================================================
 describe("handleMessage: tool_use_summary", () => {
-  it("appends a system message with the summary text", () => {
+  it("does not create a visible system message (tool_use blocks already render the tool call)", () => {
     wsModule.connectSession("s1");
     fireMessage({ type: "session_init", session: makeSession("s1") });
 
@@ -1757,10 +1761,10 @@ describe("handleMessage: tool_use_summary", () => {
       tool_use_ids: ["tu-1", "tu-2", "tu-3"],
     });
 
-    const msgs = useStore.getState().messages.get("s1");
-    expect(msgs).toBeDefined();
-    const systemMsg = msgs!.find((m) => m.role === "system" && m.content === "Ran 3 tools: Bash, Read, Grep");
-    expect(systemMsg).toBeDefined();
+    const msgs = useStore.getState().messages.get("s1") || [];
+    // tool_use_summary is intentionally not rendered as a system message
+    const systemMsg = msgs.find((m) => m.role === "system" && m.content === "Ran 3 tools: Bash, Read, Grep");
+    expect(systemMsg).toBeUndefined();
   });
 });
 

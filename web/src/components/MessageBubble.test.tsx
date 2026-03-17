@@ -122,13 +122,13 @@ describe("MessageBubble - assistant messages", () => {
     });
     render(<MessageBubble message={msg} />);
 
-    // ToolBlock renders with the label "Terminal" for Bash
-    expect(screen.getByText("Terminal")).toBeTruthy();
-    // And the preview should show the command
+    // Bash renders inline with $ prefix and command visible directly
     expect(screen.getByText("pwd")).toBeTruthy();
+    const preElement = screen.getByText("pwd").closest("pre");
+    expect(preElement).toBeTruthy();
   });
 
-  it("renders thinking blocks with 'Reasoning' label and char count", () => {
+  it("renders thinking blocks as inline faded italic text", () => {
     const thinkingText = "Let me analyze this problem step by step...";
     const msg = makeMessage({
       role: "assistant",
@@ -139,12 +139,14 @@ describe("MessageBubble - assistant messages", () => {
     });
     render(<MessageBubble message={msg} />);
 
-    expect(screen.getByText("Reasoning")).toBeTruthy();
-    expect(screen.getByText(`${thinkingText.length} chars`)).toBeTruthy();
+    // Thinking renders inline as faded italic text via Markdown mock
+    expect(screen.getByText(thinkingText)).toBeTruthy();
   });
 
-  it("thinking blocks expand and collapse on click", () => {
-    const thinkingText = "Deep analysis of the problem at hand.";
+  it("thinking blocks show 'Show more' for long content", () => {
+    // Use text with many lines so it triggers the isLong threshold
+    const thinkingLines = Array.from({ length: 12 }, (_, i) => `Step ${i + 1}: analysis of the problem`);
+    const thinkingText = thinkingLines.join("\n");
     const msg = makeMessage({
       role: "assistant",
       content: "",
@@ -152,22 +154,16 @@ describe("MessageBubble - assistant messages", () => {
         { type: "thinking", thinking: thinkingText },
       ],
     });
-    const { container } = render(<MessageBubble message={msg} />);
+    render(<MessageBubble message={msg} />);
 
-    // Thinking content is visible by default
-    expect(screen.getByText(thinkingText)).toBeTruthy();
+    // Long text is truncated, "Show more" button appears
+    expect(screen.getByText("Show more")).toBeTruthy();
 
-    // Find and click the thinking button
-    const thinkingButton = screen.getByText("Reasoning").closest("button")!;
-    fireEvent.click(thinkingButton);
+    // Click to expand
+    fireEvent.click(screen.getByText("Show more"));
 
-    // Now collapsed
-    const preAfterCollapse = container.querySelector("pre");
-    expect(preAfterCollapse?.textContent || "").not.toContain(thinkingText);
-
-    // Click again to re-open
-    fireEvent.click(thinkingButton);
-    expect(screen.getByText(thinkingText)).toBeTruthy();
+    // After expanding, "Show more" disappears (no collapse toggle)
+    expect(screen.queryByText("Show more")).toBeNull();
   });
 
   it("renders tool_result blocks with string content", () => {
@@ -227,7 +223,7 @@ describe("MessageBubble - assistant messages", () => {
 
     expect(screen.getByText("Success output")).toBeTruthy();
     const resultDiv = screen.getByText("Success output");
-    expect(resultDiv.className).toContain("text-cc-muted");
+    // Non-error tool results should NOT have error styling
     expect(resultDiv.className).not.toContain("text-cc-error");
   });
 
@@ -243,14 +239,19 @@ describe("MessageBubble - assistant messages", () => {
     });
     render(<MessageBubble message={msg} />);
 
-    expect(screen.getByText("Output (last 20 lines)")).toBeTruthy();
-    const resultPre = document.querySelector("pre");
+    // Footer shows "last 20 of N" info text
+    expect(screen.getByText(/last 20 of \d+/)).toBeTruthy();
+    // Find the second pre (first is the command, second is the result)
+    const allPres = document.querySelectorAll("pre");
+    const resultPre = allPres[allPres.length - 1];
     const tailLines = (resultPre?.textContent || "").split("\n");
     expect(tailLines.includes("line-1")).toBe(false);
     expect(tailLines.includes("line-25")).toBe(true);
 
-    fireEvent.click(screen.getByText("Show full"));
-    const fullPre = document.querySelector("pre");
+    // Click "Show all" to expand
+    fireEvent.click(screen.getByText("Show all"));
+    const allPresAfter = document.querySelectorAll("pre");
+    const fullPre = allPresAfter[allPresAfter.length - 1];
     const fullLines = (fullPre?.textContent || "").split("\n");
     expect(fullLines.includes("line-1")).toBe(true);
     expect(screen.getByText("Show tail")).toBeTruthy();
@@ -290,9 +291,9 @@ describe("MessageBubble - content block grouping", () => {
     });
     render(<MessageBubble message={msg} />);
 
-    // Both labels should appear separately
+    // Read renders as a card with label, Bash renders inline with command
     expect(screen.getByText("Read File")).toBeTruthy();
-    expect(screen.getByText("Terminal")).toBeTruthy();
+    expect(screen.getByText("ls")).toBeTruthy();
   });
 
   it("renders a single tool_use without group count badge", () => {
@@ -305,8 +306,8 @@ describe("MessageBubble - content block grouping", () => {
     });
     render(<MessageBubble message={msg} />);
 
-    // Should render Terminal label but no count badge
-    expect(screen.getByText("Terminal")).toBeTruthy();
+    // Bash renders inline with the command visible, no count badge
+    expect(screen.getByText("echo hi")).toBeTruthy();
     expect(screen.queryByText("1")).toBeNull();
   });
 

@@ -370,6 +370,15 @@ const MSG_ASSISTANT_STREAMING: ChatMessage = {
   timestamp: Date.now() - 35000,
 };
 
+const MSG_ASSISTANT_STREAMING_THINKING: ChatMessage = {
+  id: "msg-streaming-thinking",
+  role: "assistant",
+  content: "Let me analyze the codebase to understand the authentication architecture. I should look at the middleware, session store, and token validation...",
+  isStreaming: true,
+  streamingPhase: "thinking",
+  timestamp: Date.now() - 34000,
+};
+
 const MSG_SYSTEM: ChatMessage = {
   id: "msg-6",
   role: "system",
@@ -1008,6 +1017,9 @@ export function Playground() {
             </Card>
             <Card label="Assistant message (streaming)">
               <MessageBubble message={MSG_ASSISTANT_STREAMING} />
+            </Card>
+            <Card label="Assistant message (streaming thinking phase)">
+              <MessageBubble message={MSG_ASSISTANT_STREAMING_THINKING} />
             </Card>
             <Card label="Assistant message (thinking block)">
               <MessageBubble message={MSG_ASSISTANT_THINKING} />

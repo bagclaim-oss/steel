@@ -675,6 +675,7 @@ function handleParsedMessage(
       clearStreamingDraftMessage(sessionId);
       store.setStreaming(sessionId, null);
       streamingPhaseBySession.delete(sessionId);
+      streamingBlocksBySession.delete(sessionId);
       store.setStreamingStats(sessionId, null);
       store.clearToolProgress(sessionId);
       store.setSessionStatus(sessionId, "idle");
@@ -986,6 +987,7 @@ function handleParsedMessage(
         clearStreamingDraftMessage(sessionId);
         store.setStreaming(sessionId, null);
         streamingPhaseBySession.delete(sessionId);
+        streamingBlocksBySession.delete(sessionId);
         store.setStreamingStats(sessionId, null);
         store.clearToolProgress(sessionId);
         store.setSessionStatus(sessionId, "idle");

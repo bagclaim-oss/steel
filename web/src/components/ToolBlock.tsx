@@ -64,12 +64,12 @@ export function ToolBlock({
 
   // Edit gets a special borderless treatment — visual identity without a card
   if (name === "Edit") {
-    return <EditBlock input={input} open={open} setOpen={setOpen} preview={preview} />;
+    return <EditBlock input={input} />;
   }
 
   // Bash gets a terminal-style borderless treatment
   if (name === "Bash") {
-    return <BashBlock input={input} open={open} setOpen={setOpen} preview={preview} />;
+    return <BashBlock input={input} />;
   }
 
   return (
@@ -106,14 +106,7 @@ export function ToolBlock({
 }
 
 /** Edit tool — inline diff, no card, no scroll, "show more" for long diffs */
-function EditBlock({
-  input,
-}: {
-  input: Record<string, unknown>;
-  open: boolean;
-  setOpen: (v: boolean) => void;
-  preview: string;
-}) {
+function EditBlock({ input }: { input: Record<string, unknown> }) {
   const filePath = String(input.file_path || "");
   const fileName = filePath ? filePath.split("/").pop() || filePath : "";
   const oldStr = String(input.old_string || "");
@@ -195,14 +188,7 @@ function EditBlock({
 }
 
 /** Bash tool — shows command directly, always visible */
-function BashBlock({
-  input,
-}: {
-  input: Record<string, unknown>;
-  open: boolean;
-  setOpen: (v: boolean) => void;
-  preview: string;
-}) {
+function BashBlock({ input }: { input: Record<string, unknown> }) {
   const command = typeof input.command === "string" ? input.command : "";
   const desc = typeof input.description === "string" ? input.description : "";
 

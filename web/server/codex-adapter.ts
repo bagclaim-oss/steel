@@ -834,9 +834,12 @@ export class CodexAdapter implements IBackendAdapter {
       if (!this.connected) return false;
     }
 
-    // Guard against dispatching when transport is down (e.g. after proxy WS drop)
+    // Guard against dispatching when transport is down (e.g. after proxy WS drop).
+    // Also trigger cleanup so the bridge sees the adapter as disconnected and
+    // stops trying to flush messages in a loop (proc.exited may not have fired yet).
     if (!this.transport.isConnected()) {
       console.warn(`[codex-adapter] Transport disconnected — cannot dispatch ${msg.type}`);
+      this.cleanupAndDisconnect();
       return false;
     }
 
@@ -1445,7 +1448,10 @@ export class CodexAdapter implements IBackendAdapter {
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       if (errMsg === "Transport closed") {
-        this.emit({ type: "error", message: "Connection to Codex lost. Cannot fetch MCP status." });
+        // Transient disconnect (e.g. page refresh, WS proxy reconnection).
+        // Re-queue so it retries automatically after re-initialization.
+        console.log(`[codex-adapter] Session ${this.sessionId}: mcp_get_status failed (transport closed), re-queuing for retry`);
+        this.pendingOutgoing.push({ type: "mcp_get_status" });
       } else {
         this.emit({ type: "error", message: `Failed to get MCP status: ${err}` });
       }

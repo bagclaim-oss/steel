@@ -841,7 +841,11 @@ function handleParsedMessage(
         store.setCliConnected(sessionId, false);
         store.setCliReconnecting(sessionId, false);
         store.setSessionStatus(sessionId, null);
-      } else if (phase === "reconnecting" || phase === "starting" || phase === "initializing") {
+      } else if (phase === "reconnecting") {
+        store.setCliConnected(sessionId, false);
+        store.setCliReconnecting(sessionId, true);
+        store.setSessionStatus(sessionId, null);
+      } else if (phase === "starting" || phase === "initializing") {
         store.setCliConnected(sessionId, false);
         store.setCliReconnecting(sessionId, true);
       } else {

@@ -28,6 +28,15 @@ export type Auth = ReturnType<typeof betterAuth>;
 
 let _auth: Auth | null = null;
 
+/** Escape HTML special characters to prevent injection in email templates. */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 /**
  * Build a sendEmail function backed by Resend when configured,
  * or a console logger for local development.
@@ -71,10 +80,10 @@ export function getAuth(): Auth {
         enabled: true,
         requireEmailVerification: !!process.env.RESEND_API_KEY,
         sendResetPassword: async ({ user, url }) => {
-          void sendEmail(
+          await sendEmail(
             user.email,
             `${appName} — Reset your password`,
-            `<p>Hi ${user.name},</p>
+            `<p>Hi ${escapeHtml(user.name)},</p>
              <p>Click the link below to reset your password:</p>
              <p><a href="${url}">Reset password</a></p>
              <p>If you didn't request this, you can safely ignore this email.</p>
@@ -85,10 +94,10 @@ export function getAuth(): Auth {
       emailVerification: {
         sendOnSignUp: !!process.env.RESEND_API_KEY,
         sendVerificationEmail: async ({ user, url }) => {
-          void sendEmail(
+          await sendEmail(
             user.email,
             `${appName} — Verify your email`,
-            `<p>Hi ${user.name},</p>
+            `<p>Hi ${escapeHtml(user.name)},</p>
              <p>Welcome to ${appName}! Please verify your email address:</p>
              <p><a href="${url}">Verify email</a></p>
              <p>— ${appName}</p>`,
@@ -103,12 +112,12 @@ export function getAuth(): Auth {
           membershipLimit: 50,
           creatorRole: "owner",
           sendInvitationEmail: async ({ invitation, inviter, organization: org }) => {
-            const acceptUrl = `${process.env.BETTER_AUTH_URL || "http://localhost:3458"}/api/auth/organization/accept-invitation?invitationId=${invitation.id}`;
-            void sendEmail(
+            const acceptUrl = `${process.env.BETTER_AUTH_URL || "http://localhost:3458"}/api/auth/organization/accept-invitation?invitationId=${encodeURIComponent(invitation.id)}`;
+            await sendEmail(
               invitation.email,
-              `${inviter.user.name} invited you to ${org.name}`,
+              `${escapeHtml(inviter.user.name)} invited you to ${escapeHtml(org.name)}`,
               `<p>Hi,</p>
-               <p><strong>${inviter.user.name}</strong> invited you to join <strong>${org.name}</strong> on ${appName}.</p>
+               <p><strong>${escapeHtml(inviter.user.name)}</strong> invited you to join <strong>${escapeHtml(org.name)}</strong> on ${appName}.</p>
                <p><a href="${acceptUrl}">Accept invitation</a></p>
                <p>— ${appName}</p>`,
             );

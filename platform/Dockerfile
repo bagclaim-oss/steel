@@ -22,14 +22,17 @@ FROM oven/bun:1-slim AS runtime
 
 WORKDIR /app
 
-# Copy built artifacts + runtime deps
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./
+# Copy package files and install production-only deps (excludes vite, vitest, etc.)
+COPY --from=builder /app/package.json /app/bun.lock* ./
+RUN bun install --frozen-lockfile --production
 
-# Copy Drizzle schema + config for db:push at deploy time
+# Copy built artifacts
+COPY --from=builder /app/dist ./dist
+
+# Copy Drizzle schema + config + migrations for drizzle-kit migrate at deploy time
 COPY --from=builder /app/server/db ./server/db
 COPY --from=builder /app/drizzle.config.ts ./
+COPY --from=builder /app/drizzle ./drizzle
 
 ENV NODE_ENV=production
 

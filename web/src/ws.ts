@@ -837,11 +837,11 @@ function handleParsedMessage(
 
     case "session_phase": {
       const phase = data.phase;
-      if (phase === "terminated" || phase === "reconnecting") {
+      if (phase === "terminated") {
         store.setCliConnected(sessionId, false);
         store.setCliReconnecting(sessionId, false);
         store.setSessionStatus(sessionId, null);
-      } else if (phase === "starting" || phase === "initializing") {
+      } else if (phase === "reconnecting" || phase === "starting" || phase === "initializing") {
         store.setCliConnected(sessionId, false);
         store.setCliReconnecting(sessionId, true);
       } else {

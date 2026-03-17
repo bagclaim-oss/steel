@@ -281,7 +281,7 @@ export async function executeSessionCreation(
       ports: containerPorts,
       volumes: (body.container as Record<string, unknown>)?.volumes as string[] | undefined,
       env: { ...(envVars ?? {}), DISPLAY: ":99" },
-      privileged: effectiveImage === "the-companion:latest",
+      privileged: sandboxEnabled && effectiveImage === "the-companion:latest",
     };
     try {
       containerInfo = containerManager.createContainer(tempId, cwd!, cConfig);

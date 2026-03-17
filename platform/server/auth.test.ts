@@ -247,7 +247,7 @@ describe("getAuth", () => {
     mockResendSend.mockResolvedValueOnce({
       data: null,
       error: { message: "rate limit exceeded", name: "rate_limit_exceeded" },
-    });
+    } as any);
 
     const auth = getAuth();
     const callback = (auth as any).options.emailAndPassword.sendResetPassword;

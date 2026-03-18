@@ -81,9 +81,19 @@ export function AgentsPage({ route }: Props) {
     try {
       const list = await api.listAgents();
       setAgents(list);
-      // Derive linearOAuthConfigured from agents: true if any Linear agent has an access token
+      // Check if any OAuth connections exist (so the Linear trigger toggle is shown)
       const hasLinearAgent = list.some(a => a.triggers?.linear?.enabled && a.triggers?.linear?.hasAccessToken);
-      setLinearOAuthConfigured(hasLinearAgent);
+      if (hasLinearAgent) {
+        setLinearOAuthConfigured(true);
+      } else {
+        // Also check if standalone OAuth connections exist
+        try {
+          const { connections } = await api.listLinearOAuthConnections();
+          setLinearOAuthConfigured(connections.length > 0);
+        } catch {
+          setLinearOAuthConfigured(false);
+        }
+      }
     } catch {
       // ignore
     } finally {
@@ -141,6 +151,7 @@ export function AgentsPage({ route }: Props) {
       scheduleExpression: agent.triggers?.schedule?.expression || "0 8 * * *",
       scheduleRecurring: agent.triggers?.schedule?.recurring ?? true,
       linearEnabled: agent.triggers?.linear?.enabled ?? false,
+      linearOAuthConnectionId: agent.triggers?.linear?.oauthConnectionId ?? "",
     });
     setError("");
     // Route Linear agents to the dedicated editor
@@ -253,7 +264,10 @@ export function AgentsPage({ route }: Props) {
             expression: form.scheduleExpression,
             recurring: form.scheduleRecurring,
           },
-          linear: { enabled: form.linearEnabled },
+          linear: {
+            enabled: form.linearEnabled,
+            ...(form.linearOAuthConnectionId ? { oauthConnectionId: form.linearOAuthConnectionId } : {}),
+          },
         },
       };
 

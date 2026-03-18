@@ -18,6 +18,7 @@ const mockApi = {
   listSkills: vi.fn(),
   listEnvs: vi.fn(),
   getLinearOAuthStatus: vi.fn(),
+  listLinearOAuthConnections: vi.fn(),
 };
 
 vi.mock("../api.js", () => ({
@@ -35,6 +36,7 @@ vi.mock("../api.js", () => ({
     listSkills: (...args: unknown[]) => mockApi.listSkills(...args),
     listEnvs: (...args: unknown[]) => mockApi.listEnvs(...args),
     getLinearOAuthStatus: (...args: unknown[]) => mockApi.getLinearOAuthStatus(...args),
+    listLinearOAuthConnections: (...args: unknown[]) => mockApi.listLinearOAuthConnections(...args),
   },
 }));
 
@@ -92,6 +94,7 @@ beforeEach(() => {
   mockApi.listSkills.mockResolvedValue([]);
   mockApi.listEnvs.mockResolvedValue([]);
   mockApi.getLinearOAuthStatus.mockResolvedValue({ configured: false, hasClientId: false, hasClientSecret: false, hasWebhookSecret: false, hasAccessToken: false });
+  mockApi.listLinearOAuthConnections.mockResolvedValue({ connections: [] });
   window.location.hash = "#/agents";
   // Reset publicUrl mock to empty (no public URL configured)
   mockPublicUrl = "";

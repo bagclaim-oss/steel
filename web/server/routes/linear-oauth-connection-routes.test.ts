@@ -279,6 +279,31 @@ describe("linear-oauth-connection-routes", () => {
       expect(json.error).toBe("OAuth connection not found");
     });
 
+    it("returns 409 when updating oauthClientId to one that already exists", async () => {
+      vi.mocked(getOAuthConnection).mockReturnValue(mockConnection);
+      // Another connection already uses this clientId
+      vi.mocked(listOAuthConnections).mockReturnValue([
+        { ...mockConnection, id: "conn-other", oauthClientId: "existing-cid" },
+      ]);
+
+      const res = await PUT("/linear/oauth-connections/conn-1", { oauthClientId: "existing-cid" });
+      expect(res.status).toBe(409);
+      const json = await res.json();
+      expect(json.error).toContain("already exists");
+      // Should NOT call updateOAuthConnection
+      expect(updateOAuthConnection).not.toHaveBeenCalled();
+    });
+
+    it("allows updating oauthClientId to the same value (no-op duplicate)", async () => {
+      vi.mocked(getOAuthConnection).mockReturnValue(mockConnection);
+      vi.mocked(updateOAuthConnection).mockReturnValue({ ...mockConnection, updatedAt: 9999 });
+
+      // Updating to the same clientId the connection already has should be allowed
+      const res = await PUT("/linear/oauth-connections/conn-1", { oauthClientId: mockConnection.oauthClientId });
+      expect(res.status).toBe(200);
+      expect(updateOAuthConnection).toHaveBeenCalled();
+    });
+
     it("returns 500 when update fails", async () => {
       vi.mocked(getOAuthConnection).mockReturnValue(mockConnection);
       vi.mocked(updateOAuthConnection).mockReturnValue(null);

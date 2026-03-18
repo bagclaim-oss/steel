@@ -65,6 +65,17 @@ export function registerLinearOAuthConnectionRoutes(api: Hono): void {
     if (typeof body.oauthClientSecret === "string") patch.oauthClientSecret = body.oauthClientSecret;
     if (typeof body.webhookSecret === "string") patch.webhookSecret = body.webhookSecret;
 
+    // Guard: prevent duplicate oauthClientId on update (same logic as create)
+    if (typeof body.oauthClientId === "string") {
+      const trimmed = body.oauthClientId.trim();
+      if (trimmed && trimmed !== existing.oauthClientId) {
+        const duplicate = listOAuthConnections().find((conn) => conn.oauthClientId === trimmed);
+        if (duplicate) {
+          return c.json({ error: "A connection with this OAuth client ID already exists" }, 409);
+        }
+      }
+    }
+
     const updated = updateOAuthConnection(id, patch as Partial<Omit<typeof existing, "id" | "createdAt">>);
     if (!updated) return c.json({ error: "Update failed" }, 500);
 

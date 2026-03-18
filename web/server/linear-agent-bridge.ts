@@ -483,7 +483,7 @@ export class LinearAgentBridge {
         };
       }
       console.warn(
-        `[linear-agent-bridge] OAuth connection "${linear.oauthConnectionId}" referenced by agent not found — credentials will be empty`,
+        `[linear-agent-bridge] OAuth connection "${linear.oauthConnectionId}" referenced by agent not found — falling back to inline credentials`,
       );
     }
 

@@ -132,11 +132,11 @@ export function TopBar() {
   }, [showWorkspaceControls, workspaceTabs, activeTab, cwd, quickTerminalOpen, quickTerminalTabs.length, openQuickTerminal, defaultTerminalOpts, setActiveTab, markChatTabReentry, currentSessionId]);
 
   return (
-    <header className="relative shrink-0 h-11 px-4 bg-cc-bg">
-      <div className="h-full flex items-center gap-1 min-w-0">
+    <header className="relative shrink-0 border-b border-cc-separator bg-cc-card/72 px-4 backdrop-blur-xl md:px-5">
+      <div className="flex h-14 items-center gap-2 min-w-0">
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className={`flex items-center justify-center w-8 h-8 rounded-md transition-colors cursor-pointer shrink-0 ${
+          className={`flex items-center justify-center w-9 h-9 rounded-xl transition-colors cursor-pointer shrink-0 ${
             sidebarOpen
               ? "text-cc-primary bg-cc-active"
               : "text-cc-muted hover:text-cc-fg hover:bg-cc-hover"
@@ -150,12 +150,25 @@ export function TopBar() {
         </button>
 
         {showWorkspaceControls && (
-          <div className="flex-1 flex items-center justify-start md:justify-center gap-0.5 min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex-1 flex items-center gap-3 min-w-0 overflow-hidden">
+            <div className="hidden min-w-0 lg:block">
+              <div className="truncate text-[12px] font-semibold text-cc-fg">{sessionName}</div>
+              <div className="truncate text-[10px] uppercase tracking-[0.18em] text-cc-muted">
+                {isConnected
+                  ? status === "running"
+                    ? "Session live"
+                    : status === "compacting"
+                      ? "Compacting"
+                      : "Ready"
+                  : "Reconnecting"}
+              </div>
+            </div>
+            <div className="flex flex-1 items-center justify-start md:justify-center gap-1 min-w-0 overflow-x-auto rounded-full border border-cc-border bg-cc-bg/60 px-1.5 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <button
                 onClick={() => activateWorkspaceTab("chat")}
-                className={`h-full px-3 text-[12px] font-medium transition-colors cursor-pointer flex items-center gap-1.5 border-b-[1.5px] shrink-0 ${
+                className={`h-9 px-3 text-[12px] font-medium transition-colors cursor-pointer flex items-center gap-1.5 border-b-[1.5px] rounded-full shrink-0 ${
                   activeTab === "chat"
-                    ? "text-cc-fg border-cc-primary"
+                    ? "text-cc-fg border-cc-primary bg-cc-card"
                     : "text-cc-muted hover:text-cc-fg border-transparent"
                 }`}
                 title={sessionName || "Session"}
@@ -174,9 +187,9 @@ export function TopBar() {
               </button>
               <button
                 onClick={() => activateWorkspaceTab("diff")}
-                className={`h-full px-3 text-[12px] font-medium transition-colors cursor-pointer flex items-center gap-1.5 border-b-[1.5px] shrink-0 ${
+                className={`h-9 px-3 text-[12px] font-medium transition-colors cursor-pointer flex items-center gap-1.5 border-b-[1.5px] rounded-full shrink-0 ${
                   activeTab === "diff"
-                    ? "text-cc-fg border-cc-primary"
+                    ? "text-cc-fg border-cc-primary bg-cc-card"
                     : "text-cc-muted hover:text-cc-fg border-transparent"
                 }`}
                 aria-label="Diffs tab"
@@ -191,11 +204,11 @@ export function TopBar() {
               <button
                 onClick={() => activateWorkspaceTab("terminal")}
                 disabled={!cwd}
-                className={`h-full px-3 text-[12px] font-medium transition-colors flex items-center border-b-[1.5px] shrink-0 ${
+                className={`h-9 px-3 text-[12px] font-medium transition-colors flex items-center border-b-[1.5px] rounded-full shrink-0 ${
                   !cwd
                     ? "text-cc-muted/50 border-transparent cursor-not-allowed"
                     : activeTab === "terminal"
-                      ? "text-cc-fg border-cc-primary cursor-pointer"
+                      ? "text-cc-fg border-cc-primary bg-cc-card cursor-pointer"
                       : "text-cc-muted hover:text-cc-fg border-transparent cursor-pointer"
                 }`}
                 title={terminalButtonTitle}
@@ -205,9 +218,9 @@ export function TopBar() {
               </button>
               <button
                 onClick={() => activateWorkspaceTab("processes")}
-                className={`h-full px-3 text-[12px] font-medium transition-colors cursor-pointer flex items-center gap-1.5 border-b-[1.5px] shrink-0 ${
+                className={`h-9 px-3 text-[12px] font-medium transition-colors cursor-pointer flex items-center gap-1.5 border-b-[1.5px] rounded-full shrink-0 ${
                   activeTab === "processes"
-                    ? "text-cc-fg border-cc-primary"
+                    ? "text-cc-fg border-cc-primary bg-cc-card"
                     : "text-cc-muted hover:text-cc-fg border-transparent"
                 }`}
                 aria-label="Processes tab"
@@ -222,11 +235,11 @@ export function TopBar() {
               <button
                 onClick={() => activateWorkspaceTab("editor")}
                 disabled={!cwd}
-                className={`h-full px-3 text-[12px] font-medium transition-colors flex items-center border-b-[1.5px] shrink-0 ${
+                className={`h-9 px-3 text-[12px] font-medium transition-colors flex items-center border-b-[1.5px] rounded-full shrink-0 ${
                   !cwd
                     ? "text-cc-muted/50 border-transparent cursor-not-allowed"
                     : activeTab === "editor"
-                      ? "text-cc-fg border-cc-primary cursor-pointer"
+                      ? "text-cc-fg border-cc-primary bg-cc-card cursor-pointer"
                       : "text-cc-muted hover:text-cc-fg border-transparent cursor-pointer"
                 }`}
                 title={!cwd ? "Editor unavailable while session is reconnecting" : "Editor"}
@@ -236,9 +249,9 @@ export function TopBar() {
               </button>
               <button
                 onClick={() => activateWorkspaceTab("browser")}
-                className={`h-full px-3 text-[12px] font-medium transition-colors cursor-pointer flex items-center border-b-[1.5px] shrink-0 ${
+                className={`h-9 px-3 text-[12px] font-medium transition-colors cursor-pointer flex items-center border-b-[1.5px] rounded-full shrink-0 ${
                   activeTab === "browser"
-                    ? "text-cc-fg border-cc-primary"
+                    ? "text-cc-fg border-cc-primary bg-cc-card"
                     : "text-cc-muted hover:text-cc-fg border-transparent"
                 }`}
                 title="Browser preview"
@@ -246,10 +259,11 @@ export function TopBar() {
               >
                 Browser
               </button>
+            </div>
           </div>
         )}
 
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0 rounded-full border border-cc-border bg-cc-bg/55 px-1.5 py-1">
           {showWorkspaceControls && currentSessionId && (
             <AiValidationToggle sessionId={currentSessionId} />
           )}
@@ -257,7 +271,7 @@ export function TopBar() {
           {showContextToggle && (
             <button
               onClick={() => setTaskPanelOpen(!taskPanelOpen)}
-              className={`flex items-center justify-center w-8 h-8 rounded-md transition-colors cursor-pointer ${
+              className={`flex items-center justify-center w-8 h-8 rounded-xl transition-colors cursor-pointer ${
                 taskPanelOpen
                   ? "text-cc-primary bg-cc-active"
                   : "text-cc-muted hover:text-cc-fg hover:bg-cc-hover"

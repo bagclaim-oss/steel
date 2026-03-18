@@ -87,11 +87,11 @@ function PanelSection({
   }, []);
 
   return (
-    <div className="border-t border-cc-separator first:border-t-0">
+    <div className="mx-3 mt-3 overflow-hidden rounded-[22px] border border-cc-border bg-cc-bg/55 shadow-[0_14px_36px_rgba(15,23,42,0.1)] first:mt-0">
       <button
         onClick={toggle}
         aria-expanded={!collapsed}
-        className="w-full flex items-center gap-1.5 px-4 py-2 text-left hover:bg-cc-hover/50 transition-colors cursor-pointer"
+        className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-cc-hover/50 transition-colors cursor-pointer"
       >
         <svg
           viewBox="0 0 16 16"
@@ -101,7 +101,7 @@ function PanelSection({
         >
           <path d="M6 4l4 4-4 4" />
         </svg>
-        <span className="text-[11px] font-semibold text-cc-muted uppercase tracking-wider flex-1 truncate">
+        <span className="text-[11px] font-semibold text-cc-muted uppercase tracking-[0.18em] flex-1 truncate">
           {label}
         </span>
         {badge && <span className="shrink-0">{badge}</span>}
@@ -1109,13 +1109,18 @@ export function TaskPanel({ sessionId }: { sessionId: string }) {
   return (
     <aside
       aria-label="Session context"
-      className="w-full lg:w-[320px] h-full flex flex-col overflow-hidden bg-cc-card"
+      className="w-full lg:w-[320px] h-full flex flex-col overflow-hidden bg-transparent"
     >
       {/* Header */}
-      <div className="shrink-0 h-11 flex items-center justify-between px-4 bg-cc-card border-b border-cc-separator">
+      <div className="shrink-0 flex items-center justify-between border-b border-cc-separator bg-cc-card/78 px-4 py-4 backdrop-blur">
+        <div>
         <h2 className="text-sm font-semibold text-cc-fg tracking-tight">
           {configMode ? "Panel Settings" : "Context"}
         </h2>
+          <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-cc-muted">
+            {configMode ? "Configure your inspector" : "Session intelligence"}
+          </p>
+        </div>
         <button
           onClick={() => {
             if (configMode) {
@@ -1125,7 +1130,7 @@ export function TaskPanel({ sessionId }: { sessionId: string }) {
             }
           }}
           aria-label="Close panel"
-          className="flex items-center justify-center w-8 h-8 rounded-lg text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
+          className="flex items-center justify-center w-9 h-9 rounded-xl text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
         >
           <svg
             viewBox="0 0 16 16"
@@ -1143,7 +1148,7 @@ export function TaskPanel({ sessionId }: { sessionId: string }) {
         <TaskPanelConfigView isCodex={isCodex} />
       ) : (
         <>
-          <div data-testid="task-panel-content" className="min-h-0 flex-1 overflow-y-auto">
+          <div data-testid="task-panel-content" className="min-h-0 flex-1 overflow-y-auto px-0 py-3">
             <ClaudeConfigBrowser sessionId={sessionId} />
             {applicableSections
               .filter((id) => config.enabled[id] !== false)
@@ -1161,10 +1166,10 @@ export function TaskPanel({ sessionId }: { sessionId: string }) {
           </div>
 
           {/* Settings button at bottom */}
-          <div className="shrink-0 px-4 py-2 pb-safe border-t border-cc-separator">
+          <div className="shrink-0 border-t border-cc-separator px-4 py-3 pb-safe bg-cc-card/55">
             <button
               onClick={() => useStore.getState().setTaskPanelConfigMode(true)}
-              className="flex items-center gap-1.5 text-[11px] text-cc-muted hover:text-cc-fg transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 rounded-full border border-cc-border bg-cc-bg/60 px-3 py-2 text-[11px] text-cc-muted hover:text-cc-fg transition-colors cursor-pointer"
               title="Configure panel sections"
               data-testid="customize-panel-btn"
             >

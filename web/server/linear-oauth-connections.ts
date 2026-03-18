@@ -74,43 +74,69 @@ function ensureLoaded(): void {
 
 // ─── Migration ───────────────────────────────────────────────────────────────
 
+interface MigrationSettings {
+  linearOAuthClientId: string;
+  linearOAuthClientSecret: string;
+  linearOAuthWebhookSecret: string;
+  linearOAuthAccessToken: string;
+  linearOAuthRefreshToken: string;
+  [key: string]: unknown;
+}
+
+interface MigrationDeps {
+  listAgents: () => Array<{ id: string; name: string; triggers?: { linear?: Record<string, unknown> } }>;
+  updateAgent: (id: string, patch: Record<string, unknown>) => void;
+  getSettings: () => MigrationSettings;
+}
+
 /**
  * One-time migration: if no OAuth connections exist, extract inline credentials
  * from agents and global settings into standalone OAuth connections.
  * Deduplicates by oauthClientId so multiple agents sharing the same app
  * get a single connection.
+ *
+ * Accepts optional deps parameter for testability.
  */
-function migrateFromAgents(): void {
+export function migrateFromAgents(deps?: MigrationDeps): void {
   if (connections.length > 0) return;
 
-  // Lazy import to avoid circular dependency at module load time
-  let agentStoreModule: typeof import("./agent-store.js") | null = null;
-  let settingsModule: typeof import("./settings-manager.js") | null = null;
-  try {
-    agentStoreModule = require("./agent-store.js") as typeof import("./agent-store.js");
-    settingsModule = require("./settings-manager.js") as typeof import("./settings-manager.js");
-  } catch {
-    return; // Can't migrate without dependencies
+  let resolvedDeps: MigrationDeps;
+  if (deps) {
+    resolvedDeps = deps;
+  } else {
+    // Lazy import to avoid circular dependency at module load time
+    try {
+      const agentStoreModule = require("./agent-store.js") as typeof import("./agent-store.js");
+      const settingsModule = require("./settings-manager.js") as typeof import("./settings-manager.js");
+      resolvedDeps = {
+        listAgents: agentStoreModule.listAgents as MigrationDeps["listAgents"],
+        updateAgent: agentStoreModule.updateAgent as MigrationDeps["updateAgent"],
+        getSettings: settingsModule.getSettings as unknown as MigrationDeps["getSettings"],
+      };
+    } catch {
+      return; // Can't migrate without dependencies
+    }
   }
 
-  const agents = agentStoreModule.listAgents();
+  const agents = resolvedDeps.listAgents();
   const seenClientIds = new Set<string>();
 
   for (const agent of agents) {
     const linear = agent.triggers?.linear;
-    if (!linear?.oauthClientId || seenClientIds.has(linear.oauthClientId)) continue;
-    seenClientIds.add(linear.oauthClientId);
+    const oauthClientId = linear?.oauthClientId as string | undefined;
+    if (!oauthClientId || seenClientIds.has(oauthClientId)) continue;
+    seenClientIds.add(oauthClientId);
 
     const now = Date.now();
     const conn: LinearOAuthConnection = {
       id: randomUUID(),
       name: `${agent.name} OAuth App`,
-      oauthClientId: linear.oauthClientId,
-      oauthClientSecret: linear.oauthClientSecret || "",
-      webhookSecret: linear.webhookSecret || "",
-      accessToken: linear.accessToken || "",
-      refreshToken: linear.refreshToken || "",
-      status: linear.accessToken ? "connected" : "disconnected",
+      oauthClientId,
+      oauthClientSecret: (linear?.oauthClientSecret as string) || "",
+      webhookSecret: (linear?.webhookSecret as string) || "",
+      accessToken: (linear?.accessToken as string) || "",
+      refreshToken: (linear?.refreshToken as string) || "",
+      status: linear?.accessToken ? "connected" : "disconnected",
       createdAt: now,
       updatedAt: now,
     };
@@ -118,12 +144,12 @@ function migrateFromAgents(): void {
 
     // Update all agents with this clientId to reference the new connection
     for (const a of agents) {
-      if (a.triggers?.linear?.oauthClientId === linear.oauthClientId) {
-        agentStoreModule.updateAgent(a.id, {
+      if ((a.triggers?.linear?.oauthClientId as string) === oauthClientId) {
+        resolvedDeps.updateAgent(a.id, {
           triggers: {
             ...a.triggers,
             linear: {
-              ...a.triggers.linear,
+              ...a.triggers!.linear,
               oauthConnectionId: conn.id,
             },
           },
@@ -133,7 +159,7 @@ function migrateFromAgents(): void {
   }
 
   // Also migrate from global settings if present
-  const settings = settingsModule.getSettings();
+  const settings = resolvedDeps.getSettings();
   if (settings.linearOAuthClientId && !seenClientIds.has(settings.linearOAuthClientId)) {
     const now = Date.now();
     connections.push({

@@ -17,6 +17,7 @@ import * as linearAgent from "./linear-agent.js";
 import type { AgentSessionEventPayload, AgentPlanItem, LinearOAuthCredentials } from "./linear-agent.js";
 import { getSettings } from "./settings-manager.js";
 import { companionBus } from "./event-bus.js";
+import { findOAuthConnectionByClientId, getOAuthConnection, updateOAuthConnection } from "./linear-oauth-connections.js";
 
 /** Interval (ms) for flushing intermediate progress as ephemeral thoughts. */
 const PROGRESS_FLUSH_INTERVAL_MS = 30_000;
@@ -464,9 +465,26 @@ export class LinearAgentBridge {
     }
   }
 
-  /** Extract Linear OAuth credentials from an agent's config. */
+  /** Extract Linear OAuth credentials from an agent's config.
+   *  Prefers the new `oauthConnectionId` model, falls back to inline credentials. */
   private getCredentials(agent: AgentConfig): LinearOAuthCredentials {
     const linear = agent.triggers?.linear;
+
+    // New model: resolve from OAuth connection
+    if (linear?.oauthConnectionId) {
+      const conn = getOAuthConnection(linear.oauthConnectionId);
+      if (conn) {
+        return {
+          clientId: conn.oauthClientId,
+          clientSecret: conn.oauthClientSecret,
+          webhookSecret: conn.webhookSecret,
+          accessToken: conn.accessToken,
+          refreshToken: conn.refreshToken,
+        };
+      }
+    }
+
+    // Legacy fallback: inline credentials
     return {
       clientId: linear?.oauthClientId || "",
       clientSecret: linear?.oauthClientSecret || "",
@@ -476,34 +494,58 @@ export class LinearAgentBridge {
     };
   }
 
-  /** Create a callback that persists refreshed tokens back to the agent config. */
+  /** Create a callback that persists refreshed tokens back to the appropriate store. */
   private createTokenRefreshCallback(agentId: string): (tokens: { accessToken: string; refreshToken: string }) => void {
     return (tokens) => {
       const agent = agentStore.getAgent(agentId);
-      if (agent?.triggers?.linear) {
-        agentStore.updateAgent(agentId, {
-          triggers: {
-            ...agent.triggers,
-            linear: {
-              ...agent.triggers.linear,
-              accessToken: tokens.accessToken,
-              refreshToken: tokens.refreshToken,
-            },
-          },
+      if (!agent?.triggers?.linear) return;
+
+      // New model: update the OAuth connection
+      if (agent.triggers.linear.oauthConnectionId) {
+        updateOAuthConnection(agent.triggers.linear.oauthConnectionId, {
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          status: "connected",
         });
+        return;
       }
+
+      // Legacy fallback: update agent inline
+      agentStore.updateAgent(agentId, {
+        triggers: {
+          ...agent.triggers,
+          linear: {
+            ...agent.triggers.linear,
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+          },
+        },
+      });
     };
   }
 
-  /** Find the agent configured for a specific Linear OAuth client ID. */
+  /** Find the agent configured for a specific Linear OAuth client ID.
+   *  Checks both new `oauthConnectionId` model and legacy inline credentials. */
   private findLinearAgentByClientId(oauthClientId: string | undefined): AgentConfig | null {
     if (!oauthClientId) return null;
     const agents = agentStore.listAgents();
-    const agent = agents.find(
+
+    // New model: find agents via OAuth connection reference
+    const oauthConn = findOAuthConnectionByClientId(oauthClientId);
+    if (oauthConn) {
+      const agent = agents.find(
+        (a) => a.enabled && a.triggers?.linear?.enabled
+          && a.triggers.linear.oauthConnectionId === oauthConn.id,
+      );
+      if (agent) return agent;
+    }
+
+    // Legacy fallback: inline oauthClientId
+    const legacyAgent = agents.find(
       (a) => a.enabled && a.triggers?.linear?.enabled
         && a.triggers.linear.oauthClientId === oauthClientId,
     );
-    return agent || null;
+    return legacyAgent || null;
   }
 
   /** Find any enabled Linear agent's ID (for backward compat on session restore). */

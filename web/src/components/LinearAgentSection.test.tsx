@@ -51,7 +51,6 @@ const defaultProps = {
   onEdit: vi.fn(),
   onRun: vi.fn(),
   onAddNew: vi.fn(),
-  onManageCredentials: vi.fn(),
 };
 
 beforeEach(() => {
@@ -146,13 +145,13 @@ describe("LinearAgentSection", () => {
     expect(defaultProps.onAddNew).toHaveBeenCalledTimes(1);
   });
 
-  // Test 8: Verifies clicking "Manage OAuth" calls onManageCredentials
-  it('calls onManageCredentials when "Manage OAuth" is clicked', () => {
+  // Test 8: Verifies clicking "Manage OAuth" navigates to the OAuth settings page
+  it('navigates to #/integrations/linear-oauth when "Manage OAuth" is clicked', () => {
     render(<LinearAgentSection {...defaultProps} />);
 
     fireEvent.click(screen.getByText("Manage OAuth"));
 
-    expect(defaultProps.onManageCredentials).toHaveBeenCalledTimes(1);
+    expect(window.location.hash).toBe("#/integrations/linear-oauth");
   });
 
   // Test 9: Accessibility scan with agents rendered (non-empty state).

@@ -22,6 +22,14 @@ vi.mock("./settings-manager.js", () => ({
   getSettings: vi.fn().mockReturnValue({ publicUrl: "" }),
 }));
 
+// Mock the OAuth connections module used by the bridge for credential resolution
+// and agent lookup. Default: no connections found (falls through to legacy path).
+vi.mock("./linear-oauth-connections.js", () => ({
+  findOAuthConnectionByClientId: vi.fn().mockReturnValue(null),
+  getOAuthConnection: vi.fn().mockReturnValue(null),
+  updateOAuthConnection: vi.fn(),
+}));
+
 import * as agentStore from "./agent-store.js";
 import * as linearAgent from "./linear-agent.js";
 import { LinearAgentBridge, buildPrompt } from "./linear-agent-bridge.js";

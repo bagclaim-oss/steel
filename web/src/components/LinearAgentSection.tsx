@@ -6,7 +6,6 @@ interface LinearAgentSectionProps {
   onEdit: (agent: AgentInfo) => void;
   onRun: (agent: AgentInfo) => void;
   onAddNew: () => void;
-  onManageCredentials: () => void;
 }
 
 export function LinearAgentSection({
@@ -14,7 +13,6 @@ export function LinearAgentSection({
   onEdit,
   onRun,
   onAddNew,
-  onManageCredentials,
 }: LinearAgentSectionProps) {
   return (
     <div className="relative mb-6 rounded-xl border border-cc-border bg-cc-card overflow-hidden">
@@ -36,7 +34,7 @@ export function LinearAgentSection({
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={onManageCredentials}
+              onClick={() => { window.location.hash = "#/integrations/linear-oauth"; }}
               className="text-[11px] text-cc-muted hover:text-cc-fg transition-colors cursor-pointer"
             >
               Manage OAuth

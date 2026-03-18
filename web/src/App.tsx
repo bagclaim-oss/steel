@@ -185,7 +185,7 @@ export default function App() {
   }
 
   return (
-    <div className="fixed inset-0 flex font-sans-ui bg-cc-bg text-cc-fg antialiased pt-safe overflow-hidden overscroll-none">
+    <div className="app-shell fixed inset-0 flex font-sans-ui bg-cc-bg text-cc-fg antialiased pt-safe overflow-hidden overscroll-none md:gap-3 md:px-3 md:pb-3">
       {/* Mobile overlay backdrop */}
       {sidebarOpen && (
         <div
@@ -198,19 +198,21 @@ export default function App() {
       <div
         className={`
           fixed inset-y-0 left-0 md:relative md:inset-auto z-40 md:z-auto
-          h-full shrink-0 transition-all duration-200 pt-safe md:pt-0
-          ${sidebarOpen ? "w-full md:w-[260px] translate-x-0" : "w-0 -translate-x-full md:w-0 md:-translate-x-full"}
+          h-full shrink-0 transition-all duration-200 pt-safe md:pt-3
+          ${sidebarOpen ? "w-full md:w-[282px] translate-x-0" : "w-0 -translate-x-full md:w-0 md:-translate-x-full"}
           overflow-hidden
         `}
       >
-        <Sidebar />
+        <div className="app-sidebar-rail app-panel-glow h-full overflow-hidden rounded-none md:rounded-[24px]">
+          <Sidebar />
+        </div>
       </div>
 
       {/* Main area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="app-main-frame flex-1 flex flex-col min-w-0 overflow-hidden rounded-none md:rounded-[28px] md:border md:border-cc-border/80 md:shadow-[0_28px_80px_rgba(15,23,42,0.16)]">
         <TopBar />
         <UpdateBanner />
-        <div className="flex-1 overflow-hidden relative">
+        <div className="app-content-stage flex-1 overflow-hidden relative">
           {isSettingsPage && (
             <div className="absolute inset-0">
               <Suspense fallback={<LazyFallback />}><SettingsPage embedded /></Suspense>
@@ -335,7 +337,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => useStore.getState().setTaskPanelOpen(true)}
-              className="hidden lg:flex fixed right-0 top-1/2 -translate-y-1/2 z-30 items-center gap-1 rounded-l-lg border border-r-0 border-cc-border bg-cc-card/95 backdrop-blur px-2 py-2 text-[11px] text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
+              className="app-context-peek hidden lg:flex fixed right-3 top-1/2 -translate-y-1/2 z-30 items-center gap-1 rounded-l-xl border border-r-0 border-cc-border px-2.5 py-2.5 text-[11px] text-cc-muted hover:text-cc-fg transition-colors cursor-pointer"
               title="Open context panel"
             >
               <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
@@ -356,12 +358,14 @@ export default function App() {
           <div
             className={`
               fixed inset-y-0 right-0 lg:relative lg:inset-auto z-40 lg:z-auto
-              h-full shrink-0 transition-all duration-200 pt-safe lg:pt-0
-              ${taskPanelOpen ? "w-full lg:w-[320px] translate-x-0" : "w-0 translate-x-full lg:w-0 lg:translate-x-full"}
+              h-full shrink-0 transition-all duration-200 pt-safe lg:pt-3
+              ${taskPanelOpen ? "w-full lg:w-[340px] translate-x-0" : "w-0 translate-x-full lg:w-0 lg:translate-x-full"}
               overflow-hidden
             `}
           >
-            <TaskPanel sessionId={currentSessionId} />
+            <div className="app-context-rail app-panel-glow h-full overflow-hidden rounded-none lg:rounded-[24px]">
+              <TaskPanel sessionId={currentSessionId} />
+            </div>
           </div>
         </>
       )}

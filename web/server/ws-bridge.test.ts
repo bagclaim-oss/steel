@@ -4378,11 +4378,11 @@ describe("Idle kill watchdog", () => {
     // Disconnect the browser — should start idle watchdog
     bridge.handleBrowserClose(browser);
 
-    // Advance past the idle kill threshold (default 20 min) + check interval (60s)
+    // Advance past the idle kill threshold (default 24h) + check interval (60s)
     // The watchdog checks every 60s, so we need to advance enough for:
-    // 1) The idle threshold to be exceeded (20 min)
+    // 1) The idle threshold to be exceeded (24h)
     // 2) A check interval to fire
-    vi.advanceTimersByTime(20 * 60_000 + 60_000);
+    vi.advanceTimersByTime(24 * 60 * 60_000 + 60_000);
 
     expect(idleKillHandler).toHaveBeenCalledWith({ sessionId: "s1" });
   });

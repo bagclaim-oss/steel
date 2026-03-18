@@ -295,7 +295,7 @@ describe("SessionOrchestrator", () => {
       expect(deps.launcher.kill).not.toHaveBeenCalled();
     });
 
-    it("idle kill callback kills non-archived sessions", async () => {
+    it("idle kill callback kills CLI but preserves container", async () => {
       deps.launcher.getSession.mockReturnValue({ archived: false });
       orchestrator.initialize();
 
@@ -303,6 +303,9 @@ describe("SessionOrchestrator", () => {
       await new Promise(r => setTimeout(r, 0));
 
       expect(deps.launcher.kill).toHaveBeenCalledWith("s1");
+      // Container must NOT be removed — idle-kill only stops the CLI process
+      // so the container can be reused on relaunch.
+      expect(containerManager.removeContainer).not.toHaveBeenCalled();
     });
 
     it("idle kill clears auto-relaunch counter so session can be fully relaunched later", async () => {
@@ -1420,9 +1423,9 @@ describe("SessionOrchestrator", () => {
     });
 
     it("relaunches exited containerized session even when container was removed", async () => {
-      // After idle-kill, the container is removed and state becomes "exited".
-      // The fix skips PID/container checks for exited sessions entirely, so
-      // relaunch proceeds. This is the core Docker bug scenario.
+      // If a container was removed externally (e.g. docker prune), the session
+      // state becomes "exited". The fix skips PID/container checks for exited
+      // sessions entirely, so relaunch proceeds.
       vi.mocked(containerManager.isContainerAlive).mockReturnValue("not_found" as any);
       deps.launcher.getSession
         .mockReturnValueOnce({ archived: false } as any) // check archived

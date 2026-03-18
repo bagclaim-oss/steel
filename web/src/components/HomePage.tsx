@@ -842,10 +842,11 @@ export function HomePage() {
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)] lg:items-end">
           <div className="rounded-[28px] border border-cc-border bg-cc-card/85 px-6 py-6 shadow-[0_30px_80px_rgba(15,23,42,0.16)] backdrop-blur">
             <div className="inline-flex items-center gap-2 rounded-full border border-cc-border bg-cc-hover/70 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-cc-muted">
-              <img src={logoSrc} alt="" className="h-4 w-4 rounded-sm" />
+              <img src={logoSrc} alt="The Companion" className="h-4 w-4 rounded-sm" />
               Companion Workspace
             </div>
             <div className="mt-5 max-w-3xl">
+              <p className="text-sm font-medium text-cc-fg/70">The Companion</p>
               <h1 className="text-3xl font-semibold tracking-[-0.04em] text-cc-fg sm:text-[40px]">
                 Ship product work from one conversation.
               </h1>
@@ -861,15 +862,15 @@ export function HomePage() {
               </div>
               <div className="rounded-2xl border border-cc-border bg-cc-bg/60 px-4 py-3">
                 <div className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Model</div>
-                <div className="mt-1 text-sm font-medium text-cc-fg">{selectedModel.label}</div>
+                <div className="mt-1 text-sm font-medium text-cc-fg">{selectedModel.label} selected</div>
               </div>
               <div className="rounded-2xl border border-cc-border bg-cc-bg/60 px-4 py-3">
                 <div className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Workspace</div>
-                <div className="mt-1 truncate text-sm font-medium text-cc-fg">{workspaceLabel}</div>
+                <div className="mt-1 truncate text-sm font-medium text-cc-fg">Repo · {workspaceLabel}</div>
               </div>
               <div className="rounded-2xl border border-cc-border bg-cc-bg/60 px-4 py-3">
                 <div className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Launch mode</div>
-                <div className="mt-1 text-sm font-medium text-cc-fg">{selectedMode.label}</div>
+                <div className="mt-1 text-sm font-medium text-cc-fg">{selectedMode.label} mode</div>
               </div>
             </div>
           </div>
@@ -888,14 +889,14 @@ export function HomePage() {
               <div className="flex items-start justify-between gap-3 rounded-2xl border border-cc-border bg-cc-bg/60 px-4 py-3">
                 <div>
                   <div className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Repository</div>
-                  <div className="mt-1 text-sm font-medium text-cc-fg">{workspaceLabel}</div>
+                  <div className="mt-1 text-sm font-medium text-cc-fg">Repo · {workspaceLabel}</div>
                 </div>
-                <div className="max-w-[150px] truncate text-right text-[11px] font-mono-code text-cc-muted">{dirLabel}</div>
+                <div className="max-w-[150px] truncate text-right text-[11px] font-mono-code text-cc-muted">cwd · {dirLabel}</div>
               </div>
               <div className="flex items-start justify-between gap-3 rounded-2xl border border-cc-border bg-cc-bg/60 px-4 py-3">
                 <div>
                   <div className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Branch strategy</div>
-                  <div className="mt-1 text-sm font-medium text-cc-fg">{branchLabel}</div>
+                  <div className="mt-1 text-sm font-medium text-cc-fg">Branch · {branchLabel}</div>
                 </div>
                 <div className="text-right text-[11px] text-cc-muted">
                   {useWorktree ? "Isolated worktree" : "Current worktree"}
@@ -907,7 +908,7 @@ export function HomePage() {
                   <div className="mt-1 truncate text-sm font-medium text-cc-fg">{selectedEnvName}</div>
                 </div>
                 <div className="rounded-2xl border border-cc-border bg-cc-bg/60 px-4 py-3">
-                  <div className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Sandbox</div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Isolation</div>
                   <div className="mt-1 truncate text-sm font-medium text-cc-fg">{selectedSandboxName}</div>
                 </div>
               </div>

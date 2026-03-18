@@ -299,7 +299,7 @@ function ContentBlockRenderer({
       return <BashResultBlock text={content} isError={isError} />;
     }
     return (
-      <div className="overflow-hidden rounded-2xl border border-cc-border bg-cc-code-bg shadow-[0_18px_40px_rgba(15,23,42,0.1)]">
+      <div className="overflow-hidden rounded-lg rounded-2xl border border-cc-border bg-cc-code-bg shadow-[0_18px_40px_rgba(15,23,42,0.1)]">
         <pre className={`text-[12px] font-mono-code px-3 py-2 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto ${
           isError ? "text-cc-error" : "text-cc-code-fg/60"
         }`}>
@@ -319,7 +319,7 @@ function BashResultBlock({ text, isError }: { text: string; isError: boolean }) 
   const rendered = showFull || !hasMore ? text : lines.slice(-20).join("\n");
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-cc-border bg-cc-code-bg shadow-[0_18px_40px_rgba(15,23,42,0.1)]">
+    <div className="overflow-hidden rounded-lg rounded-2xl border border-cc-border bg-cc-code-bg shadow-[0_18px_40px_rgba(15,23,42,0.1)]">
       <pre className={`text-[12px] font-mono-code px-3 py-2 whitespace-pre-wrap leading-relaxed ${
         isError ? "text-cc-error" : "text-cc-code-fg/60"
       }`}>

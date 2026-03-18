@@ -8,7 +8,7 @@
  * - Empty state when no connections exist
  * - Add Connection form toggle, validation, and submission
  * - Delete connection with two-click confirmation flow
- * - Install to Workspace button calls authorize URL API
+ * - Reconnect / Manage button calls authorize URL API with status-aware labeling
  * - OAuth success/error banners from URL hash params
  * - Agents using each connection are displayed
  * - Back button navigation (home vs session)
@@ -174,6 +174,12 @@ describe("LinearOAuthSettingsPage", () => {
     expect(screen.getByText("Dev App")).toBeInTheDocument();
     // Client IDs (truncated)
     expect(screen.getByText(/Client ID: client-id-abc123/)).toBeInTheDocument();
+    expect(
+      screen.getByText("Ready to receive @mentions and post updates back to Linear."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("This app may already be installed in Linear, but Companion no longer has a valid OAuth token. Reconnect it to restore agent replies."),
+    ).toBeInTheDocument();
   });
 
   it("shows loading state initially", () => {
@@ -369,9 +375,42 @@ describe("LinearOAuthSettingsPage", () => {
     });
   });
 
-  // ─── Install to Workspace ─────────────────────────────────────────────────
+  it("shows delete API error when deletion is blocked", async () => {
+    mockApi.deleteLinearOAuthConnection.mockRejectedValue(
+      new Error("Cannot delete: agents are using this OAuth connection"),
+    );
 
-  it("calls authorize URL API when Install to Workspace is clicked", async () => {
+    render(<LinearOAuthSettingsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Production App")).toBeInTheDocument();
+    });
+
+    const deleteButtons = screen.getAllByText("Delete");
+    fireEvent.click(deleteButtons[0]);
+    fireEvent.click(screen.getByText("Confirm Delete"));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Cannot delete: agents are using this OAuth connection"),
+      ).toBeInTheDocument();
+    });
+  });
+
+  // ─── Reconnect / Manage actions ───────────────────────────────────────────
+
+  it("shows status-aware action labels", async () => {
+    render(<LinearOAuthSettingsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Production App")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Manage in Linear")).toBeInTheDocument();
+    expect(screen.getByText("Reconnect to Workspace")).toBeInTheDocument();
+  });
+
+  it("calls authorize URL API when Reconnect to Workspace is clicked", async () => {
     // Mock window.open to prevent actual navigation
     const originalOpen = window.open;
     window.open = vi.fn();
@@ -382,9 +421,34 @@ describe("LinearOAuthSettingsPage", () => {
       expect(screen.getByText("Production App")).toBeInTheDocument();
     });
 
-    // Click the Install button for the first connection
-    const installButtons = screen.getAllByText("Install to Workspace");
-    fireEvent.click(installButtons[0]);
+    fireEvent.click(screen.getByText("Reconnect to Workspace"));
+
+    await waitFor(() => {
+      expect(mockApi.getLinearOAuthConnectionAuthorizeUrl).toHaveBeenCalledWith(
+        "conn-2",
+        "/#/integrations/linear-oauth",
+      );
+    });
+
+    expect(window.open).toHaveBeenCalledWith(
+      "https://linear.app/oauth/authorize?client_id=test",
+      "_self",
+    );
+
+    window.open = originalOpen;
+  });
+
+  it("calls authorize URL API when Manage in Linear is clicked", async () => {
+    const originalOpen = window.open;
+    window.open = vi.fn();
+
+    render(<LinearOAuthSettingsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Manage in Linear")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("Manage in Linear"));
 
     await waitFor(() => {
       expect(mockApi.getLinearOAuthConnectionAuthorizeUrl).toHaveBeenCalledWith(

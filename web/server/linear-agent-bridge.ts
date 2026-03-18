@@ -15,6 +15,7 @@ import type { AgentConfig } from "./agent-types.js";
 import * as agentStore from "./agent-store.js";
 import * as linearAgent from "./linear-agent.js";
 import type { AgentSessionEventPayload, AgentPlanItem, LinearOAuthCredentials } from "./linear-agent.js";
+import { buildLinearOAuthSystemPrompt } from "./linear-prompt-builder.js";
 import { getSettings } from "./settings-manager.js";
 import { companionBus } from "./event-bus.js";
 import { findOAuthConnectionByClientId, getOAuthConnection, updateOAuthConnection } from "./linear-oauth-connections.js";
@@ -42,6 +43,16 @@ function extractTextFromAssistant(msg: BrowserIncomingMessage): string {
       typeof b === "object" && b !== null && (b as Record<string, unknown>).type === "text" && typeof (b as Record<string, unknown>).text === "string")
     .map((b) => b.text)
     .join("\n");
+}
+
+/** Extract text deltas from stream events. */
+function extractTextDeltaFromStreamEvent(msg: BrowserIncomingMessage): string {
+  if (msg.type !== "stream_event") return "";
+  const event = msg.event as Record<string, unknown> | undefined;
+  if (!event || event.type !== "content_block_delta") return "";
+  const delta = event.delta as Record<string, unknown> | undefined;
+  if (!delta || delta.type !== "text_delta" || typeof delta.text !== "string") return "";
+  return delta.text;
 }
 
 /** Extract all tool use blocks from assistant message content (with raw input for plan extraction) */
@@ -191,19 +202,34 @@ export class LinearAgentBridge {
     }
 
     const creds = this.getCredentials(agent);
+    const onTokensRefreshed = this.createTokenRefreshCallback(agent.id);
+    const oauthConn = agent.triggers?.linear?.oauthConnectionId
+      ? getOAuthConnection(agent.triggers.linear.oauthConnectionId)
+      : null;
+    const linearAccessEnv = oauthConn?.accessToken
+      ? {
+        LINEAR_OAUTH_ACCESS_TOKEN: oauthConn.accessToken,
+        LINEAR_API_KEY: oauthConn.accessToken,
+      }
+      : undefined;
+    const linearSystemPrompt = oauthConn?.accessToken
+      ? buildLinearOAuthSystemPrompt({ name: oauthConn.name })
+      : undefined;
 
     // 2. Immediately acknowledge with a thought (must be within 10s)
     linearAgent.postActivity(creds, linearSessionId, {
       type: "thought",
       body: "Starting Companion session...",
       ephemeral: true,
-    }).catch((err) => console.error("[linear-agent-bridge] Failed to post initial thought:", err));
+    }, onTokensRefreshed).catch((err) => console.error("[linear-agent-bridge] Failed to post initial thought:", err));
 
     // 3. Launch the CLI session with enriched prompt
     try {
       const sessionInfo = await this.agentExecutor.executeAgent(agent.id, enrichedPrompt, {
         force: true,
         triggerType: "linear",
+        additionalEnv: linearAccessEnv,
+        systemPrompt: linearSystemPrompt,
       });
 
       if (!sessionInfo) {
@@ -215,7 +241,7 @@ export class LinearAgentBridge {
           body: isOverlap
             ? `Agent "${agent.name}" is currently busy with another session. Please wait for it to complete.`
             : "Failed to start Companion session. Check The Companion for details.",
-        });
+        }, onTokensRefreshed);
         return;
       }
 
@@ -229,9 +255,12 @@ export class LinearAgentBridge {
       // 5. Set external URL linking back to Companion
       const settings = getSettings();
       const baseUrl = settings.publicUrl || "http://localhost:3456";
-      linearAgent.updateSessionUrls(creds, linearSessionId, [
-        { label: "Companion Session", url: `${baseUrl}/#/session/${companionSessionId}` },
-      ]).catch((err) => console.error("[linear-agent-bridge] Failed to set external URLs:", err));
+      linearAgent.updateSessionUrls(
+        creds,
+        linearSessionId,
+        [{ label: "Companion Session", url: `${baseUrl}/#/session/${companionSessionId}` }],
+        onTokensRefreshed,
+      ).catch((err) => console.error("[linear-agent-bridge] Failed to set external URLs:", err));
 
       // 6. Set up response relay (pass agentId for credential lookup)
       this.setupRelay(linearSessionId, companionSessionId, agent.id);
@@ -239,13 +268,13 @@ export class LinearAgentBridge {
       await linearAgent.postActivity(creds, linearSessionId, {
         type: "thought",
         body: `Agent "${agent.name}" session started. Working on it...`,
-      });
+      }, onTokensRefreshed);
     } catch (err) {
       console.error("[linear-agent-bridge] Failed to start session:", err);
       await linearAgent.postActivity(creds, linearSessionId, {
         type: "error",
         body: `Failed to start session: ${err instanceof Error ? err.message : String(err)}`,
-      });
+      }, onTokensRefreshed);
     }
   }
 
@@ -313,6 +342,7 @@ export class LinearAgentBridge {
     // Look up agent for credentials
     const agent = agentStore.getAgent(agentId);
     const creds = agent ? this.getCredentials(agent) : null;
+    const onTokensRefreshed = this.createTokenRefreshCallback(agentId);
 
     // Post acknowledgement
     if (creds) {
@@ -320,7 +350,7 @@ export class LinearAgentBridge {
         type: "thought",
         body: "Processing follow-up...",
         ephemeral: true,
-      }).catch((err) => console.error("[linear-agent-bridge] Failed to post thought:", err));
+      }, onTokensRefreshed).catch((err) => console.error("[linear-agent-bridge] Failed to post thought:", err));
     }
 
     // Re-establish relay for the new turn (resets pendingText accumulator).
@@ -346,16 +376,45 @@ export class LinearAgentBridge {
 
     const cleanups: Array<() => void> = [];
     let pendingText = "";
+    let streamedTextForCurrentMessage = "";
     // Track pending tool uses by ID so we can post results when they come back
     const pendingToolUseIds = new Map<string, string>(); // tool_use_id → tool name
+    const onTokensRefreshed = this.createTokenRefreshCallback(agentId);
+
+    const appendPendingText = (text: string) => {
+      if (!text) return;
+      pendingText += (pendingText ? "\n" : "") + text;
+    };
+
+    const unsubStream = companionBus.on("message:stream_event", ({ sessionId, message }) => {
+      if (sessionId !== companionSessionId) return;
+      const delta = extractTextDeltaFromStreamEvent(message);
+      if (!delta) return;
+
+      if (!streamedTextForCurrentMessage) {
+        appendPendingText(delta);
+      } else {
+        pendingText += delta;
+      }
+      streamedTextForCurrentMessage += delta;
+    });
+    cleanups.push(unsubStream);
 
     // Relay assistant messages → Linear activities
     const unsubAssistant = companionBus.on("message:assistant", ({ sessionId, message: msg }) => {
       if (sessionId !== companionSessionId) return;
       const text = extractTextFromAssistant(msg);
       if (text) {
-        pendingText += (pendingText ? "\n" : "") + text;
+        if (streamedTextForCurrentMessage && text.startsWith(streamedTextForCurrentMessage)) {
+          const suffix = text.slice(streamedTextForCurrentMessage.length);
+          if (suffix) {
+            pendingText += suffix;
+          }
+        } else if (!streamedTextForCurrentMessage || text !== streamedTextForCurrentMessage) {
+          appendPendingText(text);
+        }
       }
+      streamedTextForCurrentMessage = "";
 
       // Relay all tool use blocks as action activities (supports parallel tool calls)
       for (const tool of extractToolUses(msg)) {
@@ -369,7 +428,7 @@ export class LinearAgentBridge {
           action: tool.name,
           parameter: tool.input || undefined,
           ephemeral: true,
-        }).catch((err) => console.error("[linear-agent-bridge] Failed to post action:", err));
+        }, onTokensRefreshed).catch((err) => console.error("[linear-agent-bridge] Failed to post action:", err));
 
         // Relay TodoWrite → Linear plan checklist
         if (tool.name === "TodoWrite" && tool.rawInput) {
@@ -385,7 +444,7 @@ export class LinearAgentBridge {
                 status: mapTodoStatus(t.status),
               }));
             if (planItems.length > 0) {
-              linearAgent.updateSessionPlan(creds, linearSessionId, planItems)
+              linearAgent.updateSessionPlan(creds, linearSessionId, planItems, onTokensRefreshed)
                 .catch((err) => console.error("[linear-agent-bridge] Failed to update plan:", err));
             }
           }
@@ -402,7 +461,7 @@ export class LinearAgentBridge {
             action: toolName,
             result: result.content,
             ephemeral: true,
-          }).catch((err) => console.error("[linear-agent-bridge] Failed to post tool result:", err));
+          }, onTokensRefreshed).catch((err) => console.error("[linear-agent-bridge] Failed to post tool result:", err));
         }
       }
     });
@@ -419,7 +478,7 @@ export class LinearAgentBridge {
           type: "thought",
           body: newText.slice(0, 2000),
           ephemeral: true,
-        }).catch((err) => console.error("[linear-agent-bridge] Failed to post progress:", err));
+        }, onTokensRefreshed).catch((err) => console.error("[linear-agent-bridge] Failed to post progress:", err));
       }
     }, PROGRESS_FLUSH_INTERVAL_MS);
     cleanups.push(() => clearInterval(progressTimer));
@@ -434,12 +493,13 @@ export class LinearAgentBridge {
           await linearAgent.postActivity(creds, linearSessionId, {
             type: "response",
             body: pendingText,
-          });
+          }, onTokensRefreshed);
         } catch (err) {
           console.error("[linear-agent-bridge] Failed to post response:", err);
         }
         pendingText = "";
         lastFlushedLength = 0;
+        streamedTextForCurrentMessage = "";
       }
     });
     cleanups.push(unsubResult);

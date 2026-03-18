@@ -26,6 +26,7 @@ export function LinearOAuthSettingsPage({ embedded = false }: LinearOAuthSetting
   // ---- Delete confirmation --------------------------------------------------
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState("");
 
   // ---- Install in-progress tracking -----------------------------------------
   const [installingId, setInstallingId] = useState<string | null>(null);
@@ -125,14 +126,17 @@ export function LinearOAuthSettingsPage({ embedded = false }: LinearOAuthSetting
   async function onDelete(id: string) {
     if (confirmDeleteId !== id) {
       setConfirmDeleteId(id);
+      setDeleteError("");
       return;
     }
     setDeletingId(id);
     setConfirmDeleteId(null);
     try {
       await api.deleteLinearOAuthConnection(id);
+      setDeleteError("");
       await loadConnections();
-    } catch {
+    } catch (e: unknown) {
+      setDeleteError(e instanceof Error ? e.message : String(e));
       await loadConnections();
     } finally {
       setDeletingId(null);
@@ -268,6 +272,7 @@ export function LinearOAuthSettingsPage({ embedded = false }: LinearOAuthSetting
               onClick={() => {
                 setShowAddForm(!showAddForm);
                 setAddError("");
+                setDeleteError("");
               }}
               className="px-3 py-2 rounded-lg text-sm font-medium transition-colors bg-cc-primary hover:bg-cc-primary-hover text-white cursor-pointer"
             >
@@ -278,6 +283,12 @@ export function LinearOAuthSettingsPage({ embedded = false }: LinearOAuthSetting
           {connectionsError && (
             <div className="px-3 py-2 rounded-lg bg-cc-error/10 border border-cc-error/20 text-xs text-cc-error">
               {connectionsError}
+            </div>
+          )}
+
+          {deleteError && (
+            <div className="px-3 py-2 rounded-lg bg-cc-error/10 border border-cc-error/20 text-xs text-cc-error">
+              {deleteError}
             </div>
           )}
 
@@ -403,6 +414,11 @@ export function LinearOAuthSettingsPage({ embedded = false }: LinearOAuthSetting
                         <p className="mt-1 text-xs text-cc-muted truncate">
                           Client ID: {truncateId(conn.oauthClientId)}
                         </p>
+                        <p className="mt-1 text-xs text-cc-muted">
+                          {conn.status === "connected"
+                            ? "Ready to receive @mentions and post updates back to Linear."
+                            : "This app may already be installed in Linear, but Companion no longer has a valid OAuth token. Reconnect it to restore agent replies."}
+                        </p>
 
                         {/* Agents using this connection */}
                         {connAgents.length > 0 && (
@@ -423,13 +439,18 @@ export function LinearOAuthSettingsPage({ embedded = false }: LinearOAuthSetting
                           type="button"
                           onClick={() => onInstall(conn.id)}
                           disabled={installingId === conn.id}
+                          aria-label={conn.status === "connected" ? `Manage ${conn.name}` : `Reconnect ${conn.name}`}
                           className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                             installingId === conn.id
                               ? "bg-cc-hover text-cc-muted cursor-not-allowed"
                               : "bg-violet-600 hover:bg-violet-700 text-white cursor-pointer"
                           }`}
                         >
-                          {installingId === conn.id ? "Redirecting..." : "Install to Workspace"}
+                          {installingId === conn.id
+                            ? "Redirecting..."
+                            : conn.status === "connected"
+                              ? "Manage in Linear"
+                              : "Reconnect to Workspace"}
                         </button>
                         <button
                           type="button"

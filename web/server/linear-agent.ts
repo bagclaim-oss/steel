@@ -395,6 +395,7 @@ export async function postActivity(
   creds: LinearOAuthCredentials,
   agentSessionId: string,
   content: AgentActivityContent,
+  onTokensRefreshed?: (tokens: { accessToken: string; refreshToken: string }) => void,
 ): Promise<void> {
   const result = await linearGraphQL<{ agentActivityCreate?: { success: boolean } }>(
     creds,
@@ -402,6 +403,7 @@ export async function postActivity(
       agentActivityCreate(input: $input) { success }
     }`,
     { input: { agentSessionId, content } },
+    onTokensRefreshed,
   );
 
   if (result.errors?.length) {
@@ -414,6 +416,7 @@ export async function updateSessionUrls(
   creds: LinearOAuthCredentials,
   agentSessionId: string,
   urls: Array<{ label: string; url: string }>,
+  onTokensRefreshed?: (tokens: { accessToken: string; refreshToken: string }) => void,
 ): Promise<void> {
   const result = await linearGraphQL<{ agentSessionUpdate?: { success: boolean } }>(
     creds,
@@ -421,6 +424,7 @@ export async function updateSessionUrls(
       agentSessionUpdate(id: $id, input: $input) { success }
     }`,
     { id: agentSessionId, input: { externalUrls: urls } },
+    onTokensRefreshed,
   );
 
   if (result.errors?.length) {
@@ -433,6 +437,7 @@ export async function updateSessionPlan(
   creds: LinearOAuthCredentials,
   agentSessionId: string,
   plan: AgentPlanItem[],
+  onTokensRefreshed?: (tokens: { accessToken: string; refreshToken: string }) => void,
 ): Promise<void> {
   const result = await linearGraphQL<{ agentSessionUpdate?: { success: boolean } }>(
     creds,
@@ -440,6 +445,7 @@ export async function updateSessionPlan(
       agentSessionUpdate(id: $id, input: $input) { success }
     }`,
     { id: agentSessionId, input: { plan } },
+    onTokensRefreshed,
   );
 
   if (result.errors?.length) {

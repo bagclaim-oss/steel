@@ -20,15 +20,15 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
   if (message.role === "user") {
     return (
       <div className="flex justify-end animate-[userSlideIn_0.3s_ease-out]">
-        <div className="max-w-[85%] sm:max-w-[80%] px-3.5 sm:px-4 py-2.5 rounded-[16px] rounded-br-[6px] user-bubble-gradient text-cc-fg shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+        <div className="max-w-[88%] sm:max-w-[78%] px-4 sm:px-5 py-3 rounded-[22px] rounded-br-[8px] user-bubble-gradient text-cc-fg shadow-[0_20px_46px_rgba(15,23,42,0.16)]">
           {message.images && message.images.length > 0 && (
-            <div className="flex gap-2 flex-wrap mb-2">
+            <div className="mb-3 flex gap-2 flex-wrap">
               {message.images.map((img, i) => (
                 <img
                   key={i}
                   src={`data:${img.media_type};base64,${img.data}`}
                   alt="attachment"
-                  className="max-w-[150px] sm:max-w-[200px] max-h-[120px] sm:max-h-[150px] rounded-xl object-cover border border-cc-border/30"
+                  className="max-w-[150px] sm:max-w-[200px] max-h-[120px] sm:max-h-[150px] rounded-2xl object-cover border border-cc-border/30"
                 />
               ))}
             </div>
@@ -142,9 +142,9 @@ function AssistantMessage({ message }: { message: ChatMessage }) {
 
 function AssistantAvatar() {
   return (
-    <div className="w-6 h-6 rounded-full avatar-ring flex items-center justify-center shrink-0 mt-0.5">
+    <div className="w-7 h-7 rounded-full avatar-ring flex items-center justify-center shrink-0 mt-0.5 shadow-[0_10px_24px_rgba(15,23,42,0.12)]">
       <div className="avatar-inner w-full h-full rounded-full flex items-center justify-center">
-        <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 text-cc-primary">
+        <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 text-cc-primary">
           <path d="M8 2L10.5 6.5L15 8L10.5 9.5L8 14L5.5 9.5L1 8L5.5 6.5L8 2Z" />
         </svg>
       </div>
@@ -154,7 +154,7 @@ function AssistantAvatar() {
 
 function MarkdownContent({ text, showCursor = false }: { text: string; showCursor?: boolean }) {
   return (
-    <div className="markdown-body text-[14px] sm:text-[15px] text-cc-fg leading-relaxed overflow-hidden">
+    <div className="markdown-body text-[14px] sm:text-[15px] text-cc-fg leading-[1.72] overflow-hidden">
       <Markdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -206,9 +206,9 @@ function MarkdownContent({ text, showCursor = false }: { text: string; showCurso
             if (isBlock) {
               const lang = match?.[1] || "";
               return (
-                <div className="my-2.5 rounded-xl overflow-hidden border border-cc-border shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+                <div className="my-3 overflow-hidden rounded-2xl border border-cc-border shadow-[0_18px_42px_rgba(15,23,42,0.12)]">
                   {lang && (
-                    <div className="px-3 py-1.5 bg-cc-code-bg border-b border-cc-border flex items-center gap-2">
+                    <div className="px-3 py-2 bg-cc-code-bg border-b border-cc-border flex items-center gap-2">
                       <div className="flex gap-1">
                         <span className="w-2 h-2 rounded-full bg-cc-muted/20" />
                         <span className="w-2 h-2 rounded-full bg-cc-muted/20" />
@@ -219,7 +219,7 @@ function MarkdownContent({ text, showCursor = false }: { text: string; showCurso
                       </span>
                     </div>
                   )}
-                  <pre className="px-3 sm:px-4 py-2.5 sm:py-3 bg-cc-code-bg text-cc-code-fg text-[12px] sm:text-[13px] font-mono-code leading-relaxed overflow-x-auto">
+                  <pre className="px-3.5 sm:px-4 py-3 sm:py-3.5 bg-cc-code-bg text-cc-code-fg text-[12px] sm:text-[13px] font-mono-code leading-relaxed overflow-x-auto">
                     <code>{children}</code>
                   </pre>
                 </div>
@@ -227,7 +227,7 @@ function MarkdownContent({ text, showCursor = false }: { text: string; showCurso
             }
 
             return (
-              <code className="px-1.5 py-0.5 rounded-md bg-cc-fg/[0.06] text-[12.5px] font-mono-code text-cc-fg/80 border border-cc-border/40">
+              <code className="px-1.5 py-0.5 rounded-lg bg-cc-fg/[0.06] text-[12.5px] font-mono-code text-cc-fg/80 border border-cc-border/40">
                 {children}
               </code>
             );
@@ -275,7 +275,11 @@ function ContentBlockRenderer({
   toolUseById: Map<string, ToolUseInfo>;
 }) {
   if (block.type === "text") {
-    return <MarkdownContent text={block.text} />;
+    return (
+      <div className="rounded-[24px] border border-cc-border bg-cc-card/72 px-4 py-3 shadow-[0_18px_46px_rgba(15,23,42,0.1)]">
+        <MarkdownContent text={block.text} />
+      </div>
+    );
   }
 
   if (block.type === "thinking") {
@@ -295,7 +299,7 @@ function ContentBlockRenderer({
       return <BashResultBlock text={content} isError={isError} />;
     }
     return (
-      <div className="rounded-lg bg-cc-code-bg overflow-hidden">
+      <div className="overflow-hidden rounded-2xl border border-cc-border bg-cc-code-bg shadow-[0_18px_40px_rgba(15,23,42,0.1)]">
         <pre className={`text-[12px] font-mono-code px-3 py-2 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto ${
           isError ? "text-cc-error" : "text-cc-code-fg/60"
         }`}>
@@ -315,7 +319,7 @@ function BashResultBlock({ text, isError }: { text: string; isError: boolean }) 
   const rendered = showFull || !hasMore ? text : lines.slice(-20).join("\n");
 
   return (
-    <div className="rounded-lg bg-cc-code-bg overflow-hidden">
+    <div className="overflow-hidden rounded-2xl border border-cc-border bg-cc-code-bg shadow-[0_18px_40px_rgba(15,23,42,0.1)]">
       <pre className={`text-[12px] font-mono-code px-3 py-2 whitespace-pre-wrap leading-relaxed ${
         isError ? "text-cc-error" : "text-cc-code-fg/60"
       }`}>
@@ -344,10 +348,10 @@ function ToolGroupBlock({ name, items }: { name: string; items: ToolGroupItem[] 
   const label = getToolLabel(name);
 
   return (
-    <div className="border border-cc-border rounded-[10px] overflow-hidden bg-cc-card tool-card">
+    <div className="overflow-hidden rounded-[22px] border border-cc-border bg-cc-card/80 tool-card shadow-[0_18px_42px_rgba(15,23,42,0.12)]">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-cc-hover transition-colors cursor-pointer"
+        className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-cc-hover transition-colors cursor-pointer"
       >
         <svg
           viewBox="0 0 16 16"
@@ -364,7 +368,7 @@ function ToolGroupBlock({ name, items }: { name: string; items: ToolGroupItem[] 
       </button>
 
       {open && (
-        <div className="border-t border-cc-border px-3 py-1.5">
+        <div className="border-t border-cc-border bg-cc-bg/45 px-4 py-2">
           {items.map((item, i) => {
             const preview = getPreview(item.name, item.input);
             return (
@@ -390,8 +394,8 @@ function ThinkingBlock({ text }: { text: string }) {
     : normalized;
 
   return (
-    <div>
-      <div className="markdown-body text-[13px] text-cc-fg/40 leading-relaxed italic">
+    <div className="rounded-[22px] border border-cc-border/70 bg-cc-card/45 px-4 py-3">
+      <div className="markdown-body text-[13px] text-cc-fg/45 leading-relaxed italic">
         <Markdown
           remarkPlugins={[remarkGfm]}
           components={{

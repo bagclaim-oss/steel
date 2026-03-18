@@ -74,12 +74,12 @@ export function ToolBlock({
 
   return (
     <div
-      className="border border-cc-border rounded-[10px] overflow-hidden bg-cc-card tool-card"
+      className="overflow-hidden rounded-[22px] border border-cc-border bg-cc-card/80 tool-card shadow-[0_18px_42px_rgba(15,23,42,0.12)]"
       data-tool-use-id={toolUseId}
     >
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-cc-hover transition-colors cursor-pointer"
+        className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-cc-hover transition-colors cursor-pointer"
       >
         <svg
           viewBox="0 0 16 16"
@@ -98,7 +98,7 @@ export function ToolBlock({
       </button>
 
       {open && (
-        <div className="px-3 pb-3 pt-0 border-t border-cc-border/60">
+        <div className="border-t border-cc-border/60 bg-cc-bg/45 px-4 pb-4 pt-0">
           <div className="mt-2">
             <ToolDetail name={name} input={input} />
           </div>
@@ -132,7 +132,7 @@ function EditBlock({ input, toolUseId }: { input: Record<string, unknown>; toolU
   const isTall = diffLineCount > 15;
 
   return (
-    <div data-tool-use-id={toolUseId}>
+    <div data-tool-use-id={toolUseId} className="rounded-[22px] border border-cc-border bg-cc-card/72 px-4 py-3 shadow-[0_18px_42px_rgba(15,23,42,0.1)]">
       {/* Single-line header: Edit fileName [all] */}
       <div className="flex items-center gap-1.5 py-0.5">
         <span className="text-[11px] font-medium text-emerald-600/70 dark:text-emerald-400/70">Edit</span>
@@ -196,11 +196,11 @@ function BashBlock({ input, toolUseId }: { input: Record<string, unknown>; toolU
   const desc = typeof input.description === "string" ? input.description : "";
 
   return (
-    <div data-tool-use-id={toolUseId}>
+    <div data-tool-use-id={toolUseId} className="rounded-[22px] border border-cc-border bg-cc-code-bg/82 px-4 py-3 shadow-[0_18px_42px_rgba(15,23,42,0.1)]">
       {desc && (
         <div className="text-[11px] text-cc-muted/50 mb-1 italic">{desc}</div>
       )}
-      <div className="rounded-lg bg-cc-code-bg px-3 py-2 overflow-x-auto">
+      <div className="rounded-xl bg-black/10 px-3 py-2 overflow-x-auto">
         <pre className="text-[12px] font-mono-code text-cc-code-fg leading-relaxed whitespace-pre-wrap break-words">
           <span className="text-cc-muted/40 select-none">$ </span>{command}
         </pre>

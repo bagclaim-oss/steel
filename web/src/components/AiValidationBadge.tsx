@@ -29,8 +29,8 @@ export function AiValidationBadge({ entry, onDismiss }: AiValidationBadgeProps) 
   }
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-1.5 text-[11px] ${
-      isAllow ? "text-cc-success" : "text-cc-error"
+    <div className={`flex items-center gap-2 rounded-[18px] border px-3.5 py-2 text-[11px] ${
+      isAllow ? "border-cc-success/20 bg-cc-success/8 text-cc-success" : "border-cc-error/20 bg-cc-error/8 text-cc-error"
     }`}>
       {/* Shield icon */}
       <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 shrink-0 opacity-70">

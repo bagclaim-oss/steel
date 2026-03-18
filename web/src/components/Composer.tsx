@@ -336,17 +336,17 @@ export function Composer({ sessionId }: { sessionId: string }) {
   const canSend = text.trim().length > 0 && isConnected;
 
   return (
-    <div className="shrink-0 px-0 sm:px-6 pt-0 sm:pt-3 pb-5 sm:pb-4 bg-cc-input-bg sm:bg-transparent">
-      <div className="max-w-3xl mx-auto">
+    <div className="shrink-0 px-0 sm:px-6 pt-0 sm:pt-4 pb-5 sm:pb-5 bg-transparent">
+      <div className="max-w-[860px] mx-auto">
         {/* Image thumbnails */}
         {images.length > 0 && (
-          <div className="flex items-center gap-2 mb-2 px-3 sm:px-0 flex-wrap">
+          <div className="mb-3 flex items-center gap-2 px-3 sm:px-0 flex-wrap">
             {images.map((img, i) => (
               <div key={i} className="relative group">
                 <img
                   src={`data:${img.mediaType};base64,${img.base64}`}
                   alt={img.name}
-                  className="w-12 h-12 rounded-lg object-cover border border-cc-border"
+                  className="w-12 h-12 rounded-2xl object-cover border border-cc-border shadow-[0_12px_24px_rgba(15,23,42,0.12)]"
                 />
                 <button
                   onClick={() => removeImage(i)}
@@ -374,7 +374,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
         />
 
         {/* Input container: flat separator on mobile, card on desktop */}
-        <div className={`relative overflow-visible transition-all duration-200 border-t border-cc-separator sm:border sm:border-cc-border sm:bg-cc-input-bg/95 sm:rounded-[16px] sm:backdrop-blur-sm composer-card ${
+        <div className={`relative overflow-visible transition-all duration-200 border-t border-cc-separator sm:border sm:border-cc-border sm:bg-cc-input-bg/92 sm:rounded-[24px] sm:backdrop-blur composer-card ${
           isPlan
             ? "sm:border-cc-primary/40 sm:shadow-[0_10px_30px_rgba(217,119,87,0.08)]"
             : "sm:focus-within:border-cc-primary/25"
@@ -383,7 +383,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
           {slashMenuOpen && filteredCommands.length > 0 && (
             <div
               ref={menuRef}
-              className="absolute left-2 right-2 bottom-full mb-1 max-h-[240px] overflow-y-auto bg-cc-card border border-cc-border rounded-[10px] shadow-lg z-20 py-1"
+              className="absolute left-2 right-2 bottom-full mb-2 max-h-[260px] overflow-y-auto bg-cc-card border border-cc-border rounded-[18px] shadow-[0_22px_56px_rgba(15,23,42,0.18)] z-20 py-2"
             >
               {filteredCommands.map((cmd, i) => (
                 <button
@@ -424,11 +424,11 @@ export function Composer({ sessionId }: { sessionId: string }) {
             selectedIndex={mention.mentionMenuIndex}
             onSelect={selectPrompt}
             menuRef={mention.mentionMenuRef}
-            className="absolute left-2 right-2 bottom-full mb-1"
+            className="absolute left-2 right-2 bottom-full mb-2"
           />
 
           {savePromptOpen && (
-            <div className="absolute left-2 right-2 bottom-full mb-1 bg-cc-card border border-cc-border rounded-[10px] shadow-lg z-20 p-3 space-y-2">
+            <div className="absolute left-2 right-2 bottom-full mb-2 bg-cc-card border border-cc-border rounded-[18px] shadow-[0_22px_56px_rgba(15,23,42,0.18)] z-20 p-4 space-y-3">
               <div className="text-xs font-semibold text-cc-fg">Save prompt</div>
               <input
                 value={savePromptName}
@@ -501,7 +501,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
           )}
 
           {/* Mobile toolbar: mode toggle + model switcher + secondary actions (hidden on sm+) */}
-          <div className="flex items-center gap-1.5 px-3 pt-1.5 pb-0.5 sm:hidden">
+          <div className="flex items-center gap-1.5 px-4 pt-2 pb-1 sm:hidden">
             <button
               onClick={toggleMode}
               disabled={!isConnected}
@@ -571,7 +571,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
           </div>
 
           {/* Textarea row */}
-          <div className="px-3 sm:px-3 pt-1 sm:pt-2.5">
+          <div className="px-4 sm:px-4 pt-1.5 sm:pt-3">
             <textarea
               ref={textareaRef}
               value={text}
@@ -586,13 +586,13 @@ export function Composer({ sessionId }: { sessionId: string }) {
                 : "Waiting for CLI connection..."}
               disabled={!isConnected}
               rows={1}
-              className="w-full px-1 py-1.5 text-base sm:text-sm bg-transparent resize-none outline-none text-cc-fg font-sans-ui placeholder:text-cc-muted disabled:opacity-50 overflow-y-auto"
-              style={{ minHeight: "36px", maxHeight: "200px" }}
+              className="w-full px-1 py-2 text-base sm:text-[15px] bg-transparent resize-none outline-none text-cc-fg font-sans-ui placeholder:text-cc-muted disabled:opacity-50 overflow-y-auto"
+              style={{ minHeight: "52px", maxHeight: "220px" }}
             />
           </div>
 
           {/* Mobile action row (hidden on sm+) */}
-          <div className="flex items-center justify-end gap-1 px-3 pb-1 sm:hidden">
+          <div className="flex items-center justify-end gap-1 px-4 pb-2 sm:hidden">
             {/* Send/stop */}
             {isRunning ? (
               <button
@@ -623,7 +623,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
           </div>
 
           {/* Desktop action bar: + bookmark mode spacer model send (hidden on mobile) */}
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 pb-2">
+          <div className="hidden sm:flex items-center gap-2 px-3.5 pb-3 pt-1 border-t border-cc-border/70">
             {/* + button (image upload) */}
             <button
               onClick={() => fileInputRef.current?.click()}

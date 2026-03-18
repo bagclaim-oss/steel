@@ -60,11 +60,11 @@ export function PermissionBanner({
   const suggestions = permission.permission_suggestions;
 
   return (
-    <div className="px-2 sm:px-4 py-3 border-b border-cc-border animate-[fadeSlideIn_0.2s_ease-out]">
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-start gap-2 sm:gap-3">
+    <div className="px-3 sm:px-4 py-3 border-b border-cc-border animate-[fadeSlideIn_0.2s_ease-out]">
+      <div className="max-w-[860px] mx-auto">
+        <div className="flex items-start gap-3 rounded-[22px] border border-cc-border bg-cc-card/78 px-4 py-4 shadow-[0_18px_46px_rgba(15,23,42,0.12)]">
           {/* Icon */}
-          <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+          <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
             isAskUser
               ? "bg-cc-primary/10 border border-cc-primary/20"
               : "bg-cc-warning/10 border border-cc-warning/20"
@@ -82,12 +82,12 @@ export function PermissionBanner({
 
           {/* Content */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className={`text-xs font-semibold ${isAskUser ? "text-cc-primary" : "text-cc-warning"}`}>
+            <div className="mb-2 flex items-center gap-2">
+              <span className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${isAskUser ? "text-cc-primary" : "text-cc-warning"}`}>
                 {isAskUser ? "Question" : "Permission Request"}
               </span>
               {!isAskUser && (
-                <span className="text-[11px] text-cc-muted font-mono-code">{permission.tool_name}</span>
+                <span className="rounded-full border border-cc-border bg-cc-bg/55 px-2 py-0.5 text-[10px] text-cc-muted font-mono-code">{permission.tool_name}</span>
               )}
             </div>
 
@@ -108,11 +108,11 @@ export function PermissionBanner({
 
             {/* Actions - only for non-AskUserQuestion tools */}
             {!isAskUser && (
-              <div className="flex items-center gap-2 mt-3 flex-wrap">
+              <div className="flex items-center gap-2 mt-4 flex-wrap">
                 <button
                   onClick={() => handleAllow()}
                   disabled={loading}
-                  className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium rounded-lg bg-cc-success/90 hover:bg-cc-success text-white disabled:opacity-50 transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-medium rounded-xl bg-cc-success/90 hover:bg-cc-success text-white disabled:opacity-50 transition-colors cursor-pointer shadow-[0_14px_28px_rgba(15,23,42,0.14)]"
                 >
                   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-3 h-3">
                     <path d="M3 8.5l3.5 3.5 6.5-7" />
@@ -127,7 +127,7 @@ export function PermissionBanner({
                     onClick={() => handleAllow(undefined, [suggestion])}
                     disabled={loading}
                     title={`${suggestion.type}: ${JSON.stringify(suggestion)}`}
-                    className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium rounded-lg bg-cc-primary/10 hover:bg-cc-primary/20 text-cc-primary border border-cc-primary/20 disabled:opacity-50 transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-medium rounded-xl bg-cc-primary/10 hover:bg-cc-primary/20 text-cc-primary border border-cc-primary/20 disabled:opacity-50 transition-colors cursor-pointer"
                   >
                     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3">
                       <path d="M3 8.5l3.5 3.5 6.5-7" />
@@ -139,7 +139,7 @@ export function PermissionBanner({
                 <button
                   onClick={handleDeny}
                   disabled={loading}
-                  className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium rounded-lg bg-cc-hover hover:bg-cc-active text-cc-fg border border-cc-border disabled:opacity-50 transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-medium rounded-xl bg-cc-hover hover:bg-cc-active text-cc-fg border border-cc-border disabled:opacity-50 transition-colors cursor-pointer"
                 >
                   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-3 h-3">
                     <path d="M4 4l8 8M12 4l-8 8" />

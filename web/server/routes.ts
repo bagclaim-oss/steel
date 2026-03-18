@@ -31,6 +31,7 @@ import { registerSystemRoutes } from "./routes/system-routes.js";
 import { registerLinearRoutes, fetchLinearTeamStates } from "./routes/linear-routes.js";
 import { registerLinearConnectionRoutes } from "./routes/linear-connection-routes.js";
 import { getConnection, resolveApiKey } from "./linear-connections.js";
+import { registerLinearOAuthConnectionRoutes } from "./routes/linear-oauth-connection-routes.js";
 import { getSettings } from "./settings-manager.js";
 import { discoverClaudeSessions } from "./claude-session-discovery.js";
 import { getClaudeSessionHistoryPage } from "./claude-session-history.js";
@@ -1247,6 +1248,7 @@ export function createRoutes(
 
   registerLinearRoutes(api);
   registerLinearConnectionRoutes(api);
+  registerLinearOAuthConnectionRoutes(api);
 
   registerGitRoutes(api, prPoller);
   registerSystemRoutes(api, {

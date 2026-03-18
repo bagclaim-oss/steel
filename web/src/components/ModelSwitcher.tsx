@@ -81,10 +81,10 @@ export function ModelSwitcher({ sessionId }: ModelSwitcherProps) {
     <div ref={containerRef} className="relative shrink-0">
       <button
         onClick={() => setOpen((prev) => !prev)}
-        className={`flex items-center gap-1 h-8 px-2 rounded-md text-[12px] font-medium transition-colors cursor-pointer ${
+        className={`flex items-center gap-1.5 h-9 px-3 rounded-full border text-[12px] font-medium transition-colors cursor-pointer ${
           open
-            ? "text-cc-fg bg-cc-active"
-            : "text-cc-muted hover:text-cc-fg hover:bg-cc-hover"
+            ? "text-cc-fg bg-cc-active border-cc-primary/20"
+            : "text-cc-muted border-cc-border bg-cc-bg/60 hover:text-cc-fg hover:bg-cc-hover"
         }`}
         title={`Current model: ${currentOption.label}`}
         aria-label="Switch model"
@@ -100,7 +100,7 @@ export function ModelSwitcher({ sessionId }: ModelSwitcherProps) {
 
       {open && (
         <div
-          className="absolute right-0 bottom-full mb-1 z-50 min-w-[160px] rounded-lg border border-cc-separator bg-cc-bg shadow-lg overflow-hidden"
+          className="absolute right-0 bottom-full mb-2 z-50 min-w-[180px] rounded-[18px] border border-cc-separator bg-cc-bg shadow-[0_22px_56px_rgba(15,23,42,0.18)] overflow-hidden"
           role="listbox"
           aria-label="Select model"
         >

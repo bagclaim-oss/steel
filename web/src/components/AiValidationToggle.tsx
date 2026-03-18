@@ -48,10 +48,10 @@ export function AiValidationToggle({ sessionId }: AiValidationToggleProps) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className={`flex items-center justify-center w-8 h-8 rounded-md transition-colors cursor-pointer ${
+        className={`flex items-center justify-center w-8 h-8 rounded-full border transition-colors cursor-pointer ${
           enabled
-            ? "text-cc-success hover:bg-cc-hover"
-            : "text-cc-muted hover:text-cc-fg hover:bg-cc-hover"
+            ? "text-cc-success border-cc-success/20 bg-cc-success/8 hover:bg-cc-hover"
+            : "text-cc-muted border-cc-border bg-cc-bg/60 hover:text-cc-fg hover:bg-cc-hover"
         }`}
         title={enabled ? "AI Validation: On" : "AI Validation: Off"}
         aria-label="Toggle AI validation settings"
@@ -64,7 +64,7 @@ export function AiValidationToggle({ sessionId }: AiValidationToggleProps) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 w-64 bg-cc-bg border border-cc-border rounded-lg shadow-lg p-2 space-y-1">
+        <div className="absolute right-0 top-full mt-2 z-50 w-64 bg-cc-bg border border-cc-border rounded-[18px] shadow-[0_22px_56px_rgba(15,23,42,0.18)] p-3 space-y-2">
           <p className="text-[10px] text-cc-muted px-2 pt-1 pb-1">
             AI Validation for this session
           </p>
@@ -72,7 +72,7 @@ export function AiValidationToggle({ sessionId }: AiValidationToggleProps) {
           <button
             type="button"
             onClick={() => toggle("aiValidationEnabled", enabled)}
-            className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-cc-hover text-cc-fg transition-colors cursor-pointer"
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-cc-hover text-cc-fg transition-colors cursor-pointer"
             aria-label="Toggle AI validation"
           >
             <span className="text-xs">Enabled</span>
@@ -86,7 +86,7 @@ export function AiValidationToggle({ sessionId }: AiValidationToggleProps) {
               <button
                 type="button"
                 onClick={() => toggle("aiValidationAutoApprove", autoApprove)}
-                className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-cc-hover text-cc-fg transition-colors cursor-pointer"
+                className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-cc-hover text-cc-fg transition-colors cursor-pointer"
                 aria-label="Toggle auto-approve safe tools"
               >
                 <span className="text-xs">Auto-approve safe</span>
@@ -98,7 +98,7 @@ export function AiValidationToggle({ sessionId }: AiValidationToggleProps) {
               <button
                 type="button"
                 onClick={() => toggle("aiValidationAutoDeny", autoDeny)}
-                className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-cc-hover text-cc-fg transition-colors cursor-pointer"
+                className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-cc-hover text-cc-fg transition-colors cursor-pointer"
                 aria-label="Toggle auto-deny dangerous tools"
               >
                 <span className="text-xs">Auto-deny dangerous</span>

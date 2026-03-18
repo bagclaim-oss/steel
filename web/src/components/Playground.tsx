@@ -23,6 +23,7 @@ import type {
 } from "../types.js";
 import { AiValidationBadge } from "./AiValidationBadge.js";
 import { AiValidationToggle } from "./AiValidationToggle.js";
+import { ModelSwitcher } from "./ModelSwitcher.js";
 import { ToolExecutionBar } from "./ToolExecutionBar.js";
 import { ToolTurnSummary } from "./ToolTurnSummary.js";
 import type { ToolActivityEntry } from "../store/tasks-slice.js";
@@ -963,6 +964,9 @@ export function Playground() {
             </Card>
             <Card label="Per-session toggle (enabled)">
               <PlaygroundAiValidationToggle enabled={true} />
+            </Card>
+            <Card label="Session model switcher">
+              <PlaygroundModelSwitcher />
             </Card>
             <Card label="Auto-resolved badge (with dismiss)">
               <div className="border border-cc-border rounded-xl overflow-hidden bg-cc-card">
@@ -3727,6 +3731,7 @@ function TaskRow({ task }: { task: TaskItem }) {
 // ─── Inline AiValidationToggle playground wrapper ───────────────────────────
 
 const PLAYGROUND_AI_VALIDATION_SESSION = "ai-validation-playground";
+const PLAYGROUND_MODEL_SWITCHER_SESSION = "model-switcher-playground";
 
 function PlaygroundAiValidationToggle({ enabled }: { enabled: boolean }) {
   useEffect(() => {
@@ -3782,6 +3787,72 @@ function PlaygroundAiValidationToggle({ enabled }: { enabled: boolean }) {
     <div className="flex items-center gap-2 p-2">
       <AiValidationToggle sessionId={PLAYGROUND_AI_VALIDATION_SESSION} />
       <span className="text-xs text-cc-muted">Click to toggle</span>
+    </div>
+  );
+}
+
+function PlaygroundModelSwitcher() {
+  useEffect(() => {
+    const store = useStore.getState();
+    const prevSession = store.sessions.get(PLAYGROUND_MODEL_SWITCHER_SESSION);
+    const prevSdkSessions = [...store.sdkSessions];
+    const prevCli = new Map(store.cliConnected);
+
+    store.updateSession(PLAYGROUND_MODEL_SWITCHER_SESSION, {
+      session_id: PLAYGROUND_MODEL_SWITCHER_SESSION,
+      model: "claude-sonnet-4-6",
+      cwd: "/workspace",
+      tools: [],
+      permissionMode: "default",
+      claude_code_version: "1.0.0",
+      mcp_servers: [],
+      agents: [],
+      slash_commands: [],
+      skills: [],
+      total_cost_usd: 0,
+      num_turns: 0,
+      context_used_percent: 0,
+      is_compacting: false,
+      git_branch: "main",
+      is_worktree: false,
+      is_containerized: false,
+      repo_root: "/workspace",
+      git_ahead: 0,
+      git_behind: 0,
+      total_lines_added: 0,
+      total_lines_removed: 0,
+      backend_type: "claude",
+      ...prevSession,
+    });
+    store.setSdkSessions([
+      ...store.sdkSessions.filter((sdk) => sdk.sessionId !== PLAYGROUND_MODEL_SWITCHER_SESSION),
+      {
+        sessionId: PLAYGROUND_MODEL_SWITCHER_SESSION,
+        state: "connected",
+        cwd: "/workspace",
+        createdAt: Date.now(),
+        backendType: "claude",
+        model: "claude-sonnet-4-6",
+      },
+    ]);
+    store.setCliConnected(PLAYGROUND_MODEL_SWITCHER_SESSION, true);
+
+    return () => {
+      if (prevSession) {
+        useStore.getState().updateSession(PLAYGROUND_MODEL_SWITCHER_SESSION, prevSession);
+      }
+      useStore.getState().setSdkSessions(prevSdkSessions);
+      useStore.getState().setCliConnected(
+        PLAYGROUND_MODEL_SWITCHER_SESSION,
+        prevCli.get(PLAYGROUND_MODEL_SWITCHER_SESSION) ?? false,
+      );
+    };
+  }, []);
+
+  return (
+    <div className="flex items-center gap-2 p-2">
+      <ModelSwitcher sessionId={PLAYGROUND_MODEL_SWITCHER_SESSION} />
+      <span className="text-xs text-cc-muted">Switch between Claude launch models</span>
     </div>
   );
 }

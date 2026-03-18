@@ -320,18 +320,18 @@ export function LinearSection({
   return (
     <aside className="space-y-2 mt-0.5" ref={linearDropdownRef}>
       <div
-        className="relative rounded-[12px] border border-cc-border bg-cc-card/90 px-2.5 py-2"
+        className="relative rounded-[24px] border border-cc-border bg-cc-card/82 px-4 py-4 shadow-[0_18px_48px_rgba(15,23,42,0.12)]"
         title={`Repo: ${cwd}`}
       >
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] uppercase tracking-wide text-cc-muted">Context</span>
+          <span className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Project context</span>
 
           {/* Connection picker — only shown when multiple connections exist */}
           {connectionsLoaded && connections.length > 1 && (
             <select
               value={selectedConnectionId ?? ""}
               onChange={(e) => handleConnectionChange(e.target.value)}
-              className="px-1.5 py-1 rounded-md text-[11px] bg-cc-input-bg border border-cc-border text-cc-fg focus:outline-none focus:border-cc-primary/60 cursor-pointer max-w-[140px] truncate"
+              className="px-2 py-1.5 rounded-xl text-[11px] bg-cc-input-bg border border-cc-border text-cc-fg focus:outline-none focus:border-cc-primary/60 cursor-pointer max-w-[160px] truncate"
               title="Select Linear workspace"
             >
               {connections.map((conn) => (
@@ -345,7 +345,7 @@ export function LinearSection({
           {/* When a project is attached, show project badge */}
           {linearMapping ? (
             <>
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-cc-primary/35 bg-cc-primary/10 text-cc-primary">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border border-cc-primary/35 bg-cc-primary/10 text-cc-primary">
                 <LinearLogo className="w-3.5 h-3.5" />
                 <span>{linearMapping.projectName}</span>
                 <button
@@ -362,7 +362,7 @@ export function LinearSection({
               <button
                 type="button"
                 onClick={() => setShowCreateIssueModal(true)}
-                className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] border border-dashed border-cc-border text-cc-muted hover:text-cc-fg hover:border-cc-primary/40 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] border border-dashed border-cc-border text-cc-muted hover:text-cc-fg hover:border-cc-primary/40 transition-colors cursor-pointer"
               >
                 <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
                   <path d="M8 2a.5.5 0 01.5.5v5h5a.5.5 0 010 1h-5v5a.5.5 0 01-1 0v-5h-5a.5.5 0 010-1h5v-5A.5.5 0 018 2z" />
@@ -383,7 +383,7 @@ export function LinearSection({
                   }
                   setShowLinearDropdown(!showLinearDropdown);
                 }}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border transition-colors cursor-pointer ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border transition-colors cursor-pointer ${
                   selectedLinearIssue
                     ? "border-cc-primary/35 bg-cc-primary/10 text-cc-primary"
                     : linearConfigured
@@ -400,7 +400,7 @@ export function LinearSection({
                 <button
                   type="button"
                   onClick={handleOpenAttachDropdown}
-                  className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] border border-dashed border-cc-border text-cc-muted hover:text-cc-fg hover:border-cc-primary/40 transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] border border-dashed border-cc-border text-cc-muted hover:text-cc-fg hover:border-cc-primary/40 transition-colors cursor-pointer"
                 >
                   <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
                     <path d="M8 2a.5.5 0 01.5.5v5h5a.5.5 0 010 1h-5v5a.5.5 0 01-1 0v-5h-5a.5.5 0 010-1h5v-5A.5.5 0 018 2z" />
@@ -414,7 +414,7 @@ export function LinearSection({
                 <button
                   type="button"
                   onClick={() => setShowCreateIssueModal(true)}
-                  className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] border border-dashed border-cc-border text-cc-muted hover:text-cc-fg hover:border-cc-primary/40 transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] border border-dashed border-cc-border text-cc-muted hover:text-cc-fg hover:border-cc-primary/40 transition-colors cursor-pointer"
                 >
                   <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
                     <path d="M8 2a.5.5 0 01.5.5v5h5a.5.5 0 010 1h-5v5a.5.5 0 01-1 0v-5h-5a.5.5 0 010-1h5v-5A.5.5 0 018 2z" />
@@ -443,11 +443,11 @@ export function LinearSection({
           const displayIssues = searchAllProjects ? globalSearchResults : filteredIssues;
 
           return (
-            <div className="mt-2">
+            <div className="mt-3">
               {/* Selected issue badge */}
               {selectedLinearIssue && (
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="flex-1 min-w-0 text-xs text-cc-primary truncate">
+                  <div className="flex-1 min-w-0 rounded-2xl border border-cc-primary/18 bg-cc-primary/8 px-3 py-2 text-xs text-cc-primary truncate">
                     <span className="font-mono-code">{selectedLinearIssue.identifier}</span> - {selectedLinearIssue.title}
                   </div>
                   <button
@@ -469,7 +469,7 @@ export function LinearSection({
                 value={projectSearchQuery}
                 onChange={(e) => setProjectSearchQuery(e.target.value)}
                 placeholder={searchAllProjects ? "Search all projects..." : "Filter issues..."}
-                className="w-full px-2 py-1.5 text-xs bg-cc-input-bg border border-cc-border rounded-md text-cc-fg placeholder:text-cc-muted focus:outline-none focus:border-cc-primary/60"
+                className="w-full px-3 py-2 text-xs bg-cc-input-bg border border-cc-border rounded-xl text-cc-fg placeholder:text-cc-muted focus:outline-none focus:border-cc-primary/60"
               />
 
               {/* Issue list */}
@@ -486,13 +486,13 @@ export function LinearSection({
                   {query ? "No matching issues" : "No active issues found"}
                 </div>
               ) : (
-                <div className="max-h-56 overflow-y-auto -mx-0.5 mt-1">
+                <div className="max-h-56 overflow-y-auto -mx-0.5 mt-2">
                   {displayIssues.map((issue) => (
                     <button
                       key={issue.id}
                       type="button"
                       onClick={() => handleSelectLinearIssue(issue)}
-                      className={`w-full px-2 py-1.5 text-left rounded-md transition-colors cursor-pointer ${
+                      className={`w-full px-3 py-2 text-left rounded-xl transition-colors cursor-pointer ${
                         selectedLinearIssue?.id === issue.id
                           ? "bg-cc-primary/10 border border-cc-primary/30"
                           : "hover:bg-cc-hover"
@@ -530,7 +530,7 @@ export function LinearSection({
 
         {/* Attach project dropdown */}
         {showAttachProjectDropdown && (
-          <div className="absolute left-2.5 right-2.5 top-[44px] bg-cc-card border border-cc-border rounded-[10px] shadow-lg z-20 overflow-hidden">
+          <div className="absolute left-4 right-4 top-[56px] bg-cc-card border border-cc-border rounded-[18px] shadow-[0_22px_56px_rgba(15,23,42,0.18)] z-20 overflow-hidden">
             <div className="p-2 border-b border-cc-border">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-cc-fg font-medium">Attach a Linear project to this repo</span>
@@ -566,7 +566,7 @@ export function LinearSection({
 
         {/* Search dropdown (used as fallback when mapping exists, or primary when no mapping) */}
         {showLinearDropdown && linearConfigured && (
-          <div className="absolute left-2.5 right-2.5 top-[44px] bg-cc-card border border-cc-border rounded-[10px] shadow-lg z-20 overflow-hidden">
+          <div className="absolute left-4 right-4 top-[56px] bg-cc-card border border-cc-border rounded-[18px] shadow-[0_22px_56px_rgba(15,23,42,0.18)] z-20 overflow-hidden">
             <div className="p-2 border-b border-cc-border">
               <div className="flex items-center gap-2">
                 <input
@@ -578,7 +578,7 @@ export function LinearSection({
                   onFocus={() => setShowLinearDropdown(true)}
                   autoFocus
                   placeholder="ENG-123 or issue title"
-                  className="w-full px-2.5 py-2 text-sm bg-cc-input-bg border border-cc-border rounded-md text-cc-fg placeholder:text-cc-muted focus:outline-none focus:border-cc-primary/60"
+                  className="w-full px-3 py-2.5 text-sm bg-cc-input-bg border border-cc-border rounded-xl text-cc-fg placeholder:text-cc-muted focus:outline-none focus:border-cc-primary/60"
                 />
                 <button
                   type="button"
@@ -643,7 +643,7 @@ export function LinearSection({
           onClick={() => {
             window.location.hash = "#/integrations/linear";
           }}
-          className="absolute top-2 right-2 inline-flex h-7 w-7 items-center justify-center rounded-md text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
+          className="absolute top-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-xl text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
           title="Linear settings"
         >
           <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">

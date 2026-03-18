@@ -81,7 +81,7 @@ export function BranchPicker({
             setShowBranchDropdown(!showBranchDropdown);
             setBranchFilter("");
           }}
-          className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-md transition-colors cursor-pointer text-cc-muted hover:text-cc-fg hover:bg-cc-hover"
+          className="flex items-center gap-1.5 rounded-xl border border-cc-border bg-cc-bg/60 px-3 py-2 text-xs transition-colors cursor-pointer text-cc-muted hover:text-cc-fg hover:bg-cc-hover"
           title={`Repository: ${cwd}`}
           data-is-new-branch={isNewBranch ? "true" : "false"}
         >
@@ -96,15 +96,15 @@ export function BranchPicker({
           </svg>
         </button>
         {showBranchDropdown && (
-          <div className="absolute left-0 bottom-full mb-1 w-72 max-w-[calc(100%-2rem)] bg-cc-card border border-cc-border rounded-[10px] shadow-lg z-10 overflow-hidden">
+          <div className="absolute left-0 bottom-full mb-2 w-80 max-w-[calc(100%-2rem)] bg-cc-card border border-cc-border rounded-[18px] shadow-[0_22px_56px_rgba(15,23,42,0.18)] z-10 overflow-hidden">
             {/* Search/filter input */}
-            <div className="px-2 py-2 border-b border-cc-border">
+            <div className="px-3 py-3 border-b border-cc-border bg-cc-bg/45">
               <input
                 type="text"
                 value={branchFilter}
                 onChange={(e) => setBranchFilter(e.target.value)}
                 placeholder="Filter or create branch..."
-                className="w-full px-2 py-1 text-base sm:text-xs bg-cc-input-bg border border-cc-border rounded-md text-cc-fg font-mono-code placeholder:text-cc-muted focus:outline-none focus:border-cc-primary/50"
+                className="w-full px-3 py-2 text-base sm:text-xs bg-cc-input-bg border border-cc-border rounded-xl text-cc-fg font-mono-code placeholder:text-cc-muted focus:outline-none focus:border-cc-primary/50"
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === "Escape") {
@@ -114,7 +114,7 @@ export function BranchPicker({
               />
             </div>
             {/* Branch list */}
-            <div className="max-h-[240px] overflow-y-auto py-1">
+            <div className="max-h-[260px] overflow-y-auto py-2">
               {(() => {
                 const filter = branchFilter.toLowerCase().trim();
                 const localBranches = branches.filter((b) => !b.isRemote && (!filter || b.name.toLowerCase().includes(filter)));
@@ -127,7 +127,7 @@ export function BranchPicker({
                     {/* Local branches */}
                     {localBranches.length > 0 && (
                       <>
-                        <div className="px-3 py-1 text-[10px] text-cc-muted uppercase tracking-wider">Local</div>
+                        <div className="px-4 py-1 text-[10px] text-cc-muted uppercase tracking-[0.18em]">Local</div>
                         {localBranches.map((b) => (
                           <button
                             key={b.name}
@@ -135,7 +135,7 @@ export function BranchPicker({
                               onBranchChange(b.name, false);
                               setShowBranchDropdown(false);
                             }}
-                            className={`w-full px-3 py-1.5 text-xs text-left hover:bg-cc-hover transition-colors cursor-pointer flex items-center gap-2 ${
+                            className={`w-full px-4 py-2 text-xs text-left hover:bg-cc-hover transition-colors cursor-pointer flex items-center gap-2 ${
                               b.name === selectedBranch ? "text-cc-primary font-medium" : "text-cc-fg"
                             }`}
                           >
@@ -161,7 +161,7 @@ export function BranchPicker({
                     {/* Remote branches */}
                     {remoteBranches.length > 0 && (
                       <>
-                        <div className="px-3 py-1 text-[10px] text-cc-muted uppercase tracking-wider mt-1">Remote</div>
+                        <div className="px-4 py-1 text-[10px] text-cc-muted uppercase tracking-[0.18em] mt-1">Remote</div>
                         {remoteBranches.map((b) => (
                           <button
                             key={`remote-${b.name}`}
@@ -169,7 +169,7 @@ export function BranchPicker({
                               onBranchChange(b.name, false);
                               setShowBranchDropdown(false);
                             }}
-                            className={`w-full px-3 py-1.5 text-xs text-left hover:bg-cc-hover transition-colors cursor-pointer flex items-center gap-2 ${
+                            className={`w-full px-4 py-2 text-xs text-left hover:bg-cc-hover transition-colors cursor-pointer flex items-center gap-2 ${
                               b.name === selectedBranch ? "text-cc-primary font-medium" : "text-cc-fg"
                             }`}
                           >
@@ -181,17 +181,17 @@ export function BranchPicker({
                     )}
                     {/* No results */}
                     {!hasResults && filter && (
-                      <div className="px-3 py-2 text-xs text-cc-muted text-center">No matching branches</div>
+                      <div className="px-4 py-3 text-xs text-cc-muted text-center">No matching branches</div>
                     )}
                     {/* Create new branch option */}
                     {filter && !exactMatch && (
-                      <div className="border-t border-cc-border mt-1 pt-1">
+                      <div className="border-t border-cc-border mt-1 pt-2">
                         <button
                           onClick={() => {
                             onBranchChange(branchFilter.trim(), true);
                             setShowBranchDropdown(false);
                           }}
-                          className="w-full px-3 py-1.5 text-xs text-left hover:bg-cc-hover transition-colors cursor-pointer flex items-center gap-2 text-cc-primary"
+                          className="w-full px-4 py-2 text-xs text-left hover:bg-cc-hover transition-colors cursor-pointer flex items-center gap-2 text-cc-primary"
                         >
                           <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 shrink-0">
                             <path d="M8 2a.75.75 0 01.75.75v4.5h4.5a.75.75 0 010 1.5h-4.5v4.5a.75.75 0 01-1.5 0v-4.5h-4.5a.75.75 0 010-1.5h4.5v-4.5A.75.75 0 018 2z" />
@@ -211,10 +211,10 @@ export function BranchPicker({
       {/* Worktree toggle */}
       <button
         onClick={() => onWorktreeChange(!useWorktree)}
-        className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded-md transition-colors cursor-pointer ${
+        className={`flex items-center gap-1.5 px-3 py-2 text-xs rounded-xl border transition-colors cursor-pointer ${
           useWorktree
-            ? "bg-cc-primary/15 text-cc-primary font-medium"
-            : "text-cc-muted hover:text-cc-fg hover:bg-cc-hover"
+            ? "border-cc-primary/20 bg-cc-primary/15 text-cc-primary font-medium"
+            : "border-cc-border bg-cc-bg/60 text-cc-muted hover:text-cc-fg hover:bg-cc-hover"
         }`}
         title="Create an isolated worktree for this session"
       >

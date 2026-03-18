@@ -324,7 +324,7 @@ export function LinearSection({
         title={`Repo: ${cwd}`}
       >
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Project context</span>
+          <span className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Context</span>
 
           {/* Connection picker — only shown when multiple connections exist */}
           {connectionsLoaded && connections.length > 1 && (

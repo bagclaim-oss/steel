@@ -822,20 +822,108 @@ export function HomePage() {
     }
   }, [gitRepoInfo]);
 
+  const backendLabel = backends.find((b) => b.id === backend)?.name
+    || (backend === "codex" ? "Codex" : "Claude");
+  const selectedEnvName = selectedEnv
+    ? envs.find((env) => env.slug === selectedEnv)?.name || "Custom environment"
+    : "No environment";
+  const selectedSandboxName = sandboxEnabled
+    ? (selectedSandbox
+      ? sandboxes.find((sandbox) => sandbox.slug === selectedSandbox)?.name || "Sandbox profile"
+      : "Default sandbox")
+    : "Sandbox off";
+  const workspaceLabel = gitRepoInfo?.repoName || dirLabel;
+  const branchLabel = selectedBranch || gitRepoInfo?.currentBranch || "No branch";
   const canSend = text.trim().length > 0 && !sending;
 
   return (
-    <div className="flex-1 h-full flex flex-col items-center px-3 sm:px-6 pb-6 pb-safe overflow-y-auto overscroll-y-contain">
-      {/* Fixed-height spacer — pushes content to ~20% from top, content grows downward only */}
-      <div className="shrink-0 h-[12vh] sm:h-[18vh]" />
-      <div className="w-full max-w-[720px]">
-        {/* Logo + Title — minimal, centered */}
-        <div className="flex flex-col items-center mb-6 sm:mb-10">
-          <img src={logoSrc} alt="The Companion" className="w-10 h-10 sm:w-12 sm:h-12 mb-3" />
-          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-cc-fg">
-            The Companion
-          </h1>
-        </div>
+    <div className="flex-1 h-full overflow-y-auto overscroll-y-contain px-4 pt-6 pb-8 pb-safe sm:px-6 lg:px-10">
+      <div className="mx-auto w-full max-w-[1280px] space-y-6">
+        <section className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)] lg:items-end">
+          <div className="rounded-[28px] border border-cc-border bg-cc-card/85 px-6 py-6 shadow-[0_30px_80px_rgba(15,23,42,0.16)] backdrop-blur">
+            <div className="inline-flex items-center gap-2 rounded-full border border-cc-border bg-cc-hover/70 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-cc-muted">
+              <img src={logoSrc} alt="" className="h-4 w-4 rounded-sm" />
+              Companion Workspace
+            </div>
+            <div className="mt-5 max-w-3xl">
+              <h1 className="text-3xl font-semibold tracking-[-0.04em] text-cc-fg sm:text-[40px]">
+                Ship product work from one conversation.
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-cc-muted sm:text-[15px]">
+                Launch a coding session, attach project context, reuse prior threads, and keep every
+                decision inside a single premium workbench.
+              </p>
+            </div>
+            <div className="mt-6 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-cc-border bg-cc-bg/60 px-4 py-3">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Backend</div>
+                <div className="mt-1 text-sm font-medium text-cc-fg">{backendLabel}</div>
+              </div>
+              <div className="rounded-2xl border border-cc-border bg-cc-bg/60 px-4 py-3">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Model</div>
+                <div className="mt-1 text-sm font-medium text-cc-fg">{selectedModel.label}</div>
+              </div>
+              <div className="rounded-2xl border border-cc-border bg-cc-bg/60 px-4 py-3">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Workspace</div>
+                <div className="mt-1 truncate text-sm font-medium text-cc-fg">{workspaceLabel}</div>
+              </div>
+              <div className="rounded-2xl border border-cc-border bg-cc-bg/60 px-4 py-3">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Launch mode</div>
+                <div className="mt-1 text-sm font-medium text-cc-fg">{selectedMode.label}</div>
+              </div>
+            </div>
+          </div>
+
+          <aside className="rounded-[28px] border border-cc-border bg-cc-card/80 px-5 py-5 shadow-[0_24px_60px_rgba(15,23,42,0.14)] backdrop-blur">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-cc-muted">Session recipe</p>
+                <p className="mt-1 text-sm font-medium text-cc-fg">Everything needed before you launch.</p>
+              </div>
+              <div className="rounded-2xl border border-cc-primary/25 bg-cc-primary/10 px-2.5 py-1 text-[11px] font-medium text-cc-primary">
+                Ready
+              </div>
+            </div>
+            <div className="mt-4 space-y-3">
+              <div className="flex items-start justify-between gap-3 rounded-2xl border border-cc-border bg-cc-bg/60 px-4 py-3">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Repository</div>
+                  <div className="mt-1 text-sm font-medium text-cc-fg">{workspaceLabel}</div>
+                </div>
+                <div className="max-w-[150px] truncate text-right text-[11px] font-mono-code text-cc-muted">{dirLabel}</div>
+              </div>
+              <div className="flex items-start justify-between gap-3 rounded-2xl border border-cc-border bg-cc-bg/60 px-4 py-3">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Branch strategy</div>
+                  <div className="mt-1 text-sm font-medium text-cc-fg">{branchLabel}</div>
+                </div>
+                <div className="text-right text-[11px] text-cc-muted">
+                  {useWorktree ? "Isolated worktree" : "Current worktree"}
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-cc-border bg-cc-bg/60 px-4 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Environment</div>
+                  <div className="mt-1 truncate text-sm font-medium text-cc-fg">{selectedEnvName}</div>
+                </div>
+                <div className="rounded-2xl border border-cc-border bg-cc-bg/60 px-4 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-cc-muted">Sandbox</div>
+                  <div className="mt-1 truncate text-sm font-medium text-cc-fg">{selectedSandboxName}</div>
+                </div>
+              </div>
+              {selectedLinearIssue && (
+                <div className="rounded-2xl border border-cc-primary/20 bg-cc-primary/8 px-4 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-cc-primary/75">Linear attached</div>
+                  <div className="mt-1 truncate text-sm font-medium text-cc-fg">
+                    {selectedLinearIssue.identifier} · {selectedLinearIssue.title}
+                  </div>
+                </div>
+              )}
+            </div>
+          </aside>
+        </section>
+
+        <div className="w-full max-w-[980px]">
 
         {/* Hidden file input */}
         <input
@@ -849,7 +937,7 @@ export function HomePage() {
         />
 
         {/* Main input card — the hero element */}
-        <div className="relative bg-cc-card border border-cc-border rounded-2xl shadow-sm">
+        <div className="relative overflow-visible rounded-[30px] border border-cc-border bg-cc-card/90 shadow-[0_34px_90px_rgba(15,23,42,0.18)] backdrop-blur">
           <MentionMenu
             open={mention.mentionMenuOpen}
             loading={mention.promptsLoading}
@@ -857,20 +945,20 @@ export function HomePage() {
             selectedIndex={mention.mentionMenuIndex}
             onSelect={handleSelectPrompt}
             menuRef={mention.mentionMenuRef}
-            className="absolute left-2 right-2 bottom-full mb-1"
+            className="absolute left-4 right-4 bottom-full mb-2"
           />
           {/* Context badges (Linear issue, images) — inside card to avoid external shift */}
           {(selectedLinearIssue || images.length > 0) && (
-            <div className="flex items-center gap-2 px-4 pt-3 flex-wrap">
+            <div className="flex items-center gap-2 px-5 pt-4 flex-wrap">
               {selectedLinearIssue && (
-                <div className="inline-flex max-w-full items-center gap-2 rounded-md border border-cc-border bg-cc-hover/60 px-2.5 py-1.5 text-[11px] text-cc-muted">
-                  <span className="shrink-0">Linear</span>
-                  <span className="font-mono-code shrink-0">{selectedLinearIssue.identifier}</span>
+                <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-cc-primary/20 bg-cc-primary/8 px-3 py-1.5 text-[11px] text-cc-muted">
+                  <span className="shrink-0 text-cc-primary">Linear</span>
+                  <span className="font-mono-code shrink-0 text-cc-fg">{selectedLinearIssue.identifier}</span>
                   <span className="truncate">{selectedLinearIssue.title}</span>
                   <button
                     type="button"
                     onClick={() => handleIssueSelect(null)}
-                    className="shrink-0 rounded px-1 text-cc-muted hover:text-cc-fg hover:bg-cc-active transition-colors cursor-pointer"
+                    className="shrink-0 rounded-full px-1 text-cc-muted hover:text-cc-fg hover:bg-cc-active transition-colors cursor-pointer"
                     title="Remove Linear issue"
                   >
                     ×
@@ -882,7 +970,7 @@ export function HomePage() {
                   <img
                     src={`data:${img.mediaType};base64,${img.base64}`}
                     alt={img.name}
-                    className="w-10 h-10 rounded-lg object-cover border border-cc-border"
+                    className="w-12 h-12 rounded-2xl object-cover border border-cc-border"
                   />
                   <button
                     onClick={() => removeImage(i)}
@@ -907,12 +995,12 @@ export function HomePage() {
             aria-label="Task description"
             placeholder="Fix a bug, build a feature, refactor code..."
             rows={3}
-            className="w-full px-4 sm:px-5 pt-4 pb-2 text-[15px] sm:text-sm bg-transparent resize-none focus:outline-none text-cc-fg font-sans-ui placeholder:text-cc-muted/70 overflow-y-auto"
-            style={{ minHeight: "80px", maxHeight: "200px" }}
+            className="w-full px-5 sm:px-6 pt-5 pb-3 text-[16px] sm:text-[15px] bg-transparent resize-none focus:outline-none text-cc-fg font-sans-ui placeholder:text-cc-muted/70 overflow-y-auto"
+            style={{ minHeight: "120px", maxHeight: "240px" }}
           />
 
           {/* ── Toolbar: all controls in one bar ── */}
-          <div className="flex items-center gap-1 px-2.5 sm:px-3 py-2 flex-wrap">
+          <div className="flex items-center gap-1.5 border-t border-cc-border bg-cc-bg/55 px-3.5 sm:px-4 py-3 flex-wrap">
             {/* Model selector */}
             <div className="relative" ref={modelDropdownRef}>
               <button
@@ -1218,23 +1306,27 @@ export function HomePage() {
         </div>
 
         {/* ── Below-card controls ── */}
-        <div className="mt-3 sm:mt-4 space-y-2">
+        <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
 
           {/* Backend toggle */}
           {backends.length > 1 && (
-            <div className="flex items-center justify-center">
-              <div className="flex items-center bg-cc-hover/50 rounded-lg p-0.5">
+            <div className="rounded-[24px] border border-cc-border bg-cc-card/80 px-4 py-4 shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
+              <div className="mb-3">
+                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-cc-muted">Engine</p>
+                <p className="mt-1 text-sm text-cc-muted">Switch the coding backend without losing your current launch context.</p>
+              </div>
+              <div className="flex items-center justify-center rounded-2xl bg-cc-hover/60 p-1">
                 {backends.map((b) => (
                   <button
                     key={b.id}
                     onClick={() => b.available && switchBackend(b.id as BackendType)}
                     disabled={!b.available}
                     title={b.available ? b.name : `${b.name} CLI not found in PATH`}
-                    className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-md transition-colors ${
+                    className={`flex flex-1 items-center justify-center gap-1 px-3 py-2 text-xs rounded-[14px] transition-colors ${
                       !b.available
                         ? "text-cc-muted/40 cursor-not-allowed"
                         : backend === b.id
-                          ? "bg-cc-card text-cc-fg font-medium shadow-sm cursor-pointer"
+                          ? "bg-cc-card text-cc-fg font-medium shadow-[0_12px_32px_rgba(15,23,42,0.12)] cursor-pointer"
                           : "text-cc-muted hover:text-cc-fg cursor-pointer"
                     }`}
                   >
@@ -1253,14 +1345,20 @@ export function HomePage() {
 
           {/* ── Resume: Branch from session (Claude only) ── */}
           {backend === "claude" && (
-            <div>
+            <div className={`${backends.length > 1 ? "" : "lg:col-span-2"} rounded-[24px] border border-cc-border bg-cc-card/80 px-4 py-4 shadow-[0_18px_48px_rgba(15,23,42,0.12)]`}>
+              <div className="mb-3">
+                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-cc-muted">Continue an existing thread</p>
+                <p className="mt-1 text-sm text-cc-muted">
+                  Fork a previous Claude session for exploration, or continue a live branch of work.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowBranchingControls((v) => !v)}
-                className={`mx-auto flex items-center gap-1.5 px-2 py-1 text-[11px] sm:text-xs rounded-md transition-colors cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 py-2 text-[11px] sm:text-xs rounded-xl transition-colors cursor-pointer ${
                   showBranchingControls
-                    ? "text-cc-primary"
-                    : "text-cc-muted hover:text-cc-fg"
+                    ? "bg-cc-primary/10 text-cc-primary"
+                    : "bg-cc-hover/60 text-cc-muted hover:text-cc-fg"
                 }`}
                 aria-expanded={showBranchingControls}
                 aria-controls="branch-from-session-panel"
@@ -1287,7 +1385,7 @@ export function HomePage() {
                 <div className="accordion-inner" inert={!showBranchingControls || undefined}>
                   <div
                     id="branch-from-session-panel"
-                    className="mt-2 px-1 sm:px-2 py-2 space-y-2 rounded-xl border border-cc-border/20 bg-cc-card/30"
+                    className="mt-3 px-1 sm:px-2 py-2 space-y-2 rounded-2xl border border-cc-border bg-cc-bg/55"
                   >
                         <div className="flex flex-wrap items-center gap-1.5">
                           <button
@@ -1577,6 +1675,7 @@ export function HomePage() {
             <p className="text-xs text-cc-error">{error}</p>
           </div>
         )}
+      </div>
       </div>
 
       {/* Environment manager modal */}

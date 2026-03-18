@@ -308,6 +308,38 @@ describe("SessionOrchestrator", () => {
       expect(containerManager.removeContainer).not.toHaveBeenCalled();
     });
 
+    it("after idle-kill, relaunch reuses preserved container without creating a new one", async () => {
+      // End-to-end scenario: idle-kill fires, container survives, browser
+      // reconnects, and the CLI is relaunched into the existing container.
+      vi.useFakeTimers();
+      deps.launcher.getSession.mockReturnValue({
+        archived: false,
+        state: "exited",
+        containerId: "cid-preserved",
+        pid: undefined,
+      } as any);
+      deps.wsBridge.isCliConnected.mockReturnValue(false);
+      deps.launcher.relaunch.mockResolvedValue({ ok: true });
+      orchestrator.initialize();
+
+      // 1. Idle-kill fires — CLI killed, container preserved
+      companionBus.emit("session:idle-kill", { sessionId: "s1" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(deps.launcher.kill).toHaveBeenCalledWith("s1");
+      expect(containerManager.removeContainer).not.toHaveBeenCalled();
+
+      // 2. Browser reconnects — triggers auto-relaunch
+      companionBus.emit("session:relaunch-needed", { sessionId: "s1" });
+      await vi.advanceTimersByTimeAsync(15_000);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // 3. Relaunch succeeds using the preserved container — no new container created
+      expect(deps.launcher.relaunch).toHaveBeenCalledWith("s1");
+      expect(containerManager.createContainer).not.toHaveBeenCalled();
+
+      vi.useRealTimers();
+    });
+
     it("idle kill clears auto-relaunch counter so session can be fully relaunched later", async () => {
       // After idle-kill, the auto-relaunch counter must be reset. Without this,
       // a session that previously had failed relaunch attempts would be stuck at

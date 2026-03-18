@@ -27,10 +27,10 @@ function pickEditable(body: Record<string, unknown>): Partial<AgentConfig> {
 
 function buildCreateInput(
   body: Record<string, unknown>,
-  overrides?: Partial<Pick<AgentConfigCreateInput, "enabled">>,
+  overrides?: Partial<Pick<AgentConfigCreateInput, "enabled" | "version">>,
 ): AgentConfigCreateInput {
   return {
-    version: 1,
+    version: overrides?.version ?? 1,
     name: (body.name as string | undefined) || "",
     description: (body.description as string | undefined) || "",
     icon: body.icon as string | undefined,
@@ -348,6 +348,7 @@ export function registerAgentRoutes(
     try {
       // Accept an exported agent JSON and create a new agent from it
       const agent = agentStore.createAgent(buildCreateInput(body, {
+        version: (body.version as AgentConfigCreateInput["version"] | undefined) || 1,
         enabled: false, // Imported agents start disabled for safety
       }));
       return c.json(sanitizeAgent({ ...agent, nextRunAt: null }), 201);

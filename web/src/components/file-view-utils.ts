@@ -85,6 +85,12 @@ export function langForPath(filePath: string): unknown {
 }
 
 export function relPath(cwd: string, path: string): string {
-  if (path.startsWith(`${cwd}/`)) return path.slice(cwd.length + 1);
+  const normalizedCwd = cwd === "/" ? "/" : cwd.replace(/\/+$/, "");
+
+  if (normalizedCwd === "/") {
+    return path.startsWith("/") ? path.slice(1) : path;
+  }
+
+  if (path.startsWith(`${normalizedCwd}/`)) return path.slice(normalizedCwd.length + 1);
   return path;
 }

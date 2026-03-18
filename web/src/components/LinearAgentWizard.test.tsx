@@ -85,17 +85,15 @@ const defaultConnections = {
   ],
 };
 
-/** Render AgentsPage and enter the wizard via the "Setup Linear Agent" button */
+/**
+ * Render AgentsPage and enter the wizard via the setup=linear hash param.
+ * The "Setup Linear Agent" button was moved from the page header into the
+ * Linear filter empty state, so the hash param is the reliable entry point.
+ */
 async function renderAndEnterWizard() {
+  // Set hash before render so useEffect picks it up on mount
+  window.location.hash = "#/agents?setup=linear";
   render(<AgentsPage route={{ page: "agents" }} />);
-
-  // Wait for agents page to load
-  await waitFor(() => {
-    expect(screen.getByText("Setup Linear Agent")).toBeInTheDocument();
-  });
-
-  // Click the "Setup Linear Agent" button
-  fireEvent.click(screen.getByText("Setup Linear Agent"));
 
   // Wait for wizard to load
   await waitFor(() => {

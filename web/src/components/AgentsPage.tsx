@@ -13,7 +13,17 @@ import { AgentIcon } from "./AgentIcon.js";
 import { AgentCard, getWebhookUrl } from "./AgentCard.js";
 import { AgentEditor, type AgentFormData, EMPTY_FORM } from "./AgentEditor.js";
 import { LinearAgentEditor } from "./LinearAgentEditor.js";
-import { LinearAgentSection } from "./LinearAgentSection.js";
+
+// ─── Filter types ────────────────────────────────────────────────────────────
+
+type AgentFilter = "all" | "linear" | "scheduled" | "webhook";
+
+const FILTER_LABELS: Record<AgentFilter, string> = {
+  all: "All",
+  linear: "Linear",
+  scheduled: "Scheduled",
+  webhook: "Webhook",
+};
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -35,6 +45,7 @@ export function AgentsPage({ route }: Props) {
   const [runInputAgent, setRunInputAgent] = useState<AgentInfo | null>(null);
   const [runInput, setRunInput] = useState("");
   const [copiedWebhook, setCopiedWebhook] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<AgentFilter>("all");
   const [linearOAuthConfigured, setLinearOAuthConfigured] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -264,7 +275,12 @@ export function AgentsPage({ route }: Props) {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this agent?")) return;
+    const agent = agents.find(a => a.id === id);
+    const isLinear = agent?.triggers?.linear?.enabled;
+    const message = isLinear
+      ? "Delete this Linear agent? It will no longer respond to @mentions in Linear."
+      : "Delete this agent?";
+    if (!confirm(message)) return;
     try {
       await api.deleteAgent(id);
       await loadAgents();
@@ -448,6 +464,24 @@ export function AgentsPage({ route }: Props) {
     );
   }
 
+  // ── Filtering ──
+
+  const filterCounts: Record<AgentFilter, number> = {
+    all: agents.length,
+    linear: agents.filter(a => a.triggers?.linear?.enabled).length,
+    scheduled: agents.filter(a => a.triggers?.schedule?.enabled).length,
+    webhook: agents.filter(a => a.triggers?.webhook?.enabled).length,
+  };
+
+  const filteredAgents = agents.filter(agent => {
+    switch (activeFilter) {
+      case "linear": return agent.triggers?.linear?.enabled === true;
+      case "scheduled": return agent.triggers?.schedule?.enabled === true;
+      case "webhook": return agent.triggers?.webhook?.enabled === true;
+      default: return true;
+    }
+  });
+
   return (
     <div className="h-full overflow-y-auto bg-cc-bg">
       <div className="max-w-4xl mx-auto p-6">
@@ -465,13 +499,6 @@ export function AgentsPage({ route }: Props) {
               onChange={handleImport}
               className="hidden"
             />
-            <button
-              onClick={startLinearSetup}
-              className="px-3 py-1.5 text-xs rounded-lg border border-cc-border text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer flex items-center gap-1.5"
-            >
-              <LinearLogo className="w-3 h-3" />
-              Setup Linear Agent
-            </button>
             <button
               onClick={() => fileInputRef.current?.click()}
               className="px-3 py-1.5 text-xs rounded-lg border border-cc-border text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
@@ -495,18 +522,24 @@ export function AgentsPage({ route }: Props) {
 
         <PublicUrlBanner publicUrl={publicUrl} />
 
-        {/* Linear Agents section */}
-        {linearOAuthConfigured && !loading && (() => {
-          const linearAgents = agents.filter(a => a.triggers?.linear?.enabled);
-          return linearAgents.length > 0 ? (
-            <LinearAgentSection
-              agents={linearAgents}
-              onEdit={(agent) => startEdit(agent)}
-              onRun={(agent) => handleRunClick(agent)}
-              onAddNew={startLinearSetup}
-            />
-          ) : null;
-        })()}
+        {/* Filter tabs */}
+        {!loading && agents.length > 0 && (
+          <div className="flex items-center gap-1 mb-4" data-testid="filter-tabs">
+            {(["all", "linear", "scheduled", "webhook"] as AgentFilter[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setActiveFilter(f)}
+                className={`text-xs px-2.5 py-1 rounded-full transition-colors cursor-pointer ${
+                  activeFilter === f
+                    ? "bg-cc-fg text-cc-bg"
+                    : "bg-cc-hover text-cc-muted hover:text-cc-fg"
+                }`}
+              >
+                {FILTER_LABELS[f]} ({filterCounts[f]})
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Agent Cards */}
         {loading ? (
@@ -519,9 +552,36 @@ export function AgentsPage({ route }: Props) {
             <p className="text-sm text-cc-muted">No agents yet</p>
             <p className="text-xs text-cc-muted mt-1">Create an agent to get started, or import a shared JSON config.</p>
           </div>
+        ) : filteredAgents.length === 0 ? (
+          <div className="text-center py-12">
+            {activeFilter === "linear" ? (
+              <>
+                <div className="mb-3 flex justify-center text-cc-muted">
+                  <LinearLogo className="w-6 h-6" />
+                </div>
+                <p className="text-sm text-cc-muted">No Linear agents</p>
+                <p className="text-xs text-cc-muted mt-1">Create a Linear agent to respond to @mentions in Linear issues.</p>
+                <button
+                  onClick={startLinearSetup}
+                  className="mt-3 px-3 py-1.5 text-xs rounded-lg bg-cc-primary text-white hover:bg-cc-primary-hover transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  <LinearLogo className="w-3 h-3" />
+                  Setup Linear Agent
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-cc-muted">No {FILTER_LABELS[activeFilter].toLowerCase()} agents</p>
+                <p className="text-xs text-cc-muted mt-1">
+                  {activeFilter === "scheduled" && "Create an agent with a schedule trigger to see it here."}
+                  {activeFilter === "webhook" && "Create an agent with a webhook trigger to see it here."}
+                </p>
+              </>
+            )}
+          </div>
         ) : (
           <div className="space-y-3">
-            {agents.map((agent) => (
+            {filteredAgents.map((agent) => (
               <AgentCard
                 key={agent.id}
                 agent={agent}

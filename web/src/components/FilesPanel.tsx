@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { EditorView } from "@codemirror/view";
-import type { Extension } from "@codemirror/state";
 import { api, type TreeNode } from "../api.js";
 import { useStore } from "../store.js";
 import { isImageFile, langForPath, relPath } from "./file-view-utils.js";
@@ -66,12 +65,12 @@ function TreeEntry({ node, depth, cwd, selectedPath, onSelect }: TreeEntryProps)
 
 function FileContentViewer({ content, filePath, darkMode }: { content: string; filePath: string; darkMode: boolean }) {
   const extensions = useMemo(() => {
-    const exts: Extension[] = [
+    const exts = [
       EditorView.lineWrapping,
       EditorView.contentAttributes.of({ "aria-label": "File content" }),
     ];
     const lang = langForPath(filePath);
-    if (lang) exts.push(lang);
+    if (lang) exts.push(lang as never);
     return exts;
   }, [filePath]);
 
@@ -327,5 +326,3 @@ export function FilesPanel({ sessionId }: FilesPanelProps) {
     </div>
   );
 }
-
-export default FilesPanel;

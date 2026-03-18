@@ -72,7 +72,7 @@ export const EMPTY_FORM: AgentFormData = {
   linearEnabled: false,
 };
 
-export const CRON_PRESETS: { label: string; value: string }[] = [
+const CRON_PRESETS: { label: string; value: string }[] = [
   { label: "Every hour", value: "0 * * * *" },
   { label: "Every day at 8am", value: "0 8 * * *" },
   { label: "Every day at noon", value: "0 12 * * *" },
@@ -82,7 +82,7 @@ export const CRON_PRESETS: { label: string; value: string }[] = [
 ];
 
 /** Count how many advanced features are configured */
-export function countAdvancedFeatures(form: AgentFormData): number {
+function countAdvancedFeatures(form: AgentFormData): number {
   let count = 0;
   if (Object.keys(form.mcpServers).length > 0) count++;
   if (form.skills.length > 0) count++;

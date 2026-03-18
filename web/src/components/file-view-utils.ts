@@ -1,4 +1,3 @@
-import type { Extension } from "@codemirror/state";
 import { javascript } from "@codemirror/lang-javascript";
 import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
@@ -22,7 +21,7 @@ export function isImageFile(filePath: string): boolean {
 }
 
 /** Map file extension to a CodeMirror language extension. */
-export function langForPath(filePath: string): Extension | null {
+export function langForPath(filePath: string): unknown {
   const ext = filePath.split(".").pop()?.toLowerCase();
   switch (ext) {
     case "js":

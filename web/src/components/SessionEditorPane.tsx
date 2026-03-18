@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { EditorView } from "@codemirror/view";
-import type { Extension } from "@codemirror/state";
 import { Fzf } from "fzf";
 import { api, type TreeNode } from "../api.js";
 import { useStore } from "../store.js";
@@ -133,9 +132,9 @@ export function SessionEditorPane({ sessionId }: SessionEditorPaneProps) {
   // CodeMirror extensions with language detection
   const extensions = useMemo(() => {
     if (!selectedPath) return [EditorView.lineWrapping];
-    const exts: Extension[] = [EditorView.lineWrapping];
+    const exts = [EditorView.lineWrapping];
     const lang = langForPath(selectedPath);
-    if (lang) exts.push(lang);
+    if (lang) exts.push(lang as never);
     return exts;
   }, [selectedPath]);
 

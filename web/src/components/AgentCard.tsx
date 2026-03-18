@@ -4,7 +4,7 @@ import { timeAgo } from "../utils/time-ago.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-export function humanizeSchedule(expression: string, recurring: boolean): string {
+function humanizeSchedule(expression: string, recurring: boolean): string {
   if (!recurring) return "One-time";
   const parts = expression.trim().split(/\s+/);
   if (parts.length !== 5) return expression;

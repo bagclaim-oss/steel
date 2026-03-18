@@ -56,50 +56,55 @@ export function ProjectGroup({
     : "";
 
   return (
-    <div className={!isFirst ? "mt-3 pt-3 border-t border-cc-separator" : ""}>
+    <div className={!isFirst ? "mt-4 pt-4 border-t border-cc-separator" : ""}>
       {/* Group header */}
       <button
         onClick={() => onToggleCollapse(group.key)}
         aria-expanded={!isCollapsed}
-        className="w-full px-2 py-1 flex items-center gap-1.5 hover:bg-cc-hover rounded-md transition-colors cursor-pointer group/header"
+        className="w-full px-2.5 py-2 flex items-center gap-2 hover:bg-cc-hover/70 rounded-xl transition-colors cursor-pointer group/header"
       >
         <svg
           viewBox="0 0 16 16"
           fill="currentColor"
-          className={`w-2 h-2 text-cc-muted/50 transition-transform duration-150 ${isCollapsed ? "" : "rotate-90"}`}
+          className={`w-2.5 h-2.5 text-cc-muted/50 transition-transform duration-150 ${isCollapsed ? "" : "rotate-90"}`}
         >
           <path d="M6 4l4 4-4 4" />
         </svg>
-        <span className="text-[11px] font-semibold text-cc-fg/60 truncate uppercase tracking-wide">
-          {group.label}
-        </span>
+        <div className="min-w-0 text-left">
+          <span className="text-[11px] font-semibold text-cc-fg/70 truncate uppercase tracking-[0.18em] block">
+            {group.label}
+          </span>
+          <span className="text-[10px] text-cc-muted/70">
+            {group.sessions.length} session{group.sessions.length === 1 ? "" : "s"}
+          </span>
+        </div>
 
         {/* Status dots */}
         <span className="flex items-center gap-1 ml-auto shrink-0">
           {group.runningCount > 0 && (
-            <span className="w-1 h-1 rounded-full bg-cc-success" title={`${group.runningCount} running`} />
+            <span className="w-1.5 h-1.5 rounded-full bg-cc-success" title={`${group.runningCount} running`} />
           )}
           {group.permCount > 0 && (
-            <span className="w-1 h-1 rounded-full bg-cc-warning" title={`${group.permCount} waiting`} />
+            <span className="w-1.5 h-1.5 rounded-full bg-cc-warning" title={`${group.permCount} waiting`} />
           )}
         </span>
 
         {/* Count badge */}
-        <span className="text-[10px] text-cc-muted/50 tabular-nums shrink-0">
+        <span className="rounded-full border border-cc-border bg-cc-bg/60 px-2 py-0.5 text-[10px] text-cc-muted/70 tabular-nums shrink-0">
           {group.sessions.length}
         </span>
       </button>
 
       {/* Collapsed preview */}
       {isCollapsed && collapsedPreview && (
-        <div className="text-[10px] text-cc-muted/70 truncate pl-5 pb-0.5">
+        <div className="text-[10px] text-cc-muted/70 truncate pl-7 pb-1">
           {collapsedPreview}
         </div>
       )}
 
       {/* Session list */}
       {!isCollapsed && (
-        <div className="mt-0.5">
+        <div className="mt-1 space-y-1">
           {group.sessions.map((s) => {
             const permCount = pendingPermissions.get(s.id)?.size ?? 0;
             return (

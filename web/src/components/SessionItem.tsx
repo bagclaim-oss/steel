@@ -60,6 +60,21 @@ function StatusDot({ status }: { status: DerivedStatus }) {
   }
 }
 
+function statusLabel(status: DerivedStatus): string {
+  switch (status) {
+    case "awaiting":
+      return "Awaiting";
+    case "running":
+      return "Running";
+    case "reconnecting":
+      return "Reconnecting";
+    case "idle":
+      return "Ready";
+    case "exited":
+      return "Exited";
+  }
+}
+
 function BackendBadge({ type }: { type: "claude" | "codex" }) {
   if (type === "codex") {
     return (
@@ -185,17 +200,17 @@ export function SessionItem({
             onStartRename(s.id, label);
           }
         }}
-        className={`w-full flex items-center gap-2 py-2 pl-2.5 pr-12 min-h-[44px] rounded-lg transition-all duration-100 cursor-pointer relative ${
+        className={`w-full flex items-center gap-3 py-3 pl-3 pr-14 min-h-[44px] rounded-xl border transition-all duration-150 cursor-pointer relative ${
           isActive
-            ? "bg-cc-active"
-            : "hover:bg-cc-hover"
+            ? "bg-cc-active border-cc-primary/20 shadow-[0_18px_40px_rgba(15,23,42,0.12)]"
+            : "border-transparent hover:border-cc-border hover:bg-cc-hover/70"
         }`}
       >
         {/* Left accent edge for active state */}
         <span
           aria-hidden
           className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-full transition-all duration-150 ${
-            isActive ? "h-5 bg-cc-primary" : "h-0 bg-transparent"
+            isActive ? "h-7 bg-cc-primary" : "h-0 bg-transparent"
           }`}
         />
 
@@ -228,32 +243,37 @@ export function SessionItem({
         ) : (
           <div className="flex-1 min-w-0">
             <span
-              className={`text-[12.5px] font-medium truncate block leading-snug ${
-                isActive ? "text-cc-fg" : "text-cc-fg/90"
+              className={`text-[12.5px] font-semibold truncate block leading-snug ${
+                isActive ? "text-cc-fg" : "text-cc-fg/95"
               } ${isRecentlyRenamed ? "animate-name-appear" : ""}`}
               onAnimationEnd={() => onClearRecentlyRenamed(s.id)}
             >
               {label}
             </span>
-            {cwdTail && (
-              <span className="text-[10px] text-cc-muted/70 truncate block leading-tight mt-px">
-                {cwdTail}
+            <div className="mt-1 flex items-center gap-2 min-w-0">
+              <span className="inline-flex items-center rounded-full border border-cc-border bg-cc-bg/55 px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.14em] text-cc-muted">
+                {statusLabel(derivedStatus)}
               </span>
-            )}
+              {cwdTail && (
+                <span className="text-[10px] text-cc-muted/75 truncate block leading-tight">
+                  {cwdTail}
+                </span>
+              )}
+            </div>
           </div>
         )}
 
         {/* Badges: backend type + Docker + Cron */}
         {!isEditing && (
-          <span className="flex items-center gap-1 shrink-0">
+          <span className="flex items-center gap-1.5 shrink-0">
             <BackendBadge type={s.backendType} />
             {s.isContainerized && (
-              <span className="flex items-center px-1 py-0.5 rounded bg-blue-400/10" title="Docker">
+              <span className="flex items-center rounded-full border border-blue-400/15 bg-blue-400/10 px-1.5 py-1" title="Docker">
                 <img src="/logo-docker.svg" alt="Docker logo" className="w-3 h-3" />
               </span>
             )}
             {s.cronJobId && (
-              <span className="flex items-center px-1 py-0.5 rounded bg-cc-primary/10" title="Scheduled">
+              <span className="flex items-center rounded-full border border-cc-primary/20 bg-cc-primary/10 px-1.5 py-1" title="Scheduled">
                 <svg viewBox="0 0 16 16" fill="currentColor" className="w-2.5 h-2.5 text-cc-primary">
                   <path d="M8 2a6 6 0 100 12A6 6 0 008 2zM0 8a8 8 0 1116 0A8 8 0 010 8zm9-3a1 1 0 10-2 0v3a1 1 0 00.293.707l2 2a1 1 0 001.414-1.414L9 7.586V5z" />
                 </svg>
@@ -270,7 +290,7 @@ export function SessionItem({
             e.stopPropagation();
             onArchive(e, s.id);
           }}
-          className="absolute right-7 top-1/2 -translate-y-1/2 p-1 rounded-md opacity-0 pointer-events-none sm:group-hover:opacity-100 sm:group-hover:pointer-events-auto hover:bg-cc-border text-cc-muted hover:text-cc-fg transition-all cursor-pointer"
+          className="absolute right-8 top-1/2 -translate-y-1/2 p-1.5 rounded-lg opacity-0 pointer-events-none sm:group-hover:opacity-100 sm:group-hover:pointer-events-auto hover:bg-cc-border text-cc-muted hover:text-cc-fg transition-all cursor-pointer"
           title="Archive"
           aria-label="Archive session"
         >
@@ -287,7 +307,7 @@ export function SessionItem({
           e.stopPropagation();
           setMenuOpen(!menuOpen);
         }}
-        className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-md opacity-100 pointer-events-auto sm:opacity-0 sm:pointer-events-none sm:group-hover:opacity-100 sm:group-hover:pointer-events-auto hover:bg-cc-border text-cc-muted hover:text-cc-fg transition-all cursor-pointer"
+        className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg opacity-100 pointer-events-auto sm:opacity-0 sm:pointer-events-none sm:group-hover:opacity-100 sm:group-hover:pointer-events-auto hover:bg-cc-border text-cc-muted hover:text-cc-fg transition-all cursor-pointer"
         title="Session actions"
         aria-label="Session actions"
         aria-haspopup="true"
@@ -306,7 +326,7 @@ export function SessionItem({
           ref={menuRef}
           role="menu"
           aria-label="Session actions"
-          className="absolute right-0 top-full mt-1 w-40 py-1 bg-cc-card border border-cc-border/80 rounded-lg shadow-xl z-10 animate-[menu-appear_150ms_ease-out]"
+          className="absolute right-0 top-full mt-2 w-44 py-1.5 bg-cc-card border border-cc-border/80 rounded-xl shadow-[0_24px_60px_rgba(15,23,42,0.2)] z-10 animate-[menu-appear_150ms_ease-out]"
         >
           {!archived && (
             <button

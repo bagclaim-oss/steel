@@ -482,32 +482,40 @@ export function Sidebar() {
   };
 
   return (
-    <aside aria-label="Session sidebar" className="w-full md:w-[260px] h-full flex flex-col bg-cc-sidebar">
+    <aside aria-label="Session sidebar" className="w-full md:w-[260px] h-full flex flex-col bg-transparent text-cc-fg">
       {/* Header */}
-      <div className="p-3.5 pb-2">
-        <div className="flex items-center gap-2.5">
-          <img src={logoSrc} alt="" className="w-6 h-6" />
-          <span className="text-[13px] font-semibold text-cc-fg tracking-tight">The Companion</span>
+      <div className="px-4 pt-4 pb-3">
+        <div className="rounded-[24px] border border-cc-border bg-cc-card/80 px-3.5 py-3 shadow-[0_18px_40px_rgba(15,23,42,0.1)]">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-cc-primary/12 ring-1 ring-cc-primary/18">
+              <img src={logoSrc} alt="" className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <span className="block truncate text-[13px] font-semibold text-cc-fg tracking-tight">The Companion</span>
+              <span className="block truncate text-[10px] uppercase tracking-[0.18em] text-cc-muted">AI workspace</span>
+            </div>
           <button
             onClick={handleNewSession}
             title="New Session"
             aria-label="New Session"
-            className="ml-auto hidden md:flex w-8 h-8 rounded-lg bg-cc-primary hover:bg-cc-primary-hover text-white items-center justify-center transition-colors duration-150 cursor-pointer"
+            className="ml-auto hidden md:flex h-9 rounded-xl bg-cc-primary hover:bg-cc-primary-hover text-white items-center justify-center gap-1.5 px-3 transition-colors duration-150 cursor-pointer shadow-[0_16px_32px_rgba(217,119,87,0.26)]"
           >
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-3.5 h-3.5">
               <path d="M8 3v10M3 8h10" />
             </svg>
+            <span className="text-[12px] font-medium">New</span>
           </button>
           {/* Close button — mobile only (sidebar is full-width on mobile, so no backdrop to tap) */}
           <button
             onClick={() => useStore.getState().setSidebarOpen(false)}
             aria-label="Close sidebar"
-            className="md:hidden ml-auto w-8 h-8 rounded-lg flex items-center justify-center text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
+            className="md:hidden ml-auto w-9 h-9 rounded-xl flex items-center justify-center text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
           >
             <svg viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
               <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z" />
             </svg>
           </button>
+        </div>
         </div>
       </div>
 
@@ -542,9 +550,9 @@ export function Sidebar() {
       )}
 
       {/* Session list */}
-      <div className="flex-1 overflow-y-auto px-2.5 pb-2">
+      <div className="flex-1 overflow-y-auto px-3 pb-3">
         {activeSessions.length === 0 && cronSessions.length === 0 && archivedSessions.length === 0 ? (
-          <p className="px-3 py-8 text-xs text-cc-muted text-center leading-relaxed">
+          <p className="rounded-[22px] border border-dashed border-cc-border bg-cc-card/50 px-4 py-10 text-xs text-cc-muted text-center leading-relaxed">
             No sessions yet.
           </p>
         ) : (
@@ -565,7 +573,7 @@ export function Sidebar() {
             ))}
 
             {cronSessions.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-cc-separator">
+              <div className="mt-4 pt-4 border-t border-cc-separator">
                 <button
                   onClick={() => setShowCronSessions(!showCronSessions)}
                   aria-expanded={showCronSessions}
@@ -595,7 +603,7 @@ export function Sidebar() {
             )}
 
             {agentSessions.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-cc-separator">
+              <div className="mt-4 pt-4 border-t border-cc-separator">
                 <button
                   onClick={() => setShowAgentSessions(!showAgentSessions)}
                   aria-expanded={showAgentSessions}
@@ -625,7 +633,7 @@ export function Sidebar() {
             )}
 
             {archivedSessions.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-cc-separator">
+              <div className="mt-4 pt-4 border-t border-cc-separator">
                 <div className="flex items-center">
                   <button
                     onClick={() => setShowArchived(!showArchived)}
@@ -670,12 +678,12 @@ export function Sidebar() {
       </div>
 
       {/* Mobile FAB — New Session button in thumb zone */}
-      <div className="md:hidden flex justify-end px-4 pb-2">
+      <div className="md:hidden flex justify-end px-4 pb-3">
         <button
           onClick={handleNewSession}
           title="New Session"
           aria-label="New Session"
-          className="w-12 h-12 rounded-full bg-cc-primary hover:bg-cc-primary-hover text-white flex items-center justify-center shadow-lg transition-colors duration-150 cursor-pointer"
+          className="w-12 h-12 rounded-full bg-cc-primary hover:bg-cc-primary-hover text-white flex items-center justify-center shadow-[0_20px_40px_rgba(217,119,87,0.26)] transition-colors duration-150 cursor-pointer"
         >
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-5 h-5">
             <path d="M8 3v10M3 8h10" />
@@ -684,11 +692,11 @@ export function Sidebar() {
       </div>
 
       {/* Footer */}
-      <div className="px-2 py-1.5 pb-safe bg-cc-sidebar-footer border-t border-cc-border/30">
+      <div className="px-3 py-2 pb-safe border-t border-cc-border/40 bg-cc-sidebar-footer/70 backdrop-blur">
         <nav className="flex flex-col gap-1.5" aria-label="Navigation">
           {NAV_SECTIONS.map((section) => (
-            <section key={section.id} className="rounded-lg border border-cc-border/30 bg-cc-card/20 p-0.5">
-              <span className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-cc-muted/75 block">
+            <section key={section.id} className="rounded-[20px] border border-cc-border/40 bg-cc-card/45 p-1 shadow-[0_12px_28px_rgba(15,23,42,0.08)]">
+              <span className="px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-cc-muted/75 block">
                 {section.label}
               </span>
               <div className="flex flex-col">
@@ -713,7 +721,7 @@ export function Sidebar() {
                       }}
                       title={item.label}
                       aria-current={isActive ? "page" : undefined}
-                      className={`group flex min-h-[44px] md:min-h-[34px] w-full items-center gap-2 rounded-md px-2 py-1 md:py-0.5 text-left transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cc-primary/60 ${
+                      className={`group flex min-h-[44px] md:min-h-[38px] w-full items-center gap-2 rounded-xl px-2.5 py-1.5 md:py-1 text-left transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cc-primary/60 ${
                         isActive
                           ? "bg-cc-active text-cc-fg"
                           : "text-cc-muted hover:text-cc-fg hover:bg-cc-hover"
@@ -736,7 +744,7 @@ export function Sidebar() {
             </section>
           ))}
         </nav>
-        <div className="mt-1.5 rounded-lg border border-cc-border/30 bg-cc-card/20 px-1.5 py-0.5">
+        <div className="mt-1.5 rounded-[20px] border border-cc-border/40 bg-cc-card/45 px-2 py-1 shadow-[0_12px_28px_rgba(15,23,42,0.08)]">
           <div className="flex items-center justify-between">
             <span className="px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-cc-muted/75">
               Resources

@@ -14,12 +14,12 @@ export function ToolExecutionBar({
 
   return (
     <div
-      className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-mono-code pl-10 py-1.5 animate-[fadeSlideIn_0.3s_ease-out]"
+      className="ml-10 inline-flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[18px] border border-cc-border bg-cc-card/72 px-3 py-2 text-[11px] font-mono-code animate-[fadeSlideIn_0.3s_ease-out]"
       role="status"
       aria-label={`${tools.length} tool${tools.length > 1 ? "s" : ""} running`}
     >
       {tools.map((tool, i) => (
-        <span key={i} className="inline-flex items-center gap-1.5">
+        <span key={i} className="inline-flex items-center gap-1.5 rounded-full bg-cc-bg/72 px-2.5 py-1">
           <span className="relative flex items-center justify-center w-3.5 h-3.5">
             <ToolIcon type={getToolIcon(tool.toolName)} />
             {/* Pulsing ring behind the icon */}

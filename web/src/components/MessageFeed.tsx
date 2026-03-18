@@ -848,10 +848,10 @@ export function MessageFeed({ sessionId }: { sessionId: string }) {
 
   if (mergedMessages.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-5 select-none px-6">
+      <div className="flex-1 flex flex-col items-center justify-center gap-6 select-none px-6">
         {/* Animated sparkle icon */}
         <div className="relative">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cc-primary/10 to-cc-primary/5 border border-cc-primary/15 flex items-center justify-center shadow-[0_4px_20px_rgba(217,119,87,0.08)]">
+          <div className="w-18 h-18 rounded-[26px] bg-gradient-to-br from-cc-primary/14 to-cc-info/8 border border-cc-primary/15 flex items-center justify-center shadow-[0_24px_60px_rgba(15,23,42,0.16)]">
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -869,7 +869,7 @@ export function MessageFeed({ sessionId }: { sessionId: string }) {
             </svg>
           </div>
         </div>
-        <div className="text-center max-w-xs">
+        <div className="max-w-sm rounded-[28px] border border-cc-border bg-cc-card/78 px-6 py-6 text-center shadow-[0_24px_64px_rgba(15,23,42,0.12)]">
           {canLoadResumeHistory ? (
             <>
               <p className="text-sm text-cc-fg font-medium mb-1.5">
@@ -885,7 +885,7 @@ export function MessageFeed({ sessionId }: { sessionId: string }) {
                   void loadResumeHistoryPage({ preserveScroll: false })
                 }
                 disabled={resumeHistoryLoading}
-                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-cc-fg bg-cc-card border border-cc-border rounded-xl hover:bg-cc-hover hover:border-cc-primary/20 transition-all disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-cc-fg bg-cc-bg border border-cc-border rounded-xl hover:bg-cc-hover hover:border-cc-primary/20 transition-all disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer shadow-[0_12px_24px_rgba(15,23,42,0.08)]"
               >
                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
                   <path d="M8 2v12M3 9l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
@@ -916,21 +916,21 @@ export function MessageFeed({ sessionId }: { sessionId: string }) {
   return (
     <div className="flex-1 min-h-0 relative overflow-hidden">
       {/* Top fade — softens the scroll edge under the top bar */}
-      <div className="pointer-events-none absolute top-0 inset-x-0 h-6 bg-gradient-to-b from-cc-bg to-transparent z-10" />
+      <div className="pointer-events-none absolute top-0 inset-x-0 h-10 bg-gradient-to-b from-cc-card via-cc-bg/80 to-transparent z-10" />
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain px-4 sm:px-6 py-5 sm:py-8"
+        className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain px-4 sm:px-6 py-6 sm:py-8"
       >
-        <div className="max-w-3xl mx-auto space-y-5 sm:space-y-7">
+        <div className="max-w-[860px] mx-auto space-y-6 sm:space-y-8">
           {canLoadResumeHistory && !resumeHistoryLoaded && (
-            <div className="rounded-xl border border-cc-border bg-cc-card p-3">
+            <div className="rounded-[24px] border border-cc-border bg-cc-card/80 p-4 shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-medium text-cc-fg">
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-cc-muted">
                     {resumeModeLabel} existing Claude thread
                   </p>
-                  <p className="text-[11px] text-cc-muted mt-1">
+                  <p className="text-[12px] text-cc-fg mt-1 font-medium">
                     {resumeSourceSessionId}{" "}
                     {sdkSession?.cwd
                       ? `· ${formatResumeSourcePath(sdkSession.cwd)}`
@@ -942,7 +942,7 @@ export function MessageFeed({ sessionId }: { sessionId: string }) {
                     void loadResumeHistoryPage({ preserveScroll: true })
                   }
                   disabled={resumeHistoryLoading}
-                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-cc-fg bg-cc-card border border-cc-border rounded-lg hover:bg-cc-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-cc-fg bg-cc-bg border border-cc-border rounded-xl hover:bg-cc-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {resumeHistoryLoading
                     ? "Loading..."
@@ -959,7 +959,7 @@ export function MessageFeed({ sessionId }: { sessionId: string }) {
 
           {canLoadResumeHistory && resumeHistoryLoaded && (
             <div className="flex justify-center">
-              <p className="text-[11px] text-cc-muted">
+              <p className="rounded-full border border-cc-border bg-cc-card/72 px-3 py-1.5 text-[11px] text-cc-muted">
                 {resumeHistoryHasMore
                   ? resumeHistoryLoading
                     ? "Loading older transcript..."
@@ -973,7 +973,7 @@ export function MessageFeed({ sessionId }: { sessionId: string }) {
             <div className="flex justify-center pb-3">
               <button
                 onClick={handleLoadMore}
-                className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-cc-muted hover:text-cc-fg bg-cc-card border border-cc-border rounded-xl hover:bg-cc-hover hover:border-cc-primary/20 transition-all cursor-pointer shadow-[0_2px_6px_rgba(0,0,0,0.03)]"
+                className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-cc-muted hover:text-cc-fg bg-cc-card border border-cc-border rounded-xl hover:bg-cc-hover hover:border-cc-primary/20 transition-all cursor-pointer shadow-[0_14px_28px_rgba(15,23,42,0.08)]"
               >
                 <svg
                   viewBox="0 0 16 16"
@@ -998,7 +998,7 @@ export function MessageFeed({ sessionId }: { sessionId: string }) {
 
           {/* Compacting context indicator */}
           {sessionStatus === "compacting" && (
-            <div className="flex items-center gap-2 text-[11px] text-cc-warning font-mono-code pl-10 py-1">
+            <div className="ml-10 inline-flex items-center gap-2 rounded-full border border-cc-warning/20 bg-cc-warning/8 px-3 py-1.5 text-[11px] text-cc-warning font-mono-code">
               <svg
                 className="w-3.5 h-3.5 animate-spin shrink-0"
                 viewBox="0 0 16 16"
@@ -1015,7 +1015,7 @@ export function MessageFeed({ sessionId }: { sessionId: string }) {
 
           {/* Generation stats bar */}
           {sessionStatus === "running" && elapsed > 0 && (
-            <div className="flex items-center gap-2 text-[11px] text-cc-muted font-mono-code pl-10 stats-glow py-1">
+            <div className="ml-10 inline-flex items-center gap-2 rounded-full border border-cc-border bg-cc-card/72 px-3 py-1.5 text-[11px] text-cc-muted font-mono-code stats-glow">
               <span className="inline-block w-2 h-2 rounded-full bg-cc-primary animate-[typing-breathe_1.5s_ease-in-out_infinite]" />
               <span className="text-cc-fg/70">Generating</span>
               <span className="text-cc-muted/30">|</span>

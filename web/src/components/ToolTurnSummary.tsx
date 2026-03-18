@@ -28,7 +28,7 @@ export function ToolTurnSummary({
     <div className="pl-10 pr-4 animate-[fadeSlideIn_0.3s_ease-out]">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="group flex items-center gap-2 text-[11px] text-cc-muted hover:text-cc-fg/80 transition-colors cursor-pointer py-1 w-full"
+        className="group flex w-full items-center gap-2 rounded-[18px] border border-cc-border bg-cc-card/62 px-3 py-2 text-[11px] text-cc-muted hover:text-cc-fg/80 transition-colors cursor-pointer"
         aria-expanded={expanded}
         aria-label={`${entries.length} tools executed in ${stats.totalTime.toFixed(1)}s`}
       >
@@ -88,7 +88,7 @@ export function ToolTurnSummary({
 
       {/* Expanded detail */}
       {expanded && (
-        <div className="mt-1 mb-2 space-y-1 animate-[fadeSlideIn_0.2s_ease-out]">
+        <div className="mt-2 mb-2 space-y-1 rounded-[18px] border border-cc-border bg-cc-bg/58 px-3 py-3 animate-[fadeSlideIn_0.2s_ease-out]">
           {entries.map((entry) => (
             <ToolActivityRow key={entry.toolUseId} entry={entry} maxTime={stats.maxTime} />
           ))}

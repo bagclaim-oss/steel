@@ -482,6 +482,9 @@ export class LinearAgentBridge {
           refreshToken: conn.refreshToken,
         };
       }
+      console.warn(
+        `[linear-agent-bridge] OAuth connection "${linear.oauthConnectionId}" referenced by agent not found — credentials will be empty`,
+      );
     }
 
     // Legacy fallback: inline credentials

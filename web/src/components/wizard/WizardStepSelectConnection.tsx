@@ -26,6 +26,7 @@ export function WizardStepSelectConnection({
     api.listLinearOAuthConnections()
       .then((result) => {
         setConnections(result.connections);
+        setError(""); // Clear any previous error on successful fetch
         // Auto-select if only one connection or if a pre-selected ID is valid
         if (selectedConnectionId) {
           const exists = result.connections.some(c => c.id === selectedConnectionId);

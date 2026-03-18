@@ -63,11 +63,12 @@ export function LinearOAuthSettingsPage({ embedded = false }: LinearOAuthSetting
     loadAgents();
 
     // Check for OAuth callback success/error in URL hash
+    let timerId: ReturnType<typeof setTimeout> | undefined;
     const hash = window.location.hash;
     if (hash.includes("oauth_success=true")) {
       setOauthBanner({ type: "success", message: "OAuth app connected to workspace successfully!" });
       window.location.hash = "#/integrations/linear-oauth";
-      setTimeout(() => setOauthBanner(null), 5000);
+      timerId = setTimeout(() => setOauthBanner(null), 5000);
     } else if (hash.includes("oauth_error=")) {
       const match = hash.match(/oauth_error=([^&]*)/);
       let errorMsg: string;
@@ -79,6 +80,10 @@ export function LinearOAuthSettingsPage({ embedded = false }: LinearOAuthSetting
       setOauthBanner({ type: "error", message: errorMsg });
       window.location.hash = "#/integrations/linear-oauth";
     }
+
+    return () => {
+      if (timerId) clearTimeout(timerId);
+    };
   }, [loadConnections, loadAgents]);
 
   // ---- Add connection -------------------------------------------------------

@@ -30,14 +30,12 @@ function sanitizeAgent(agent: AgentConfig & { nextRunAt?: number | null }): Reco
   if (!agent.triggers?.linear) return agent as unknown as Record<string, unknown>;
   const { oauthClientSecret, webhookSecret, accessToken, refreshToken, ...safeLinear } = agent.triggers.linear;
 
-  // Resolve connection info for display
-  let oauthConnectionName: string | undefined;
-  let oauthConnectionStatus: string | undefined;
-  if (safeLinear.oauthConnectionId) {
-    const conn = getOAuthConnection(safeLinear.oauthConnectionId);
-    oauthConnectionName = conn?.name;
-    oauthConnectionStatus = conn?.status;
-  }
+  // Resolve connection info for display and flag derivation
+  const conn = safeLinear.oauthConnectionId
+    ? getOAuthConnection(safeLinear.oauthConnectionId)
+    : null;
+  const oauthConnectionName = conn?.name;
+  const oauthConnectionStatus = conn?.status;
 
   return {
     ...agent,
@@ -46,8 +44,8 @@ function sanitizeAgent(agent: AgentConfig & { nextRunAt?: number | null }): Reco
       linear: {
         ...safeLinear,
         hasAccessToken: !!(accessToken || oauthConnectionStatus === "connected"),
-        hasClientSecret: !!oauthClientSecret,
-        hasWebhookSecret: !!webhookSecret,
+        hasClientSecret: !!(oauthClientSecret || conn?.oauthClientSecret),
+        hasWebhookSecret: !!(webhookSecret || conn?.webhookSecret),
         oauthConnectionName,
         oauthConnectionStatus,
       },

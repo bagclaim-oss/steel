@@ -11,11 +11,10 @@ import * as agentStore from "../agent-store.js";
 import * as linearAgent from "../linear-agent.js";
 import { getSettings } from "../settings-manager.js";
 
-/** Find agents referencing a given OAuth connection ID. */
+/** Find agents referencing a given OAuth connection ID (includes disabled agents). */
 function findAgentsUsingConnection(connectionId: string) {
   return agentStore.listAgents().filter(
-    (a) => a.enabled && a.triggers?.linear?.enabled
-      && a.triggers.linear.oauthConnectionId === connectionId,
+    (a) => a.triggers?.linear?.oauthConnectionId === connectionId,
   );
 }
 
@@ -40,6 +39,12 @@ export function registerLinearOAuthConnectionRoutes(api: Hono): void {
     if (!oauthClientId) return c.json({ error: "oauthClientId is required" }, 400);
     if (!oauthClientSecret) return c.json({ error: "oauthClientSecret is required" }, 400);
     if (!webhookSecret) return c.json({ error: "webhookSecret is required" }, 400);
+
+    // Guard: prevent duplicate oauthClientId — webhook routing uses findByClientId
+    const duplicate = listOAuthConnections().find((conn) => conn.oauthClientId === oauthClientId);
+    if (duplicate) {
+      return c.json({ error: "A connection with this OAuth client ID already exists" }, 409);
+    }
 
     const conn = createOAuthConnection({ name, oauthClientId, oauthClientSecret, webhookSecret });
     return c.json({ connection: sanitizeOAuthConnection(conn) }, 201);

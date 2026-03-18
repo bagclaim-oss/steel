@@ -9,10 +9,8 @@ interface IntegrationsPageProps {
 }
 
 export function IntegrationsPage({ embedded = false }: IntegrationsPageProps) {
-  const [linearConfigured, setLinearConfigured] = useState(false);
   const [linearConnected, setLinearConnected] = useState(false);
   const [linearViewerLabel, setLinearViewerLabel] = useState("");
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [tailscaleStatus, setTailscaleStatus] = useState<TailscaleStatus | null>(null);
   const [linearAgents, setLinearAgents] = useState<AgentInfo[]>([]);
@@ -27,7 +25,6 @@ export function IntegrationsPage({ embedded = false }: IntegrationsPageProps) {
     // Load Linear integration status
     api.getSettings()
       .then((settings) => {
-        setLinearConfigured(settings.linearApiKeyConfigured);
         if (!settings.linearApiKeyConfigured) return;
         return api.getLinearConnection().then((info) => {
           setLinearConnected(info.connected);
@@ -36,8 +33,7 @@ export function IntegrationsPage({ embedded = false }: IntegrationsPageProps) {
           setLinearViewerLabel(`${label}${team}`);
         });
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false));
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
 
     // Load Linear agents
     api.listAgents()
@@ -46,14 +42,6 @@ export function IntegrationsPage({ embedded = false }: IntegrationsPageProps) {
       })
       .catch(() => {});
   }, []);
-
-  const linearStatus = loading
-    ? "Checking..."
-    : linearConnected
-      ? "Connected"
-      : linearConfigured
-        ? "Needs verification"
-        : "Not connected";
 
   return (
     <div className={`${embedded ? "h-full" : "h-[100dvh]"} bg-cc-bg text-cc-fg font-sans-ui antialiased overflow-y-auto`}>

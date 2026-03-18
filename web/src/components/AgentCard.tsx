@@ -157,13 +157,22 @@ export function AgentCard({
             </span>
           ))}
           {agent.triggers?.webhook?.enabled && (
-            <button
-              onClick={onCopyWebhook}
-              className="px-2 py-0.5 text-[10px] rounded-full bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors cursor-pointer"
-              title="Copy webhook URL"
-            >
-              {copiedWebhook === agent.id ? "Copied!" : "Copy URL"}
-            </button>
+            <>
+              <button
+                onClick={onCopyWebhook}
+                className="px-2 py-0.5 text-[10px] rounded-full bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors cursor-pointer"
+                title={`Copy webhook URL (${publicUrl || "current origin"})`}
+              >
+                {copiedWebhook === agent.id ? "Copied!" : "Copy URL"}
+              </button>
+              <button
+                onClick={onRegenerateSecret}
+                className="px-2 py-0.5 text-[10px] rounded-full bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 transition-colors cursor-pointer"
+                title="Regenerate webhook secret"
+              >
+                Regen Secret
+              </button>
+            </>
           )}
         </div>
         <div className="flex items-center gap-3 text-[10px] text-cc-muted">

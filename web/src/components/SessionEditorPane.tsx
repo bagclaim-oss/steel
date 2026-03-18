@@ -17,14 +17,10 @@ import { yaml } from "@codemirror/lang-yaml";
 import { Fzf } from "fzf";
 import { api, type TreeNode } from "../api.js";
 import { useStore } from "../store.js";
+import { isImageFile, relPath } from "./file-view-utils.js";
 
-const IMAGE_EXTENSIONS = new Set([
-  "png", "jpg", "jpeg", "gif", "webp", "svg", "avif", "ico", "bmp", "tiff", "tif",
-]);
-
-function isImageFile(filePath: string): boolean {
-  const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
-  return IMAGE_EXTENSIONS.has(ext);
+interface SessionEditorPaneProps {
+  sessionId: string;
 }
 
 /** Map file extension to a CodeMirror language extension. */
@@ -89,15 +85,6 @@ function langForPath(filePath: string): Extension | null {
     default:
       return null;
   }
-}
-
-interface SessionEditorPaneProps {
-  sessionId: string;
-}
-
-function relPath(cwd: string, path: string): string {
-  if (path.startsWith(`${cwd}/`)) return path.slice(cwd.length + 1);
-  return path;
 }
 
 /** Flatten a tree of nodes into a list of file entries with relative paths. */

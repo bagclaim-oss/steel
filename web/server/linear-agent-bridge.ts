@@ -476,25 +476,6 @@ export class LinearAgentBridge {
     };
   }
 
-  /** Create a callback that persists refreshed tokens back to the agent config. */
-  private createTokenRefreshCallback(agentId: string): (tokens: { accessToken: string; refreshToken: string }) => void {
-    return (tokens) => {
-      const agent = agentStore.getAgent(agentId);
-      if (agent?.triggers?.linear) {
-        agentStore.updateAgent(agentId, {
-          triggers: {
-            ...agent.triggers,
-            linear: {
-              ...agent.triggers.linear,
-              accessToken: tokens.accessToken,
-              refreshToken: tokens.refreshToken,
-            },
-          },
-        });
-      }
-    };
-  }
-
   /** Find the agent configured for a specific Linear OAuth client ID. */
   private findLinearAgentByClientId(oauthClientId: string | undefined): AgentConfig | null {
     if (!oauthClientId) return null;

@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { Hono } from "hono";
 import * as agentStore from "../agent-store.js";
 import type { AgentExecutor } from "../agent-executor.js";
-import type { AgentConfig, AgentConfigExport } from "../agent-types.js";
+import type { AgentConfig, AgentConfigCreateInput, AgentConfigExport } from "../agent-types.js";
 import { getSettings, updateSettings } from "../settings-manager.js";
 import * as staging from "../linear-staging.js";
 
@@ -22,6 +22,35 @@ function pickEditable(body: Record<string, unknown>): Partial<AgentConfig> {
     if (key in body) result[key] = body[key];
   }
   return result as Partial<AgentConfig>;
+}
+
+function buildCreateInput(
+  body: Record<string, unknown>,
+  overrides?: Partial<Pick<AgentConfigCreateInput, "enabled">>,
+): AgentConfigCreateInput {
+  return {
+    version: 1,
+    name: (body.name as string | undefined) || "",
+    description: (body.description as string | undefined) || "",
+    icon: body.icon as string | undefined,
+    backendType: (body.backendType as AgentConfig["backendType"] | undefined) || "claude",
+    model: (body.model as string | undefined) || "",
+    permissionMode: (body.permissionMode as string | undefined) || "bypassPermissions",
+    cwd: (body.cwd as string | undefined) || "",
+    envSlug: body.envSlug as string | undefined,
+    env: body.env as Record<string, string> | undefined,
+    allowedTools: body.allowedTools as string[] | undefined,
+    codexInternetAccess: body.codexInternetAccess as boolean | undefined,
+    prompt: (body.prompt as string | undefined) || "",
+    mcpServers: body.mcpServers as AgentConfig["mcpServers"] | undefined,
+    skills: body.skills as string[] | undefined,
+    container: body.container as AgentConfig["container"] | undefined,
+    branch: body.branch as string | undefined,
+    createBranch: body.createBranch as boolean | undefined,
+    useWorktree: body.useWorktree as boolean | undefined,
+    triggers: body.triggers as AgentConfig["triggers"] | undefined,
+    enabled: overrides?.enabled ?? ((body.enabled as boolean | undefined) ?? true),
+  };
 }
 
 /** Strip sensitive Linear OAuth credentials before sending to the browser */
@@ -90,29 +119,7 @@ export function registerAgentRoutes(
   api.post("/agents", async (c) => {
     const body = await c.req.json().catch(() => ({}));
     try {
-      const agent = agentStore.createAgent({
-        version: 1,
-        name: body.name || "",
-        description: body.description || "",
-        icon: body.icon,
-        backendType: body.backendType || "claude",
-        model: body.model || "",
-        permissionMode: body.permissionMode || "bypassPermissions",
-        cwd: body.cwd || "",
-        envSlug: body.envSlug,
-        env: body.env,
-        allowedTools: body.allowedTools,
-        codexInternetAccess: body.codexInternetAccess,
-        prompt: body.prompt || "",
-        mcpServers: body.mcpServers,
-        skills: body.skills,
-        container: body.container,
-        branch: body.branch,
-        createBranch: body.createBranch,
-        useWorktree: body.useWorktree,
-        triggers: body.triggers,
-        enabled: body.enabled ?? true,
-      });
+      const agent = agentStore.createAgent(buildCreateInput(body));
 
       // If this is a Linear agent with no credentials, resolve from:
       // 1. Staging slot (new per-wizard flow)
@@ -290,29 +297,9 @@ export function registerAgentRoutes(
     const body = await c.req.json().catch(() => ({}));
     try {
       // Accept an exported agent JSON and create a new agent from it
-      const agent = agentStore.createAgent({
-        version: body.version || 1,
-        name: body.name || "",
-        description: body.description || "",
-        icon: body.icon,
-        backendType: body.backendType || "claude",
-        model: body.model || "",
-        permissionMode: body.permissionMode || "bypassPermissions",
-        cwd: body.cwd || "",
-        envSlug: body.envSlug,
-        env: body.env,
-        allowedTools: body.allowedTools,
-        codexInternetAccess: body.codexInternetAccess,
-        prompt: body.prompt || "",
-        mcpServers: body.mcpServers,
-        skills: body.skills,
-        container: body.container,
-        branch: body.branch,
-        createBranch: body.createBranch,
-        useWorktree: body.useWorktree,
-        triggers: body.triggers,
+      const agent = agentStore.createAgent(buildCreateInput(body, {
         enabled: false, // Imported agents start disabled for safety
-      });
+      }));
       return c.json(sanitizeAgent({ ...agent, nextRunAt: null }), 201);
     } catch (e: unknown) {
       return c.json({ error: e instanceof Error ? e.message : String(e) }, 400);

@@ -215,6 +215,41 @@ describe("POST /linear/agent-webhook", () => {
       expect.stringContaining("No agent found for oauthClientId"),
     );
   });
+
+  it("sanitizes user-controlled fields before logging webhook diagnostics", async () => {
+    vi.mocked(agentStore.listAgents).mockReturnValue([]);
+
+    const maliciousPayload = {
+      ...validPayload,
+      action: "created\nforged",
+      oauthClientId: "evil\n[linear-agent-routes] Accepted AgentSessionEvent",
+      agentSession: {
+        ...validPayload.agentSession,
+        id: "session-123\tforged",
+      },
+    };
+
+    const res = await app.request("/linear/agent-webhook", {
+      method: "POST",
+      body: JSON.stringify(maliciousPayload),
+      headers: { "Content-Type": "application/json", "linear-signature": "valid-sig" },
+    });
+
+    expect(res.status).toBe(404);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "[linear-agent-routes] No agent found for oauthClientId: evil_[linear-agent-routes] Accepted AgentSessionEvent action=created_forged sessionId=session-123_forged",
+    );
+  });
+});
+
+describe("console spy cleanup", () => {
+  it("restores console spies before later describe blocks run", () => {
+    // Regression test: webhook tests install console spies, but later describes
+    // should still see the original console implementations.
+    expect(vi.isMockFunction(console.log)).toBe(false);
+    expect(vi.isMockFunction(console.warn)).toBe(false);
+    expect(vi.isMockFunction(console.error)).toBe(false);
+  });
 });
 
 // ─── OAuth callback tests ───────────────────────────────────────────────────
@@ -225,14 +260,6 @@ describe("GET /linear/oauth/callback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ({ app } = createApp());
-  });
-
-  it("restores console spies before later describe blocks run", () => {
-    // Regression test: webhook tests install console spies, but later describes
-    // should still see the original console implementations.
-    expect(vi.isMockFunction(console.log)).toBe(false);
-    expect(vi.isMockFunction(console.warn)).toBe(false);
-    expect(vi.isMockFunction(console.error)).toBe(false);
   });
 
   it("redirects with error when error parameter is present", async () => {

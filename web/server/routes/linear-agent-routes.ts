@@ -13,6 +13,10 @@ import * as staging from "../linear-staging.js";
 import { getSettings, updateSettings } from "../settings-manager.js";
 import { findOAuthConnectionByClientId } from "../linear-oauth-connections.js";
 
+function sanitizeLogField(value: string | undefined): string {
+  return (value || "unknown").replace(/[\r\n\t]/g, "_").slice(0, 128);
+}
+
 /**
  * Register the Linear Agent SDK pre-auth routes (before auth middleware).
  * Includes the webhook (HMAC-SHA256 verified) and the OAuth callback
@@ -40,9 +44,9 @@ export function registerLinearAgentWebhookRoute(
       return c.json({ ok: true, ignored: true });
     }
 
-    const action = payload.action || "unknown";
-    const oauthClientId = payload.oauthClientId || "unknown";
-    const linearSessionId = payload.agentSession?.id || "unknown";
+    const action = sanitizeLogField(payload.action);
+    const oauthClientId = sanitizeLogField(payload.oauthClientId);
+    const linearSessionId = sanitizeLogField(payload.agentSession?.id);
 
     // Look up credentials: first try OAuth connection (new model), then inline (legacy)
     const oauthConn = payload.oauthClientId ? findOAuthConnectionByClientId(payload.oauthClientId) : null;

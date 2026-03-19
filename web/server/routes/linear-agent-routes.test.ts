@@ -2,7 +2,7 @@
 // Covers webhook signature verification, event dispatch, OAuth callback,
 // authorization URL generation, status endpoint, and disconnect flow.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Hono } from "hono";
 
 // Mock linear-agent module
@@ -105,6 +105,10 @@ describe("POST /linear/agent-webhook", () => {
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     ({ app, bridge } = createApp());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("returns 401 when webhook signature is invalid", async () => {
@@ -221,6 +225,14 @@ describe("GET /linear/oauth/callback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     ({ app } = createApp());
+  });
+
+  it("restores console spies before later describe blocks run", () => {
+    // Regression test: webhook tests install console spies, but later describes
+    // should still see the original console implementations.
+    expect(vi.isMockFunction(console.log)).toBe(false);
+    expect(vi.isMockFunction(console.warn)).toBe(false);
+    expect(vi.isMockFunction(console.error)).toBe(false);
   });
 
   it("redirects with error when error parameter is present", async () => {

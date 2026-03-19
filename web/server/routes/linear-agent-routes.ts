@@ -40,6 +40,10 @@ export function registerLinearAgentWebhookRoute(
       return c.json({ ok: true, ignored: true });
     }
 
+    const action = payload.action || "unknown";
+    const oauthClientId = payload.oauthClientId || "unknown";
+    const linearSessionId = payload.agentSession?.id || "unknown";
+
     // Look up credentials: first try OAuth connection (new model), then inline (legacy)
     const oauthConn = payload.oauthClientId ? findOAuthConnectionByClientId(payload.oauthClientId) : null;
     let webhookSecret: string;
@@ -62,12 +66,21 @@ export function registerLinearAgentWebhookRoute(
     }
 
     if (!agent) {
-      console.error(`[linear-agent-routes] No agent found for oauthClientId: ${payload.oauthClientId}`);
+      console.error(
+        `[linear-agent-routes] No agent found for oauthClientId: ${oauthClientId} action=${action} sessionId=${linearSessionId}`,
+      );
       return c.json({ error: "No agent configured for this OAuth client" }, 404);
     }
     if (!linearAgent.verifyWebhookSignature(webhookSecret, rawBody, signature ?? null)) {
+      console.warn(
+        `[linear-agent-routes] Invalid webhook signature for oauthClientId: ${oauthClientId} action=${action} sessionId=${linearSessionId} agentId=${agent.id} signature=${signature ? "present" : "missing"}`,
+      );
       return c.json({ error: "Invalid signature" }, 401);
     }
+
+    console.log(
+      `[linear-agent-routes] Accepted AgentSessionEvent action=${action} sessionId=${linearSessionId} oauthClientId=${oauthClientId} agentId=${agent.id}`,
+    );
 
     // Dispatch asynchronously — must return 200 within 5s
     bridge.handleEvent(payload).catch((err) => {

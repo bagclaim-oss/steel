@@ -95,9 +95,15 @@ const validPayload = {
 describe("POST /linear/agent-webhook", () => {
   let app: Hono;
   let bridge: ReturnType<typeof createMockBridge>;
+  let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     ({ app, bridge } = createApp());
   });
 
@@ -115,6 +121,9 @@ describe("POST /linear/agent-webhook", () => {
     expect(res.status).toBe(401);
     const body = await res.json();
     expect(body.error).toBe("Invalid signature");
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Invalid webhook signature"),
+    );
   });
 
   it("returns 400 for invalid JSON body", async () => {
@@ -147,6 +156,9 @@ describe("POST /linear/agent-webhook", () => {
     // Wait a tick for the async dispatch
     await new Promise((r) => setTimeout(r, 10));
     expect(bridge.handleEvent).toHaveBeenCalledWith(validPayload);
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Accepted AgentSessionEvent"),
+    );
   });
 
   it("ignores non-AgentSessionEvent types", async () => {
@@ -195,6 +207,9 @@ describe("POST /linear/agent-webhook", () => {
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.error).toContain("No agent configured");
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("No agent found for oauthClientId"),
+    );
   });
 });
 

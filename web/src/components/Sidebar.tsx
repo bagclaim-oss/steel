@@ -487,7 +487,7 @@ export function Sidebar() {
       <div className="px-3.5 pt-3 pb-2 border-b border-cc-border/60 bg-cc-card/45 backdrop-blur-sm">
         <div className="flex items-center gap-2.5">
           <img src={logoSrc} alt="" className="w-6 h-6 rounded" />
-          <span className="text-[13px] font-semibold text-cc-fg tracking-tight">Companion</span>
+          <span className="text-[13px] font-semibold text-cc-fg tracking-tight">The Companion</span>
           <button
             onClick={handleNewSession}
             title="New Session"

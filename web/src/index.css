@@ -289,10 +289,12 @@
   background-size: 18px 18px;
 }
 
-.kanna-panel {
-  border: 1px solid var(--color-cc-border);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--color-cc-card) 94%, var(--color-cc-bg) 6%);
+@layer components {
+  .kanna-panel {
+    border: 1px solid var(--color-cc-border);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--color-cc-card) 94%, var(--color-cc-bg) 6%);
+  }
 }
 
 /* Generation stats pulsing bar */

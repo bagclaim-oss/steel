@@ -112,6 +112,8 @@ function setupMockStore(overrides: {
     updateSession: mockUpdateSession,
     setPreviousPermissionMode: mockSetPreviousPermissionMode,
     setSdkSessions: vi.fn(),
+    promptSuggestions: new Map<string, string[]>(),
+    clearPromptSuggestions: vi.fn(),
   };
 }
 

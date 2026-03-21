@@ -853,6 +853,7 @@ function handleParsedMessage(
         content: data.content,
         timestamp: data.timestamp || Date.now(),
       });
+      store.clearPromptSuggestions(sessionId);
       break;
     }
 
@@ -1137,6 +1138,24 @@ function handleParsedMessage(
       if (typeof latestProcessed === "number") {
         ackSeq(sessionId, latestProcessed);
       }
+      break;
+    }
+
+    case "prompt_suggestion": {
+      const suggestions = (data as BrowserIncomingMessage & { type: "prompt_suggestion"; suggestions: string[] }).suggestions;
+      store.setPromptSuggestions(sessionId, suggestions);
+      break;
+    }
+
+    case "streamlined_text":
+    case "streamlined_tool_use_summary": {
+      // Silently consume — full assistant/tool_use_summary messages are already rendered.
+      // These are for streamlined output mode which we don't currently use.
+      break;
+    }
+
+    default: {
+      console.debug("[ws] Unhandled message type:", (data as { type: string }).type);
       break;
     }
   }

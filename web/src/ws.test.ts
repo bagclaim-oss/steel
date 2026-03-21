@@ -273,6 +273,21 @@ describe("handleMessage: user_message", () => {
       content: "optimistic first prompt",
     });
   });
+
+  it("clears prompt suggestions when a server user_message is received", () => {
+    wsModule.connectSession("s1");
+    fireMessage({ type: "session_init", session: makeSession("s1") });
+    useStore.getState().setPromptSuggestions("s1", ["Explain the diff"]);
+
+    fireMessage({
+      type: "user_message",
+      id: "cmsg-live-2",
+      content: "server-backed prompt",
+      timestamp: 1001,
+    });
+
+    expect(useStore.getState().promptSuggestions.has("s1")).toBe(false);
+  });
 });
 
 // ===========================================================================
@@ -940,6 +955,48 @@ describe("handleMessage: permission_cancelled", () => {
 
     const perms = useStore.getState().pendingPermissions.get("s1");
     expect(perms!.has("req-1")).toBe(false);
+  });
+});
+
+describe("handleMessage: prompt suggestions and streamlined messages", () => {
+  it("stores prompt suggestions for the active session", () => {
+    wsModule.connectSession("s1");
+    fireMessage({ type: "session_init", session: makeSession("s1") });
+
+    fireMessage({
+      type: "prompt_suggestion",
+      suggestions: ["Summarize this change", "Write regression tests"],
+    });
+
+    expect(useStore.getState().promptSuggestions.get("s1")).toEqual([
+      "Summarize this change",
+      "Write regression tests",
+    ]);
+  });
+
+  it("silently consumes streamlined messages without mutating chat state", () => {
+    wsModule.connectSession("s1");
+    fireMessage({ type: "session_init", session: makeSession("s1") });
+    useStore.getState().appendMessage("s1", {
+      id: "existing-msg",
+      role: "assistant",
+      content: "Existing content",
+      timestamp: 1000,
+    });
+    useStore.getState().setPromptSuggestions("s1", ["Keep me"]);
+
+    const beforeMessages = useStore.getState().messages.get("s1");
+    const beforeStreaming = useStore.getState().streaming.get("s1");
+
+    fireMessage({ type: "streamlined_text", text: "Ignored streamlined text" });
+    fireMessage({
+      type: "streamlined_tool_use_summary",
+      summary: "Ignored streamlined tool summary",
+    });
+
+    expect(useStore.getState().messages.get("s1")).toEqual(beforeMessages);
+    expect(useStore.getState().streaming.get("s1")).toBe(beforeStreaming);
+    expect(useStore.getState().promptSuggestions.get("s1")).toEqual(["Keep me"]);
   });
 });
 

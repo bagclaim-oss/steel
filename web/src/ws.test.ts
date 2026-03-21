@@ -974,29 +974,35 @@ describe("handleMessage: prompt suggestions and streamlined messages", () => {
     ]);
   });
 
-  it("silently consumes streamlined messages without mutating chat state", () => {
+  it("renders streamlined_text as an assistant message", () => {
     wsModule.connectSession("s1");
     fireMessage({ type: "session_init", session: makeSession("s1") });
-    useStore.getState().appendMessage("s1", {
-      id: "existing-msg",
-      role: "assistant",
-      content: "Existing content",
-      timestamp: 1000,
-    });
-    useStore.getState().setPromptSuggestions("s1", ["Keep me"]);
 
-    const beforeMessages = useStore.getState().messages.get("s1");
-    const beforeStreaming = useStore.getState().streaming.get("s1");
+    fireMessage({ type: "streamlined_text", text: "Rendered streamlined text" });
 
-    fireMessage({ type: "streamlined_text", text: "Ignored streamlined text" });
+    expect(useStore.getState().messages.get("s1")).toEqual([
+      expect.objectContaining({
+        role: "assistant",
+        content: "Rendered streamlined text",
+      }),
+    ]);
+  });
+
+  it("renders streamlined_tool_use_summary as a system message", () => {
+    wsModule.connectSession("s1");
+    fireMessage({ type: "session_init", session: makeSession("s1") });
+
     fireMessage({
       type: "streamlined_tool_use_summary",
-      summary: "Ignored streamlined tool summary",
+      tool_summary: "Read 2 files",
     });
 
-    expect(useStore.getState().messages.get("s1")).toEqual(beforeMessages);
-    expect(useStore.getState().streaming.get("s1")).toBe(beforeStreaming);
-    expect(useStore.getState().promptSuggestions.get("s1")).toEqual(["Keep me"]);
+    expect(useStore.getState().messages.get("s1")).toEqual([
+      expect.objectContaining({
+        role: "system",
+        content: "Read 2 files",
+      }),
+    ]);
   });
 });
 

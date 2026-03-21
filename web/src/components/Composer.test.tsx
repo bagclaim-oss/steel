@@ -269,6 +269,23 @@ describe("Composer prompt suggestion chips", () => {
     expect(screen.queryByText("Explain this stack trace")).toBeNull();
     expect(screen.queryByText("Draft a fix plan")).toBeNull();
   });
+
+  it("does not send a suggestion when the composer is unavailable", () => {
+    setupMockStore({ isConnected: false });
+    (mockStoreState.promptSuggestions as Map<string, string[]>).set("s1", [
+      "Explain this stack trace",
+    ]);
+
+    render(<Composer sessionId="s1" />);
+    const chip = screen.getByText("Explain this stack trace") as HTMLButtonElement;
+
+    expect(chip.disabled).toBe(true);
+    fireEvent.click(chip);
+
+    expect(mockSendToSession).not.toHaveBeenCalled();
+    expect(mockAppendMessage).not.toHaveBeenCalled();
+    expect(mockClearPromptSuggestions).not.toHaveBeenCalled();
+  });
 });
 
 // ─── Plan mode toggle ────────────────────────────────────────────────────────

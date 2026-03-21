@@ -387,6 +387,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
               <button
                 key={i}
                 onClick={() => {
+                  if (!isConnected || isRunning) return;
                   const clientMsgId = createClientMessageId();
                   sendToSession(sessionId, {
                     type: "user_message",
@@ -402,6 +403,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
                   });
                   clearPromptSuggestions(sessionId);
                 }}
+                disabled={!isConnected || isRunning}
                 className="text-xs px-2.5 py-1.5 rounded-lg bg-cc-hover hover:bg-cc-active text-cc-fg border border-cc-border transition-colors cursor-pointer truncate max-w-[280px]"
                 title={suggestion}
               >

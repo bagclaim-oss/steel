@@ -221,7 +221,7 @@ Each message is a single JSON object followed by `\n` (newline). Multiple messag
 | Direction | Types |
 |-----------|-------|
 | **Server → CLI** | `user`, `control_response`, `control_cancel_request`, `keep_alive`, `update_environment_variables` |
-| **CLI → Server** | `system`, `assistant`, `result`, `stream_event`, `tool_progress`, `tool_use_summary`, `auth_status`, `control_request` (can_use_tool, hook_callback), `keep_alive`, `rate_limit_event`, `streamlined_text`, `streamlined_tool_use_summary`, `prompt_suggestion` |
+| **CLI → Server** | `system`, `assistant`, `result`, `stream_event`, `tool_progress`, `tool_use_summary`, `auth_status`, `control_request` (can_use_tool, hook_callback), `control_cancel_request`, `keep_alive`, `rate_limit_event`, `streamlined_text`, `streamlined_tool_use_summary`, `prompt_suggestion` |
 | **Bidirectional** | `control_request`, `control_response`, `keep_alive` |
 
 ### Filtered by SDK (present on wire but not exposed to consumers)
@@ -687,11 +687,9 @@ Register hooks, MCP servers, agents, system prompt. **Must be sent before the fi
   // NEW in v2.1.81:
   promptSuggestions?: boolean,        // Enable prompt_suggestion messages
   agentProgressSummaries?: boolean,   // Enable agent progress summaries
-  hooks?: Record<string, unknown>,    // Hook configuration (extended format)
-  sdkMcpServers?: Record<string, unknown>, // MCP servers to register (extended format)
-  jsonSchema?: Record<string, unknown>,    // JSON schema for structured output
-  agents?: Record<string, unknown>,        // Agent definitions (extended format)
 }
+
+In v2.1.81, the wire format was broadened for some fields (`hooks`, `sdkMcpServers`, `agents`), but the exact extended shapes are not yet fully documented here.
 
 // Response
 {

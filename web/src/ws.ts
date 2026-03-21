@@ -1147,10 +1147,25 @@ function handleParsedMessage(
       break;
     }
 
-    case "streamlined_text":
+    case "streamlined_text": {
+      store.appendMessage(sessionId, {
+        id: nextId(),
+        role: "assistant",
+        content: data.text,
+        timestamp: Date.now(),
+      });
+      break;
+    }
+
     case "streamlined_tool_use_summary": {
-      // Silently consume — full assistant/tool_use_summary messages are already rendered.
-      // These are for streamlined output mode which we don't currently use.
+      // Streamlined mode emits summary-only tool activity instead of the richer
+      // assistant/tool_use_summary flow, so surface it as a system message.
+      store.appendMessage(sessionId, {
+        id: nextId(),
+        role: "system",
+        content: data.tool_summary,
+        timestamp: Date.now(),
+      });
       break;
     }
 

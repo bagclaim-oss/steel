@@ -46,7 +46,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       if (e.key !== "Tab") return;
 
       const focusable = dialog!.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
       );
       if (focusable.length === 0) return;
 
@@ -131,6 +131,12 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     onComplete();
   }, [finishOnboarding, onComplete]);
 
+  // Clear shared error state when navigating between steps
+  const goToStep = useCallback((s: Step) => {
+    setError("");
+    setStep(s);
+  }, []);
+
   const stepIndex = STEPS.indexOf(step);
   const skipMotion = prefersReducedMotion();
 
@@ -199,8 +205,8 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         >
           {step === "welcome" && (
             <WelcomeStep
-              onSetupClaude={() => setStep("claude")}
-              onSetupCodex={() => setStep("codex")}
+              onSetupClaude={() => goToStep("claude")}
+              onSetupCodex={() => goToStep("codex")}
             />
           )}
           {step === "claude" && (
@@ -208,7 +214,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
               token={claudeToken}
               onTokenChange={setClaudeToken}
               onSave={handleSaveClaude}
-              onSkip={() => setStep("codex")}
+              onSkip={() => goToStep("codex")}
               saving={saving}
               error={error}
             />
@@ -218,8 +224,8 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
               apiKey={openaiKey}
               onApiKeyChange={setOpenaiKey}
               onSave={handleSaveCodex}
-              onSkip={() => finishOnboarding().then(() => setStep("done"))}
-              onBack={() => setStep("claude")}
+              onSkip={() => finishOnboarding()}
+              onBack={() => goToStep("claude")}
               saving={saving}
               error={error}
             />

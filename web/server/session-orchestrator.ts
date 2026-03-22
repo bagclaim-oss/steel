@@ -257,10 +257,10 @@ export class SessionOrchestrator {
 
       // Inject provider tokens from global settings (if not already set by env profile)
       const globalSettings = getSettings();
-      if (backend === "claude" && globalSettings.claudeCodeOAuthToken && !envVars?.CLAUDE_CODE_OAUTH_TOKEN) {
+      if (backend === "claude" && globalSettings.claudeCodeOAuthToken && !("CLAUDE_CODE_OAUTH_TOKEN" in (envVars ?? {}))) {
         envVars = { ...envVars, CLAUDE_CODE_OAUTH_TOKEN: globalSettings.claudeCodeOAuthToken };
       }
-      if (backend === "codex" && globalSettings.openaiApiKey && !envVars?.OPENAI_API_KEY) {
+      if (backend === "codex" && globalSettings.openaiApiKey && !("OPENAI_API_KEY" in (envVars ?? {}))) {
         envVars = { ...envVars, OPENAI_API_KEY: globalSettings.openaiApiKey };
       }
 

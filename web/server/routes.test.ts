@@ -1961,6 +1961,54 @@ describe("PUT /api/settings", () => {
     const json = await res.json();
     expect(json).toEqual({ error: "At least one settings field is required" });
   });
+
+  // Validates that claudeCodeOAuthToken must be a string
+  it("returns 400 for non-string claudeCodeOAuthToken", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ claudeCodeOAuthToken: 123 }),
+    });
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json).toEqual({ error: "claudeCodeOAuthToken must be a string" });
+  });
+
+  // Validates that openaiApiKey must be a string
+  it("returns 400 for non-string openaiApiKey", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ openaiApiKey: true }),
+    });
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json).toEqual({ error: "openaiApiKey must be a string" });
+  });
+
+  // Validates that onboardingCompleted must be a boolean
+  it("returns 400 for non-boolean onboardingCompleted", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ onboardingCompleted: "yes" }),
+    });
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json).toEqual({ error: "onboardingCompleted must be a boolean" });
+  });
+
+  // Validates that dockerAutoUpdate must be a boolean
+  it("returns 400 for non-boolean dockerAutoUpdate", async () => {
+    const res = await app.request("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dockerAutoUpdate: "yes" }),
+    });
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json).toEqual({ error: "dockerAutoUpdate must be a boolean" });
+  });
 });
 
 describe("POST /api/settings/anthropic/verify", () => {

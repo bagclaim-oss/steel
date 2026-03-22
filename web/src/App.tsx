@@ -161,16 +161,19 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Load publicUrl from settings on mount + check onboarding status
+  // Load publicUrl from settings + check onboarding status.
+  // Re-runs when isAuthenticated flips to true (e.g. after login) so that
+  // users who authenticate first still see the onboarding wizard.
   const [showOnboarding, setShowOnboarding] = useState(false);
   useEffect(() => {
+    if (!isAuthenticated) return;
     api.getSettings().then((s) => {
       if (s.publicUrl) useStore.getState().setPublicUrl(s.publicUrl);
       if (!s.onboardingCompleted) {
         setShowOnboarding(true);
       }
     }).catch(() => {});
-  }, []);
+  }, [isAuthenticated]);
 
   // Show Docker image update dialog if an app update just completed
   useEffect(() => {

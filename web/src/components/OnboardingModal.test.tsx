@@ -206,6 +206,80 @@ describe("OnboardingModal", () => {
     });
   });
 
+  // Verifies the Codex save error branch is exercised (line 110)
+  it("displays error when Codex save fails", async () => {
+    mockUpdateSettings.mockRejectedValueOnce(new Error("API key invalid"));
+
+    render(<OnboardingModal onComplete={vi.fn()} />);
+
+    // Go to Codex setup
+    fireEvent.click(screen.getByText("Codex"));
+
+    // Enter API key and save
+    const input = screen.getByLabelText("OpenAI API Key");
+    fireEvent.change(input, { target: { value: "bad-key" } });
+    fireEvent.click(screen.getByText("Save & Finish"));
+
+    await waitFor(() => {
+      expect(screen.getByText("API key invalid")).toBeInTheDocument();
+    });
+  });
+
+  // Verifies skipping Codex with empty key calls finishOnboarding (line 100-101)
+  it("skips Codex save when key is empty and finishes onboarding", async () => {
+    render(<OnboardingModal onComplete={vi.fn()} />);
+
+    // Go to Codex setup
+    fireEvent.click(screen.getByText("Codex"));
+
+    // Click Finish with no key entered — should just finish onboarding
+    fireEvent.click(screen.getByText("Finish"));
+
+    await waitFor(() => {
+      expect(mockUpdateSettings).toHaveBeenCalledWith({ onboardingCompleted: true });
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Setup Skipped")).toBeInTheDocument();
+    });
+  });
+
+  // Verifies copy button works (exercises CopyButton component, lines 634-636)
+  it("renders copy button on Claude setup step", () => {
+    // Mock clipboard API
+    Object.assign(navigator, {
+      clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
+
+    render(<OnboardingModal onComplete={vi.fn()} />);
+    fireEvent.click(screen.getByText("Claude Code"));
+
+    const copyBtn = screen.getByLabelText("Copy command");
+    fireEvent.click(copyBtn);
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith("claude setup-token");
+  });
+
+  // Verifies error is cleared when navigating between steps
+  it("clears error when navigating between steps", async () => {
+    mockUpdateSettings.mockRejectedValueOnce(new Error("Save failed"));
+
+    render(<OnboardingModal onComplete={vi.fn()} />);
+
+    // Go to Claude, trigger error
+    fireEvent.click(screen.getByText("Claude Code"));
+    const input = screen.getByLabelText("OAuth Token");
+    fireEvent.change(input, { target: { value: "bad-token" } });
+    fireEvent.click(screen.getByText("Save & Continue"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Save failed")).toBeInTheDocument();
+    });
+
+    // Navigate to Codex — error should be cleared
+    fireEvent.click(screen.getByText("Skip"));
+    expect(screen.queryByText("Save failed")).not.toBeInTheDocument();
+  });
+
   it("passes accessibility audit", async () => {
     const { axe } = await import("vitest-axe");
     render(<OnboardingModal onComplete={vi.fn()} />);

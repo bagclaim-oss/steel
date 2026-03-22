@@ -114,10 +114,6 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   }, []);
 
   const handleSaveCodexApiKey = useCallback(async () => {
-    if (!openaiKey.trim()) {
-      await finishOnboarding();
-      return;
-    }
     setSaving(true);
     setError("");
     try {

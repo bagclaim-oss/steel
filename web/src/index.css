@@ -41,6 +41,11 @@
   --color-cc-merged: #805ad5;
   --color-cc-codex: #10a37f;
   --color-cc-codex-hover: #0d8c6d;
+  /* Darker button-grade variants — meet WCAG AA (4.5:1) with white text */
+  --color-cc-primary-btn: #ad5535;
+  --color-cc-primary-btn-hover: #b85c3a;
+  --color-cc-codex-btn: #0a7d5f;
+  --color-cc-codex-btn-hover: #0b8362;
 }
 
 @keyframes fadeSlideIn {
@@ -205,6 +210,10 @@
   --color-cc-merged: #b794f4;
   --color-cc-codex: #34d399;
   --color-cc-codex-hover: #2fc48d;
+  --color-cc-primary-btn: #ad5535;
+  --color-cc-primary-btn-hover: #b85c3a;
+  --color-cc-codex-btn: #0a7d5f;
+  --color-cc-codex-btn-hover: #0b8362;
 }
 
 /* Scrollbar styling — desktop only.

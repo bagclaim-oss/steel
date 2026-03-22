@@ -6,6 +6,10 @@ type Step = "welcome" | "claude" | "codex" | "done";
 
 const STEPS: Step[] = ["welcome", "claude", "codex", "done"];
 
+/** Shared selector for focusable, non-disabled elements (M1 fix) */
+const FOCUSABLE_SELECTOR =
+  'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
+
 interface OnboardingModalProps {
   onComplete: () => void;
 }
@@ -45,9 +49,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
       }
       if (e.key !== "Tab") return;
 
-      const focusable = dialog!.querySelectorAll<HTMLElement>(
-        'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
-      );
+      const focusable = dialog!.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
       if (focusable.length === 0) return;
 
       const first = focusable[0];
@@ -69,9 +71,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     document.addEventListener("keydown", handleKeyDown);
 
     // Focus the first focusable element on mount
-    const firstFocusable = dialog.querySelector<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-    );
+    const firstFocusable = dialog.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
     firstFocusable?.focus();
 
     return () => document.removeEventListener("keydown", handleKeyDown);
@@ -182,9 +182,11 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
             {STEPS.slice(0, 3).map((s, i) => (
               <div
                 key={s}
-                className="h-[3px] rounded-full transition-[width,background,opacity] duration-300"
+                className="h-[3px] rounded-full transition-[transform,background,opacity] duration-300"
                 style={{
-                  width: i === stepIndex ? 32 : 12,
+                  width: 32,
+                  transform: i === stepIndex ? "scaleX(1)" : "scaleX(0.375)",
+                  transformOrigin: "center",
                   background: i <= stepIndex
                     ? "var(--color-cc-primary)"
                     : "var(--color-cc-border)",
@@ -243,7 +245,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         {step === "welcome" && (
           <button
             onClick={handleSkipAll}
-            className="w-full text-center text-xs text-cc-muted hover:text-cc-fg transition-colors cursor-pointer mt-4 py-1"
+            className="w-full text-center text-xs text-cc-muted hover:text-cc-fg transition-colors mt-4 min-h-[44px] flex items-center justify-center"
           >
             Skip setup — I'll configure this later in Settings
           </button>
@@ -267,7 +269,7 @@ function WelcomeStep({
     <div className="p-7 pb-6">
       {/* Header */}
       <div className="mb-6">
-        <div className="text-[10px] uppercase tracking-[0.12em] text-cc-primary font-medium mb-2">
+        <div className="text-[10px] uppercase tracking-[0.12em] text-cc-muted font-medium mb-2">
           First time setup
         </div>
         <h2 className="text-xl font-semibold text-cc-fg leading-tight">
@@ -282,7 +284,7 @@ function WelcomeStep({
       <div className="space-y-2.5">
         <button
           onClick={onSetupClaude}
-          className="provider-card--claude group w-full flex items-center gap-3.5 p-3.5 rounded-xl border border-cc-border bg-cc-bg text-left cursor-pointer transition-[transform,border-color,box-shadow] duration-150"
+          className="provider-card--claude group w-full flex items-center gap-3.5 p-3.5 min-h-[52px] rounded-xl border border-cc-border bg-cc-bg text-left transition-[transform,border-color,box-shadow] duration-150"
         >
           <div
             className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 font-semibold text-sm bg-cc-primary/10 text-cc-primary"
@@ -307,7 +309,7 @@ function WelcomeStep({
 
         <button
           onClick={onSetupCodex}
-          className="provider-card--codex group w-full flex items-center gap-3.5 p-3.5 rounded-xl border border-cc-border bg-cc-bg text-left cursor-pointer transition-[transform,border-color,box-shadow] duration-150"
+          className="provider-card--codex group w-full flex items-center gap-3.5 p-3.5 min-h-[52px] rounded-xl border border-cc-border bg-cc-bg text-left transition-[transform,border-color,box-shadow] duration-150"
         >
           <div
             className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 font-semibold text-sm bg-cc-codex/10 text-cc-codex"
@@ -361,7 +363,7 @@ function ClaudeSetupStep({
   return (
     <div className="p-7 pb-6">
       <div className="mb-5">
-        <div className="text-[10px] uppercase tracking-[0.12em] text-cc-primary font-medium mb-2">
+        <div className="text-[10px] uppercase tracking-[0.12em] text-cc-muted font-medium mb-2">
           Step 1 of 2
         </div>
         <h2 className="text-xl font-semibold text-cc-fg leading-tight">
@@ -427,15 +429,20 @@ function ClaudeSetupStep({
       <div className="flex items-center gap-2 pt-1">
         <button
           onClick={onSkip}
-          className="flex-1 px-4 py-2.5 min-h-[40px] rounded-lg text-sm text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
+          className="flex-1 px-4 py-2.5 min-h-[44px] rounded-lg text-sm text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors"
         >
           Skip
         </button>
         <button
           onClick={onSave}
           disabled={saving}
-          className="flex-1 px-4 py-2.5 min-h-[40px] rounded-lg text-sm font-medium bg-cc-primary hover:bg-cc-primary-hover text-white transition-[background,opacity] duration-150 cursor-pointer disabled:opacity-50"
-          style={{ boxShadow: saving ? "none" : "0 1px 3px var(--color-cc-primary)" }}
+          className="flex-1 px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-medium text-white transition-[background,opacity] duration-150 disabled:opacity-50"
+          style={{
+            backgroundColor: "var(--color-cc-primary-btn)",
+            boxShadow: saving ? "none" : "0 1px 3px var(--color-cc-primary-btn)",
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "var(--color-cc-primary-btn-hover)"}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "var(--color-cc-primary-btn)"}
         >
           {saving ? "Saving..." : token.trim() ? "Save & Continue" : "Continue"}
         </button>
@@ -473,7 +480,7 @@ function CodexSetupStep({
   return (
     <div className="p-7 pb-6">
       <div className="mb-5">
-        <div className="text-[10px] uppercase tracking-[0.12em] text-cc-codex font-medium mb-2">
+        <div className="text-[10px] uppercase tracking-[0.12em] text-cc-muted font-medium mb-2">
           Step 2 of 2
         </div>
         <h2 className="text-xl font-semibold text-cc-fg leading-tight">
@@ -518,7 +525,7 @@ function CodexSetupStep({
       <div className="flex items-center gap-2 pt-1">
         <button
           onClick={onBack}
-          className="px-3 py-2.5 min-h-[40px] rounded-lg text-sm text-cc-muted hover:text-cc-fg transition-colors cursor-pointer flex items-center gap-1"
+          className="px-3 py-2.5 min-h-[44px] min-w-[44px] rounded-lg text-sm text-cc-muted hover:text-cc-fg transition-colors flex items-center gap-1"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -528,15 +535,20 @@ function CodexSetupStep({
         <div className="flex-1" />
         <button
           onClick={onSkip}
-          className="px-4 py-2.5 min-h-[40px] rounded-lg text-sm text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
+          className="px-4 py-2.5 min-h-[44px] rounded-lg text-sm text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors"
         >
           Skip
         </button>
         <button
           onClick={onSave}
           disabled={saving}
-          className="px-5 py-2.5 min-h-[40px] rounded-lg text-sm font-medium bg-cc-codex hover:bg-cc-codex-hover text-white transition-[background,opacity] duration-150 cursor-pointer disabled:opacity-50"
-          style={{ boxShadow: saving ? "none" : "0 1px 3px var(--color-cc-codex)" }}
+          className="px-5 py-2.5 min-h-[44px] rounded-lg text-sm font-medium text-white transition-[background,opacity] duration-150 disabled:opacity-50"
+          style={{
+            backgroundColor: "var(--color-cc-codex-btn)",
+            boxShadow: saving ? "none" : "0 1px 3px var(--color-cc-codex-btn)",
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "var(--color-cc-codex-btn-hover)"}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "var(--color-cc-codex-btn)"}
         >
           {saving ? "Saving..." : apiKey.trim() ? "Save & Finish" : "Finish"}
         </button>
@@ -616,8 +628,13 @@ function DoneStep({
 
       <button
         onClick={onDone}
-        className="w-full px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-medium bg-cc-primary hover:bg-cc-primary-hover text-white transition-[background] duration-150 cursor-pointer"
-        style={{ boxShadow: "0 1px 3px var(--color-cc-primary)" }}
+        className="w-full px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-medium text-white transition-[background] duration-150"
+        style={{
+          backgroundColor: "var(--color-cc-primary-btn)",
+          boxShadow: "0 1px 3px var(--color-cc-primary-btn)",
+        }}
+        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "var(--color-cc-primary-btn-hover)"}
+        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "var(--color-cc-primary-btn)"}
       >
         Get Started
       </button>
@@ -640,7 +657,7 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="text-[10px] text-cc-muted hover:text-cc-fg transition-colors cursor-pointer flex items-center gap-1"
+      className="text-[10px] text-cc-muted hover:text-cc-fg transition-colors flex items-center gap-1 min-h-[44px] min-w-[44px] justify-end"
       aria-label="Copy command"
     >
       {copied ? (

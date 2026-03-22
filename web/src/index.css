@@ -328,6 +328,20 @@
   box-shadow: 0 4px 16px color-mix(in srgb, var(--color-cc-codex) 12%, transparent);
 }
 
+/* WCAG AA button backgrounds — darker shades for white text contrast */
+.btn-primary-aa {
+  background-color: var(--color-cc-primary-btn);
+}
+.btn-primary-aa:hover {
+  background-color: var(--color-cc-primary-btn-hover);
+}
+.btn-codex-aa {
+  background-color: var(--color-cc-codex-btn);
+}
+.btn-codex-aa:hover {
+  background-color: var(--color-cc-codex-btn-hover);
+}
+
 /* Global focus-visible ring — ensures keyboard users always see focus.
    Wrapped in @layer base so Tailwind utilities (e.g. outline-none) can override it. */
 @layer base {

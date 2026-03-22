@@ -436,13 +436,8 @@ function ClaudeSetupStep({
         <button
           onClick={onSave}
           disabled={saving}
-          className="flex-1 px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-medium text-white transition-[background,opacity] duration-150 disabled:opacity-50"
-          style={{
-            backgroundColor: "var(--color-cc-primary-btn)",
-            boxShadow: saving ? "none" : "0 1px 3px var(--color-cc-primary-btn)",
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "var(--color-cc-primary-btn-hover)"}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "var(--color-cc-primary-btn)"}
+          className="btn-primary-aa flex-1 px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-medium text-white transition-[background,opacity] duration-150 disabled:opacity-50"
+          style={{ boxShadow: saving ? "none" : "0 1px 3px var(--color-cc-primary-btn)" }}
         >
           {saving ? "Saving..." : token.trim() ? "Save & Continue" : "Continue"}
         </button>
@@ -542,13 +537,8 @@ function CodexSetupStep({
         <button
           onClick={onSave}
           disabled={saving}
-          className="px-5 py-2.5 min-h-[44px] rounded-lg text-sm font-medium text-white transition-[background,opacity] duration-150 disabled:opacity-50"
-          style={{
-            backgroundColor: "var(--color-cc-codex-btn)",
-            boxShadow: saving ? "none" : "0 1px 3px var(--color-cc-codex-btn)",
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "var(--color-cc-codex-btn-hover)"}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "var(--color-cc-codex-btn)"}
+          className="btn-codex-aa px-5 py-2.5 min-h-[44px] rounded-lg text-sm font-medium text-white transition-[background,opacity] duration-150 disabled:opacity-50"
+          style={{ boxShadow: saving ? "none" : "0 1px 3px var(--color-cc-codex-btn)" }}
         >
           {saving ? "Saving..." : apiKey.trim() ? "Save & Finish" : "Finish"}
         </button>
@@ -628,13 +618,8 @@ function DoneStep({
 
       <button
         onClick={onDone}
-        className="w-full px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-medium text-white transition-[background] duration-150"
-        style={{
-          backgroundColor: "var(--color-cc-primary-btn)",
-          boxShadow: "0 1px 3px var(--color-cc-primary-btn)",
-        }}
-        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "var(--color-cc-primary-btn-hover)"}
-        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "var(--color-cc-primary-btn)"}
+        className="btn-primary-aa w-full px-4 py-2.5 min-h-[44px] rounded-lg text-sm font-medium text-white transition-[background] duration-150"
+        style={{ boxShadow: "0 1px 3px var(--color-cc-primary-btn)" }}
       >
         Get Started
       </button>

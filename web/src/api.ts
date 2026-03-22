@@ -403,6 +403,9 @@ export interface TailscaleStatus {
 export interface AppSettings {
   anthropicApiKeyConfigured: boolean;
   anthropicModel: string;
+  claudeCodeOAuthTokenConfigured: boolean;
+  openaiApiKeyConfigured: boolean;
+  onboardingCompleted: boolean;
   linearApiKeyConfigured: boolean;
   linearConnectionCount: number;
   linearAutoTransition: boolean;
@@ -943,6 +946,9 @@ export const api = {
   updateSettings: (data: {
     anthropicApiKey?: string;
     anthropicModel?: string;
+    claudeCodeOAuthToken?: string;
+    openaiApiKey?: string;
+    onboardingCompleted?: boolean;
     linearApiKey?: string;
     linearAutoTransition?: boolean;
     linearAutoTransitionStateId?: string;

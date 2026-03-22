@@ -39,6 +39,8 @@
   --color-cc-separator: rgba(31,30,29,0.10);
   --color-cc-info: #2b6cb0;
   --color-cc-merged: #805ad5;
+  --color-cc-codex: #10a37f;
+  --color-cc-codex-hover: #0d8c6d;
 }
 
 @keyframes fadeSlideIn {
@@ -201,6 +203,8 @@
   --color-cc-separator: rgba(222,220,209,0.08);
   --color-cc-info: #63b3ed;
   --color-cc-merged: #b794f4;
+  --color-cc-codex: #34d399;
+  --color-cc-codex-hover: #2fc48d;
 }
 
 /* Scrollbar styling — desktop only.
@@ -299,6 +303,20 @@
   background: var(--color-cc-primary);
   opacity: 0.4;
   animation: typing-breathe 1.5s ease-in-out infinite;
+}
+
+/* ─── Onboarding provider cards ─────────────────────────────────────────── */
+.provider-card--claude:hover,
+.provider-card--claude:focus-visible {
+  border-color: var(--color-cc-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--color-cc-primary) 12%, transparent);
+}
+.provider-card--codex:hover,
+.provider-card--codex:focus-visible {
+  border-color: var(--color-cc-codex);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--color-cc-codex) 12%, transparent);
 }
 
 /* Global focus-visible ring — ensures keyboard users always see focus.

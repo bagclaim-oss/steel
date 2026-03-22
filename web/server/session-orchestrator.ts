@@ -255,6 +255,15 @@ export class SessionOrchestrator {
         console.warn(`[orchestrator] Environment "${body.envSlug}" not found, ignoring`);
       }
 
+      // Inject provider tokens from global settings (if not already set by env profile)
+      const globalSettings = getSettings();
+      if (backend === "claude" && globalSettings.claudeCodeOAuthToken && !envVars?.CLAUDE_CODE_OAUTH_TOKEN) {
+        envVars = { ...envVars, CLAUDE_CODE_OAUTH_TOKEN: globalSettings.claudeCodeOAuthToken };
+      }
+      if (backend === "codex" && globalSettings.openaiApiKey && !envVars?.OPENAI_API_KEY) {
+        envVars = { ...envVars, OPENAI_API_KEY: globalSettings.openaiApiKey };
+      }
+
       // Resolve sandbox configuration
       const sandboxEnabled = body.sandboxEnabled === true;
       const companionSandbox = body.sandboxSlug ? sandboxManager.getSandbox(body.sandboxSlug) : null;

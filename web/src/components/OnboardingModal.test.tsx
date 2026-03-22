@@ -22,6 +22,7 @@ import "@testing-library/jest-dom";
 vi.mock("../api.js", () => ({
   api: {
     updateSettings: vi.fn().mockResolvedValue({}),
+    getSettings: vi.fn().mockResolvedValue({ codexDeviceAuthConfigured: false }),
   },
 }));
 
@@ -29,10 +30,12 @@ import { OnboardingModal } from "./OnboardingModal.js";
 import { api } from "../api.js";
 
 const mockUpdateSettings = vi.mocked(api.updateSettings);
+const mockGetSettings = vi.mocked(api.getSettings);
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockUpdateSettings.mockResolvedValue({} as ReturnType<typeof api.updateSettings> extends Promise<infer T> ? T : never);
+  mockGetSettings.mockResolvedValue({ codexDeviceAuthConfigured: false } as ReturnType<typeof api.getSettings> extends Promise<infer T> ? T : never);
 });
 
 describe("OnboardingModal", () => {
@@ -54,6 +57,7 @@ describe("OnboardingModal", () => {
     render(<OnboardingModal onComplete={vi.fn()} />);
     fireEvent.click(screen.getByText("Codex"));
     expect(screen.getByText("Set up Codex")).toBeInTheDocument();
+    expect(screen.getByText("codex --login")).toBeInTheDocument();
   });
 
   it("skips all setup when skip link is clicked", async () => {
@@ -110,11 +114,14 @@ describe("OnboardingModal", () => {
     // Go directly to Codex setup
     fireEvent.click(screen.getByText("Codex"));
 
+    // Expand API key accordion
+    fireEvent.click(screen.getByText("Or use an API key instead"));
+
     // Enter API key
     const input = screen.getByLabelText("OpenAI API Key");
     fireEvent.change(input, { target: { value: "sk-test-key" } });
 
-    // Save
+    // Save — button shows "Save & Finish" when API key is entered
     fireEvent.click(screen.getByText("Save & Finish"));
 
     await waitFor(() => {
@@ -206,7 +213,7 @@ describe("OnboardingModal", () => {
     });
   });
 
-  // Verifies the Codex save error branch is exercised (line 110)
+  // Verifies the Codex save error branch is exercised
   it("displays error when Codex save fails", async () => {
     mockUpdateSettings.mockRejectedValueOnce(new Error("API key invalid"));
 
@@ -215,7 +222,8 @@ describe("OnboardingModal", () => {
     // Go to Codex setup
     fireEvent.click(screen.getByText("Codex"));
 
-    // Enter API key and save
+    // Expand API key accordion, enter key and save
+    fireEvent.click(screen.getByText("Or use an API key instead"));
     const input = screen.getByLabelText("OpenAI API Key");
     fireEvent.change(input, { target: { value: "bad-key" } });
     fireEvent.click(screen.getByText("Save & Finish"));
@@ -225,21 +233,41 @@ describe("OnboardingModal", () => {
     });
   });
 
-  // Verifies skipping Codex with empty key calls finishOnboarding (line 100-101)
-  it("skips Codex save when key is empty and finishes onboarding", async () => {
+  // Verifies "I've logged in" button checks device auth via getSettings
+  it("checks Codex device auth when 'I've logged in' is clicked", async () => {
+    mockGetSettings.mockResolvedValueOnce({ codexDeviceAuthConfigured: true } as ReturnType<typeof api.getSettings> extends Promise<infer T> ? T : never);
+
     render(<OnboardingModal onComplete={vi.fn()} />);
 
     // Go to Codex setup
     fireEvent.click(screen.getByText("Codex"));
 
-    // Click Finish with no key entered — should just finish onboarding
-    fireEvent.click(screen.getByText("Finish"));
+    // Click "I've logged in" — should check device auth
+    fireEvent.click(screen.getByText("I've logged in"));
 
     await waitFor(() => {
-      expect(mockUpdateSettings).toHaveBeenCalledWith({ onboardingCompleted: true });
+      expect(mockGetSettings).toHaveBeenCalled();
     });
+    // Device auth found — should complete onboarding
     await waitFor(() => {
-      expect(screen.getByText("Setup Skipped")).toBeInTheDocument();
+      expect(screen.getByText("You're all set!")).toBeInTheDocument();
+    });
+  });
+
+  // Verifies error when device auth not found
+  it("shows error when Codex device auth is not configured", async () => {
+    mockGetSettings.mockResolvedValueOnce({ codexDeviceAuthConfigured: false } as ReturnType<typeof api.getSettings> extends Promise<infer T> ? T : never);
+
+    render(<OnboardingModal onComplete={vi.fn()} />);
+
+    // Go to Codex setup
+    fireEvent.click(screen.getByText("Codex"));
+
+    // Click "I've logged in" — no auth found
+    fireEvent.click(screen.getByText("I've logged in"));
+
+    await waitFor(() => {
+      expect(screen.getByText(/No Codex auth found/)).toBeInTheDocument();
     });
   });
 

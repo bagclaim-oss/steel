@@ -95,7 +95,25 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     }
   }, [claudeToken]);
 
-  const handleSaveCodex = useCallback(async () => {
+  const handleCheckCodexAuth = useCallback(async () => {
+    setSaving(true);
+    setError("");
+    try {
+      const settings = await api.getSettings();
+      if (settings.codexDeviceAuthConfigured) {
+        setCodexConfigured(true);
+        await finishOnboarding();
+      } else {
+        setError("No Codex auth found. Run codex --login in your terminal first.");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to check auth status");
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  const handleSaveCodexApiKey = useCallback(async () => {
     if (!openaiKey.trim()) {
       await finishOnboarding();
       return;
@@ -225,7 +243,8 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
             <CodexSetupStep
               apiKey={openaiKey}
               onApiKeyChange={setOpenaiKey}
-              onSave={handleSaveCodex}
+              onCheckAuth={handleCheckCodexAuth}
+              onSaveApiKey={handleSaveCodexApiKey}
               onSkip={() => finishOnboarding()}
               onBack={() => goToStep("claude")}
               saving={saving}
@@ -318,7 +337,7 @@ function WelcomeStep({
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-[13px] font-medium text-cc-fg">Codex</div>
-            <div className="text-[11px] text-cc-muted leading-snug mt-0.5">OpenAI's coding agent — requires an API key</div>
+            <div className="text-[11px] text-cc-muted leading-snug mt-0.5">OpenAI's coding agent — log in via ChatGPT</div>
           </div>
           <svg
             className="w-4 h-4 text-cc-muted flex-shrink-0 transition-transform duration-150 group-hover:translate-x-0.5"
@@ -451,7 +470,8 @@ function ClaudeSetupStep({
 function CodexSetupStep({
   apiKey,
   onApiKeyChange,
-  onSave,
+  onCheckAuth,
+  onSaveApiKey,
   onSkip,
   onBack,
   saving,
@@ -459,18 +479,15 @@ function CodexSetupStep({
 }: {
   apiKey: string;
   onApiKeyChange: (v: string) => void;
-  onSave: () => void;
+  onCheckAuth: () => void;
+  onSaveApiKey: () => void;
   onSkip: () => void;
   onBack: () => void;
   saving: boolean;
   error: string;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  const errorId = "openai-key-error";
+  const [showApiKey, setShowApiKey] = useState(false);
+  const errorId = "codex-auth-error";
 
   return (
     <div className="p-7 pb-6">
@@ -482,28 +499,31 @@ function CodexSetupStep({
           Set up Codex
         </h2>
         <p className="text-sm text-cc-muted mt-1.5 leading-relaxed">
-          Add your OpenAI API key. It will be injected as{" "}
-          <code className="font-mono-code text-cc-fg text-xs bg-cc-hover px-1 py-0.5 rounded">OPENAI_API_KEY</code>{" "}
-          into each Codex session.
+          Log in with your ChatGPT account by running this in your terminal:
         </p>
       </div>
 
-      {/* API key input */}
-      <div className="mb-4">
-        <label htmlFor="openai-key" className="text-xs text-cc-muted block mb-1.5">
-          OpenAI API Key
-        </label>
-        <input
-          ref={inputRef}
-          id="openai-key"
-          type="password"
-          value={apiKey}
-          onChange={(e) => onApiKeyChange(e.target.value)}
-          placeholder="sk-..."
-          aria-describedby={error ? errorId : undefined}
-          aria-invalid={error ? true : undefined}
-          className="w-full px-3 py-2.5 min-h-[44px] text-sm bg-cc-bg rounded-lg border border-cc-border text-cc-fg placeholder:text-cc-muted/60 focus:outline-none focus:ring-1 focus:ring-cc-codex focus:border-cc-codex font-mono-code transition-shadow duration-150"
-        />
+      {/* Terminal-style command block */}
+      <div
+        className="rounded-lg overflow-hidden mb-4 border border-cc-border"
+        style={{ background: "var(--color-cc-code-bg)" }}
+      >
+        <div
+          className="flex items-center justify-between px-3 py-1.5 border-b border-cc-border"
+        >
+          <div className="flex items-center gap-1.5" aria-hidden="true">
+            <div className="w-[7px] h-[7px] rounded-full bg-cc-error opacity-60" />
+            <div className="w-[7px] h-[7px] rounded-full bg-cc-warning opacity-60" />
+            <div className="w-[7px] h-[7px] rounded-full bg-cc-success opacity-60" />
+          </div>
+          <CopyButton text="codex --login" />
+        </div>
+        <div className="px-3.5 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-cc-muted text-xs font-mono-code select-none" aria-hidden="true">$</span>
+            <code className="text-[13px] font-mono-code text-cc-fg select-all">codex --login</code>
+          </div>
+        </div>
       </div>
 
       {error && (
@@ -515,6 +535,49 @@ function CodexSetupStep({
           <span>{error}</span>
         </div>
       )}
+
+      {/* API key fallback — collapsible */}
+      <div className="mb-4">
+        <button
+          onClick={() => setShowApiKey(!showApiKey)}
+          className="text-xs text-cc-muted hover:text-cc-fg transition-colors flex items-center gap-1"
+        >
+          <svg
+            className="w-3 h-3 transition-transform duration-150"
+            style={{ transform: showApiKey ? "rotate(90deg)" : "rotate(0deg)" }}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+          Or use an API key instead
+        </button>
+        <div
+          className="accordion-panel"
+          data-open={showApiKey ? "true" : "false"}
+        >
+          <div className="accordion-inner">
+            <div className="mt-3">
+              <label htmlFor="openai-key" className="text-xs text-cc-muted block mb-1.5">
+                OpenAI API Key
+              </label>
+              <input
+                id="openai-key"
+                type="password"
+                value={apiKey}
+                onChange={(e) => onApiKeyChange(e.target.value)}
+                placeholder="sk-..."
+                aria-describedby={error ? errorId : undefined}
+                aria-invalid={error ? true : undefined}
+                className="w-full px-3 py-2.5 min-h-[44px] text-sm bg-cc-bg rounded-lg border border-cc-border text-cc-fg placeholder:text-cc-muted/60 focus:outline-none focus:ring-1 focus:ring-cc-codex focus:border-cc-codex font-mono-code transition-shadow duration-150"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Actions */}
       <div className="flex items-center gap-2 pt-1">
@@ -535,12 +598,12 @@ function CodexSetupStep({
           Skip
         </button>
         <button
-          onClick={onSave}
+          onClick={apiKey.trim() ? onSaveApiKey : onCheckAuth}
           disabled={saving}
           className="btn-codex-aa px-5 py-2.5 min-h-[44px] rounded-lg text-sm font-medium text-white transition-[background,opacity] duration-150 disabled:opacity-50"
           style={{ boxShadow: saving ? "none" : "0 1px 3px var(--color-cc-codex-btn)" }}
         >
-          {saving ? "Saving..." : apiKey.trim() ? "Save & Finish" : "Finish"}
+          {saving ? "Checking..." : apiKey.trim() ? "Save & Finish" : "I've logged in"}
         </button>
       </div>
     </div>

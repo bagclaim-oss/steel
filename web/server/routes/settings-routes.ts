@@ -2,6 +2,7 @@ import type { Hono } from "hono";
 import { DEFAULT_ANTHROPIC_MODEL, getSettings, updateSettings, type UpdateChannel } from "../settings-manager.js";
 import { linearCache } from "../linear-cache.js";
 import { listConnections } from "../linear-connections.js";
+import { hasContainerCodexAuth } from "../codex-container-auth.js";
 
 export function registerSettingsRoutes(api: Hono): void {
   api.get("/settings", (c) => {
@@ -12,6 +13,7 @@ export function registerSettingsRoutes(api: Hono): void {
       anthropicModel: settings.anthropicModel || DEFAULT_ANTHROPIC_MODEL,
       claudeCodeOAuthTokenConfigured: !!settings.claudeCodeOAuthToken.trim(),
       openaiApiKeyConfigured: !!settings.openaiApiKey.trim(),
+      codexDeviceAuthConfigured: hasContainerCodexAuth(),
       onboardingCompleted: settings.onboardingCompleted,
       linearApiKeyConfigured: !!settings.linearApiKey.trim() || connections.length > 0,
       linearConnectionCount: connections.length,
@@ -225,6 +227,7 @@ export function registerSettingsRoutes(api: Hono): void {
       anthropicModel: settings.anthropicModel || DEFAULT_ANTHROPIC_MODEL,
       claudeCodeOAuthTokenConfigured: !!settings.claudeCodeOAuthToken.trim(),
       openaiApiKeyConfigured: !!settings.openaiApiKey.trim(),
+      codexDeviceAuthConfigured: hasContainerCodexAuth(),
       onboardingCompleted: settings.onboardingCompleted,
       linearApiKeyConfigured: !!settings.linearApiKey.trim() || connectionsAfterUpdate.length > 0,
       linearConnectionCount: connectionsAfterUpdate.length,

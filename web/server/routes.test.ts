@@ -182,6 +182,10 @@ vi.mock("./linear-connections.js", () => ({
   _resetForTest: vi.fn(),
 }));
 
+vi.mock("./codex-container-auth.js", () => ({
+  hasContainerCodexAuth: vi.fn(() => false),
+}));
+
 const mockDiscoverClaudeSessions = vi.hoisted(() => vi.fn(
   (_options?: { limit?: number }) =>
     [] as Array<{
@@ -1526,6 +1530,7 @@ describe("GET /api/settings", () => {
       anthropicModel: "claude-sonnet-4-6",
       claudeCodeOAuthTokenConfigured: false,
       openaiApiKeyConfigured: false,
+      codexDeviceAuthConfigured: false,
       onboardingCompleted: false,
       linearApiKeyConfigured: false,
       linearConnectionCount: 0,
@@ -1583,6 +1588,7 @@ describe("GET /api/settings", () => {
       anthropicModel: "openai/gpt-4o-mini",
       claudeCodeOAuthTokenConfigured: false,
       openaiApiKeyConfigured: false,
+      codexDeviceAuthConfigured: false,
       onboardingCompleted: false,
       linearApiKeyConfigured: true,
       linearConnectionCount: 0,
@@ -1702,6 +1708,7 @@ describe("PUT /api/settings", () => {
       anthropicModel: "claude-sonnet-4-6",
       claudeCodeOAuthTokenConfigured: false,
       openaiApiKeyConfigured: false,
+      codexDeviceAuthConfigured: false,
       onboardingCompleted: false,
       linearApiKeyConfigured: false,
       linearConnectionCount: 0,

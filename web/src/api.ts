@@ -405,6 +405,7 @@ export interface AppSettings {
   anthropicModel: string;
   claudeCodeOAuthTokenConfigured: boolean;
   openaiApiKeyConfigured: boolean;
+  codexDeviceAuthConfigured: boolean;
   onboardingCompleted: boolean;
   linearApiKeyConfigured: boolean;
   linearConnectionCount: number;

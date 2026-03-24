@@ -1169,6 +1169,13 @@ function handleParsedMessage(
       break;
     }
 
+    case "port_status": {
+      if ("ports" in data && Array.isArray(data.ports)) {
+        store.setPortStatuses(sessionId, data.ports as import("./store/environment-slice.js").PortStatusInfo[]);
+      }
+      break;
+    }
+
     default: {
       console.debug("[ws] Unhandled message type:", (data as { type: string }).type);
       break;

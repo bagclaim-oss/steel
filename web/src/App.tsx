@@ -16,6 +16,7 @@ import { SessionLaunchOverlay } from "./components/SessionLaunchOverlay.js";
 import { SessionTerminalDock } from "./components/SessionTerminalDock.js";
 import { SessionEditorPane } from "./components/SessionEditorPane.js";
 import { SessionBrowserPane } from "./components/SessionBrowserPane.js";
+import { EnvironmentPanel } from "./components/EnvironmentPanel.js";
 import { UpdateOverlay } from "./components/UpdateOverlay.js";
 import { DockerUpdateDialog } from "./components/DockerUpdateDialog.js";
 import { OnboardingModal } from "./components/OnboardingModal.js";
@@ -296,7 +297,9 @@ export default function App() {
             <>
               <div className="absolute inset-0">
                 {currentSessionId ? (
-                  activeTab === "browser"
+                  activeTab === "environment"
+                    ? <EnvironmentPanel sessionId={currentSessionId} />
+                    : activeTab === "browser"
                     ? <SessionBrowserPane sessionId={currentSessionId} />
                     : activeTab === "terminal"
                     ? (

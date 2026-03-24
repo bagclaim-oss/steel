@@ -4,6 +4,7 @@
 import type { BrowserIncomingMessage } from "./session-types.js";
 import type { CodexAdapter } from "./codex-adapter.js";
 import type { SessionPhase } from "./session-state-machine.js";
+import type { PortStatus } from "./port-monitor.js";
 
 export interface CompanionEventMap {
   // ── Session lifecycle ──────────────────────────────────────────────
@@ -61,4 +62,9 @@ export interface CompanionEventMap {
 
   /** A result (turn completion) was processed and broadcast to browsers. */
   "message:result": { sessionId: string; message: BrowserIncomingMessage };
+
+  // ── Port monitoring ────────────────────────────────────────────────
+
+  /** Port health status changed (emitted by port-monitor). */
+  "port:status": { sessionId: string; ports: PortStatus[] };
 }

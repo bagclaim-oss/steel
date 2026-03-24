@@ -19,6 +19,7 @@ import { hasContainerClaudeAuth } from "./claude-container-auth.js";
 import { hasContainerCodexAuth } from "./codex-container-auth.js";
 import { discoverCommandsAndSkills } from "./commands-discovery.js";
 import { getSettings } from "./settings-manager.js";
+import { getToken } from "./auth-manager.js";
 import { generateSessionTitle } from "./auto-namer.js";
 import { companionBus } from "./event-bus.js";
 import { metricsCollector } from "./metrics-collector.js";
@@ -49,6 +50,8 @@ export interface SessionOrchestratorDeps {
     unwatch(sessionId: string): void;
   };
   agentExecutor: AgentExecutor;
+  /** Server port — used to build the MCP HTTP URL for auto-injection. */
+  port?: number;
 }
 
 export interface CreateSessionRequest {
@@ -119,6 +122,7 @@ export class SessionOrchestrator {
   private worktreeTracker: WorktreeTracker;
   private prPoller: SessionOrchestratorDeps["prPoller"];
   private agentExecutor: AgentExecutor;
+  private port: number | undefined;
 
   // Auto-relaunch state
   private relaunchingSet = new Set<string>();
@@ -140,6 +144,7 @@ export class SessionOrchestrator {
     this.worktreeTracker = deps.worktreeTracker;
     this.prPoller = deps.prPoller;
     this.agentExecutor = deps.agentExecutor;
+    this.port = deps.port;
   }
 
   // ── Initialization (event wiring) ──────────────────────────────────────────
@@ -208,8 +213,49 @@ export class SessionOrchestrator {
       await this.handleAutoNaming(sessionId, firstUserMessage);
     });
 
+    // Auto-inject Companion MCP server when a session becomes ready.
+    // This gives Claude Code / Codex agents access to validate_launch_config
+    // and test_launch_config tools without requiring a CLI install.
+    companionBus.on("session:phase-changed", ({ sessionId, to, trigger }) => {
+      if (to === "ready" && trigger === "system_init") {
+        this.injectCompanionMcpServer(sessionId);
+      }
+    });
+
     // Reconnection watchdog for stale sessions after server restart
     this.startReconnectionWatchdog();
+  }
+
+  // ── MCP Auto-Injection ─────────────────────────────────────────────────────
+
+  /**
+   * Inject the Companion MCP HTTP server into a session so the agent gets
+   * validate_launch_config and test_launch_config tools automatically.
+   */
+  private injectCompanionMcpServer(sessionId: string): void {
+    if (!this.port) return; // Can't build URL without a port
+
+    const info = this.launcher.getSession(sessionId);
+    if (!info || info.archived) return;
+
+    // Build the MCP HTTP URL. For containerized sessions, the agent runs inside
+    // a Docker container and needs to reach the host via host.docker.internal.
+    // For local sessions, localhost is fine.
+    const isContainerized = !!info.containerId;
+    const host = isContainerized ? "host.docker.internal" : "127.0.0.1";
+    let url = `http://${host}:${this.port}/api/mcp?sessionId=${sessionId}`;
+
+    // For non-localhost requests, include the auth token in the URL so the
+    // MCP client inside the container can authenticate.
+    if (isContainerized) {
+      url += `&token=${getToken()}`;
+    }
+
+    log.info("orchestrator", `Injecting Companion MCP server for session ${sessionId}`, { url: url.replace(/token=[^&]+/, "token=***") });
+
+    this.wsBridge.injectMcpSetServers(sessionId, {
+      companion: { type: "http", url },
+    });
   }
 
   // ── Session Creation ───────────────────────────────────────────────────────

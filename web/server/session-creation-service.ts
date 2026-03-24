@@ -14,6 +14,9 @@ import { getConnection } from "./linear-connections.js";
 import { buildLinearSystemPrompt } from "./linear-prompt-builder.js";
 import { discoverCommandsAndSkills } from "./commands-discovery.js";
 import { VSCODE_EDITOR_CONTAINER_PORT, CODEX_APP_SERVER_CONTAINER_PORT, NOVNC_CONTAINER_PORT } from "./constants.js";
+import { loadLaunchConfig, resolveForContext } from "./launch-config.js";
+import { runSetupScripts, startServices } from "./launch-runner.js";
+import { startMonitoring } from "./port-monitor.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -396,6 +399,73 @@ export async function executeSessionCreation(
           503,
           "running_init_script",
         );
+      }
+    }
+  }
+
+  // -- Step: Launch config (setup scripts + services) --
+  if (cwd && body.skipLaunchSetup !== true) {
+    const repoRoot = worktreeInfo?.repoRoot;
+    const launchConfig = loadLaunchConfig(cwd, repoRoot);
+    if (launchConfig) {
+      const resolved = resolveForContext(launchConfig, {
+        isSandbox: !!effectiveImage,
+        isWorktree: !!worktreeInfo,
+      });
+
+      // Run setup scripts (install deps, migrations, etc.)
+      if (resolved.setup.length > 0) {
+        await emit(onProgress, "running_launch_setup", "Running project setup...", "in_progress");
+        const setupResult = await runSetupScripts(resolved.setup, {
+          cwd,
+          containerId,
+          onOutput: (scriptName, line) => {
+            emit(onProgress, "running_launch_setup", scriptName, "in_progress", line).catch(() => {});
+          },
+        });
+        if (!setupResult.ok) {
+          if (tempId) containerManager.removeContainer(tempId);
+          throw new SessionCreationError(
+            setupResult.error ?? "Setup scripts failed",
+            503,
+            "running_launch_setup",
+          );
+        }
+        await emit(onProgress, "running_launch_setup", "Project setup complete", "done");
+      }
+
+      // Start background services (dev servers, databases, etc.)
+      const serviceCount = Object.keys(resolved.services).length;
+      if (serviceCount > 0) {
+        await emit(onProgress, "starting_services", `Starting ${serviceCount} service(s)...`, "in_progress");
+        // Generate a temporary session ID for service tracking (real ID comes from CLI launch)
+        const tempSessionId = tempId ?? crypto.randomUUID().slice(0, 8);
+        const svcResult = await startServices(resolved, {
+          cwd,
+          containerId,
+          sessionId: tempSessionId,
+          onProgress: (name, status, detail) => {
+            emit(onProgress, "starting_services", `${name}: ${status}`, "in_progress", detail).catch(() => {});
+          },
+          onOutput: (name, line) => {
+            emit(onProgress, "starting_services", name, "in_progress", line).catch(() => {});
+          },
+        });
+        if (!svcResult.ok) {
+          await emit(onProgress, "starting_services", svcResult.error ?? "Service startup failed", "error");
+          // Non-fatal: warn but continue to CLI launch
+          console.warn(`[session-creation] Service startup warning: ${svcResult.error}`);
+        } else {
+          await emit(onProgress, "starting_services", "Services started", "done");
+        }
+
+        // Start port monitoring for declared ports
+        if (Object.keys(resolved.ports).length > 0) {
+          startMonitoring(tempSessionId, resolved.ports);
+        }
+
+        // Store the temp session ID so we can re-associate after CLI launch gives us the real ID
+        (body as Record<string, unknown>).__launchTempSessionId = tempSessionId;
       }
     }
   }

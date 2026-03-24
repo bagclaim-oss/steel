@@ -32,6 +32,7 @@ interface MockStoreState {
   sdkSessions: { sessionId: string; cwd?: string; containerId?: string; model?: string; backendType?: string }[];
   gitChangedFilesCount: Map<string, number>;
   sessionProcesses: Map<string, { status: string }[]>;
+  portStatuses: Map<string, unknown[]>;
 }
 
 let storeState: MockStoreState;
@@ -57,6 +58,7 @@ function resetStore(overrides: Partial<MockStoreState> = {}) {
     sdkSessions: [],
     gitChangedFilesCount: new Map(),
     sessionProcesses: new Map(),
+    portStatuses: new Map(),
     ...overrides,
   };
 }

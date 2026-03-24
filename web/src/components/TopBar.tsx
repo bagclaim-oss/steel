@@ -3,7 +3,7 @@ import { useStore } from "../store.js";
 import { parseHash } from "../utils/routing.js";
 import { AiValidationToggle } from "./AiValidationToggle.js";
 
-type WorkspaceTab = "chat" | "diff" | "terminal" | "processes" | "editor" | "browser";
+type WorkspaceTab = "chat" | "diff" | "terminal" | "processes" | "editor" | "browser" | "environment";
 
 export function TopBar() {
   const hash = useSyncExternalStore(
@@ -246,6 +246,19 @@ export function TopBar() {
               >
                 Browser
               </button>
+              <button
+                onClick={() => activateWorkspaceTab("environment")}
+                className={`h-full px-3 text-[12px] font-medium transition-colors cursor-pointer flex items-center gap-1.5 border-b-[1.5px] shrink-0 ${
+                  activeTab === "environment"
+                    ? "text-cc-fg border-cc-primary"
+                    : "text-cc-muted hover:text-cc-fg border-transparent"
+                }`}
+                title="Environment: services & ports"
+                aria-label="Environment tab"
+              >
+                Environment
+                <PortStatusDots />
+              </button>
           </div>
         )}
 
@@ -300,5 +313,35 @@ function ThemeToggle() {
         </svg>
       )}
     </button>
+  );
+}
+
+const EMPTY_PORT_STATUSES: import("../store/environment-slice.js").PortStatusInfo[] = [];
+
+/** Tiny colored dots showing port health at a glance in the Environment tab. */
+function PortStatusDots() {
+  const currentSessionId = useStore((s) => s.currentSessionId);
+  const portStatuses = useStore((s) =>
+    currentSessionId ? s.portStatuses.get(currentSessionId) ?? EMPTY_PORT_STATUSES : EMPTY_PORT_STATUSES,
+  );
+
+  if (portStatuses.length === 0) return null;
+
+  return (
+    <span className="flex items-center gap-0.5">
+      {portStatuses.map((ps) => (
+        <span
+          key={ps.port}
+          className={`w-1.5 h-1.5 rounded-full ${
+            ps.status === "healthy"
+              ? "bg-green-500"
+              : ps.status === "unhealthy"
+              ? "bg-red-500"
+              : "bg-yellow-500"
+          }`}
+          title={`${ps.label} (:${ps.port}) — ${ps.status}`}
+        />
+      ))}
+    </span>
   );
 }

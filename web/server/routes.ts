@@ -19,6 +19,7 @@ import { registerFsRoutes } from "./routes/fs-routes.js";
 import { registerSkillRoutes } from "./routes/skills-routes.js";
 import { registerEnvRoutes } from "./routes/env-routes.js";
 import { registerSandboxRoutes } from "./routes/sandbox-routes.js";
+import { registerLaunchRoutes } from "./routes/launch-routes.js";
 import { registerCronRoutes } from "./routes/cron-routes.js";
 import { registerAgentRoutes } from "./routes/agent-routes.js";
 import { registerMetricsRoutes } from "./routes/metrics-routes.js";
@@ -26,6 +27,7 @@ import { registerLinearAgentWebhookRoute, registerLinearAgentProtectedRoutes } f
 import { registerPromptRoutes } from "./routes/prompt-routes.js";
 import { registerSettingsRoutes } from "./routes/settings-routes.js";
 import { registerTailscaleRoutes } from "./routes/tailscale-routes.js";
+import { registerMcpRoutes } from "./routes/mcp-routes.js";
 import { registerGitRoutes } from "./routes/git-routes.js";
 import { registerSystemRoutes } from "./routes/system-routes.js";
 import { isRecordingHubEnabled } from "./recording-hub/hub-config.js";
@@ -160,7 +162,10 @@ export function createRoutes(
     // Also check the companion_auth cookie — iframes (browser preview) can't
     // send Authorization headers, but browsers do forward cookies automatically.
     const cookieToken = getCookie(c, "companion_auth") ?? null;
-    if (!verifyToken(token) && !verifyToken(cookieToken)) {
+    // Token in query param — used by MCP HTTP clients in containerized sessions
+    // where the agent can't set custom headers easily.
+    const queryToken = c.req.query("token") ?? null;
+    if (!verifyToken(token) && !verifyToken(cookieToken) && !verifyToken(queryToken)) {
       return c.json({ error: "unauthorized" }, 401);
     }
     return next();
@@ -1238,6 +1243,8 @@ export function createRoutes(
   registerFsRoutes(api);
   registerEnvRoutes(api, { webDir: WEB_DIR });
   registerSandboxRoutes(api);
+  registerLaunchRoutes(api);
+  registerMcpRoutes(api, wsBridge, launcher);
 
   registerPromptRoutes(api);
   registerSettingsRoutes(api);

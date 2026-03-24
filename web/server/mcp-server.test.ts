@@ -288,6 +288,86 @@ describe("MCP Server — handleMcpRequest", () => {
     expect(data.errors).toContain("Missing services");
   });
 
+  it("test_launch_config returns startup order error when circular deps found", async () => {
+    const config = {
+      version: "1",
+      services: {
+        a: { command: "start-a", dependsOn: { b: "started" } },
+        b: { command: "start-b", dependsOn: { a: "started" } },
+      },
+    };
+    mockLoadLaunchConfig.mockReturnValue(config);
+    mockValidateConfig.mockReturnValue({ valid: true, errors: [] });
+    mockResolveForContext.mockReturnValue({
+      setup: [],
+      services: {
+        a: { name: "a", command: "start-a", dependsOn: { b: "started" }, readyTimeout: 60 },
+        b: { name: "b", command: "start-b", dependsOn: { a: "started" }, readyTimeout: 60 },
+      },
+      ports: {},
+    });
+    mockBuildStartupOrder.mockImplementation(() => {
+      throw new Error("Circular dependency detected: a, b");
+    });
+
+    const res = await handleMcpRequest(
+      rpc("tools/call", { name: "test_launch_config", arguments: { cwd: "/project" } }),
+      null,
+      deps,
+    );
+    const result = res.result as { content: Array<{ text: string }> };
+    const data = JSON.parse(result.content[0].text);
+    expect(data.valid).toBe(false);
+    expect(data.errors[0]).toContain("Circular dependency");
+  });
+
+  it("test_launch_config with setup scripts reports their results", async () => {
+    const config = {
+      version: "1",
+      setup: [{ name: "install", command: "npm install" }],
+    };
+    mockLoadLaunchConfig.mockReturnValue(config);
+    mockValidateConfig.mockReturnValue({ valid: true, errors: [] });
+    mockResolveForContext.mockReturnValue({
+      setup: [{ name: "install", command: "npm install" }],
+      services: {},
+      ports: {},
+    });
+    mockBuildStartupOrder.mockReturnValue([]);
+
+    const { runSetupScripts } = await import("./launch-runner.js");
+    (runSetupScripts as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
+
+    const res = await handleMcpRequest(
+      rpc("tools/call", { name: "test_launch_config", arguments: { cwd: "/project" } }),
+      null,
+      deps,
+    );
+    const result = res.result as { content: Array<{ text: string }> };
+    const data = JSON.parse(result.content[0].text);
+    expect(data.valid).toBe(true);
+    expect(data.setup_results).toHaveLength(1);
+    expect(data.setup_results[0].ok).toBe(true);
+  });
+
+  it("test_launch_config with context arg applies condition filtering", async () => {
+    const config = { version: "1" };
+    mockLoadLaunchConfig.mockReturnValue(config);
+    mockValidateConfig.mockReturnValue({ valid: true, errors: [] });
+    mockResolveForContext.mockReturnValue({ setup: [], services: {}, ports: {} });
+    mockBuildStartupOrder.mockReturnValue([]);
+
+    await handleMcpRequest(
+      rpc("tools/call", {
+        name: "test_launch_config",
+        arguments: { cwd: "/project", context: { isSandbox: true, isWorktree: false } },
+      }),
+      null,
+      deps,
+    );
+    expect(mockResolveForContext).toHaveBeenCalledWith(config, { isSandbox: true, isWorktree: false });
+  });
+
   it("test_launch_config with valid config runs full test cycle", async () => {
     // Set up a valid config scenario
     const config = {

@@ -209,7 +209,7 @@ async function checkTcp(
 
   const prevStatus = status.status;
   try {
-    const socket = await Bun.connect({
+    await Bun.connect({
       hostname,
       port,
       socket: {

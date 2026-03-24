@@ -11,6 +11,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect } from "node:net";
 import { loadLaunchConfig, validateConfig, resolveForContext, buildStartupOrder } from "./launch-config.js";
+import { buildLaunchSchemaResponse } from "./launch-config-schema.js";
 import type { LaunchConfig } from "./launch-config.js";
 import { runSetupScripts, startServices, stopAllServices } from "./launch-runner.js";
 import type { WsBridge } from "./ws-bridge.js";
@@ -47,6 +48,15 @@ const TOOLS = [
           description: "Project directory to check. Defaults to the session's working directory.",
         },
       },
+    },
+  },
+  {
+    name: "get_launch_config_schema",
+    description:
+      "Get the full JSON Schema and a complete example for .companion/launch.json configuration files. Use this before creating or editing a launch config.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
     },
   },
   {
@@ -164,6 +174,9 @@ async function handleToolCall(
 
   try {
     switch (toolName) {
+      case "get_launch_config_schema":
+        return { jsonrpc: "2.0", id, result: toolResult(buildLaunchSchemaResponse()) };
+
       case "validate_launch_config":
         return { jsonrpc: "2.0", id, result: toolResult(await toolValidate(cwd)) };
 

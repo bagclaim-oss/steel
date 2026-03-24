@@ -13,6 +13,7 @@ import * as gitUtils from "./git-utils.js";
 import * as sessionNames from "./session-names.js";
 import * as sessionLinearIssues from "./session-linear-issues.js";
 import { getConnection, resolveApiKey } from "./linear-connections.js";
+import { buildCompanionMcpPrompt } from "./mcp-prompt-builder.js";
 import { buildLinearSystemPrompt } from "./linear-prompt-builder.js";
 import { transitionLinearIssue, fetchLinearTeamStates } from "./routes/linear-routes.js";
 import { hasContainerClaudeAuth } from "./claude-container-auth.js";
@@ -256,6 +257,14 @@ export class SessionOrchestrator {
     this.wsBridge.injectMcpSetServers(sessionId, {
       companion: { type: "http", url },
     });
+
+    // Inject a system prompt describing the available MCP tools.
+    // For Claude sessions, we can append to the system prompt at any time.
+    // For Codex, the prompt is injected at launch time (see session-creation-service.ts).
+    const session = this.wsBridge.getSession(sessionId);
+    if (session?.backendType === "claude") {
+      this.wsBridge.injectSystemPrompt(sessionId, buildCompanionMcpPrompt());
+    }
   }
 
   // ── Session Creation ───────────────────────────────────────────────────────

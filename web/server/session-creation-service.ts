@@ -17,6 +17,7 @@ import { VSCODE_EDITOR_CONTAINER_PORT, CODEX_APP_SERVER_CONTAINER_PORT, NOVNC_CO
 import { loadLaunchConfig, resolveForContext } from "./launch-config.js";
 import { runSetupScripts, startServices, reassociateServices } from "./launch-runner.js";
 import { startMonitoring, reassociateMonitoring } from "./port-monitor.js";
+import { buildCompanionMcpPrompt } from "./mcp-prompt-builder.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -497,7 +498,9 @@ export async function executeSessionCreation(
       containerCwd: containerInfo?.containerCwd,
       resumeSessionAt,
       forkSession,
-      systemPrompt: backend === "codex" ? linearSystemPrompt : undefined,
+      systemPrompt: backend === "codex"
+        ? [linearSystemPrompt, buildCompanionMcpPrompt()].filter(Boolean).join("\n\n")
+        : undefined,
       sandboxSlug: sandboxEnabled ? ((body.sandboxSlug as string) || undefined) : undefined,
     });
   } catch (err) {

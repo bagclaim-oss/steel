@@ -77,11 +77,12 @@ describe("MCP Server — handleMcpRequest", () => {
 
   // ── tools/list ────────────────────────────────────────────────────────────
 
-  it("tools/list returns validate_launch_config and test_launch_config", async () => {
+  it("tools/list returns all three tools including get_launch_config_schema", async () => {
     const res = await handleMcpRequest(rpc("tools/list"), null, deps);
     const result = res.result as { tools: Array<{ name: string; inputSchema: unknown }> };
-    expect(result.tools).toHaveLength(2);
+    expect(result.tools).toHaveLength(3);
     const names = result.tools.map((t) => t.name);
+    expect(names).toContain("get_launch_config_schema");
     expect(names).toContain("validate_launch_config");
     expect(names).toContain("test_launch_config");
     // Each tool should have an inputSchema
@@ -124,6 +125,29 @@ describe("MCP Server — handleMcpRequest", () => {
     expect(res.error).toBeDefined();
     expect(res.error!.code).toBe(-32602);
     expect(res.error!.message).toContain("Unknown tool");
+  });
+
+  // ── get_launch_config_schema ──────────────────────────────────────────────
+
+  it("get_launch_config_schema returns schema and example without needing session context", async () => {
+    const res = await handleMcpRequest(
+      rpc("tools/call", { name: "get_launch_config_schema", arguments: {} }),
+      null, // no session
+      deps,
+    );
+    expect(res.error).toBeUndefined();
+    const result = res.result as { content: Array<{ type: string; text: string }>; isError?: boolean };
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toHaveLength(1);
+    const text = result.content[0].text;
+    // Should contain schema documentation
+    expect(text).toContain("JSON Schema");
+    expect(text).toContain("Complete Example");
+    // Should reference the key config sections
+    expect(text).toContain("setup");
+    expect(text).toContain("services");
+    expect(text).toContain("ports");
+    expect(text).toContain("dependsOn");
   });
 
   // ── validate_launch_config ────────────────────────────────────────────────

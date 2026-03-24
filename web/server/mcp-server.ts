@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect } from "node:net";
-import { loadLaunchConfig, validateConfig, resolveForContext, buildStartupOrder } from "./launch-config.js";
+import { loadLaunchConfig, validateConfig, resolveForContext, buildStartupOrder, resolveEnvVars } from "./launch-config.js";
 import { buildLaunchSchemaResponse } from "./launch-config-schema.js";
 import type { LaunchConfig } from "./launch-config.js";
 import { runSetupScripts, startServices, stopAllServices, getServiceStatuses } from "./launch-runner.js";
@@ -431,6 +431,10 @@ async function toolReload(
     isWorktree: false,
   });
 
+  // Resolve env vars (session env → envFile → process.env)
+  const sessionEnv = deps.launcher.getSessionEnv(sessionId);
+  const resolvedEnv = resolveEnvVars(config, effectiveCwd, sessionEnv);
+
   // Start services
   const serviceNames = Object.keys(resolved.services);
   if (serviceNames.length > 0) {
@@ -438,6 +442,7 @@ async function toolReload(
       cwd: effectiveCwd,
       containerId: launcherSession?.containerId,
       sessionId,
+      env: resolvedEnv.topLevelEnv,
     });
     if (!svcResult.ok) {
       return { reloaded: false, error: svcResult.error ?? "Service startup failed", services: serviceNames };
@@ -454,6 +459,7 @@ async function toolReload(
     reloaded: true,
     services: serviceNames,
     ports: portKeys,
+    env_warnings: resolvedEnv.warnings.length > 0 ? resolvedEnv.warnings : undefined,
   };
 }
 

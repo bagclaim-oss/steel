@@ -29,6 +29,10 @@ export interface RunSetupOpts {
   containerId?: string;
   onOutput?: (scriptName: string, line: string) => void;
   timeout?: number; // ms per script, default 120_000
+  /** Resolved top-level env vars to merge into all scripts */
+  env?: Record<string, string>;
+  /** Per-script env overrides keyed by script name */
+  perScriptEnv?: Record<string, Record<string, string>>;
 }
 
 export interface StartServicesOpts {
@@ -37,6 +41,8 @@ export interface StartServicesOpts {
   sessionId: string;
   onProgress?: (serviceName: string, status: ServiceStatus, detail?: string) => void;
   onOutput?: (serviceName: string, line: string) => void;
+  /** Resolved top-level env vars to merge into all services */
+  env?: Record<string, string>;
 }
 
 // ── Module state ────────────────────────────────────────────────────────────
@@ -57,9 +63,13 @@ export async function runSetupScripts(
   for (const script of scripts) {
     log.info("launch-runner", ` Running setup: ${script.name} → ${script.command}`);
     try {
+      const scriptEnv = {
+        ...(opts.env ?? {}),
+        ...(opts.perScriptEnv?.[script.name] ?? {}),
+      };
       const result = opts.containerId
-        ? await runInContainer(script.command, opts.containerId, { timeout, onOutput: (line) => opts.onOutput?.(script.name, line) })
-        : await runLocal(script.command, opts.cwd, { timeout, onOutput: (line) => opts.onOutput?.(script.name, line) });
+        ? await runInContainer(script.command, opts.containerId, { timeout, onOutput: (line) => opts.onOutput?.(script.name, line), env: scriptEnv })
+        : await runLocal(script.command, opts.cwd, { timeout, onOutput: (line) => opts.onOutput?.(script.name, line), env: scriptEnv });
 
       if (result.exitCode !== 0) {
         const truncated = result.output.length > 2000
@@ -85,13 +95,13 @@ export async function runSetupScripts(
 async function runLocal(
   command: string,
   cwd: string,
-  opts: { timeout: number; onOutput?: (line: string) => void },
+  opts: { timeout: number; onOutput?: (line: string) => void; env?: Record<string, string> },
 ): Promise<{ exitCode: number; output: string }> {
   return new Promise<{ exitCode: number; output: string }>((resolve, reject) => {
     const proc = spawn("sh", ["-lc", command], {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
+      env: { ...process.env, ...(opts.env ?? {}) },
     });
 
     const lines: string[] = [];
@@ -137,9 +147,21 @@ async function runLocal(
 async function runInContainer(
   command: string,
   containerId: string,
-  opts: { timeout: number; onOutput?: (line: string) => void },
+  opts: { timeout: number; onOutput?: (line: string) => void; env?: Record<string, string> },
 ): Promise<{ exitCode: number; output: string }> {
-  return containerManager.execInContainerAsync(containerId, ["sh", "-lc", command], {
+  // Build env flags for docker exec if env vars are provided
+  const envFlags: string[] = [];
+  if (opts.env) {
+    for (const [k, v] of Object.entries(opts.env)) {
+      envFlags.push("-e", `${k}=${v}`);
+    }
+  }
+  // Use execInContainerAsync with env flags prepended to the command args
+  // Since execInContainerAsync wraps "docker exec <containerId> ...cmd",
+  // we need to inject -e flags before the actual command.
+  // Pass them by building a custom command array.
+  const cmdWithEnv = [...envFlags, "sh", "-lc", command];
+  return containerManager.execInContainerAsync(containerId, cmdWithEnv, {
     timeout: opts.timeout,
     onOutput: opts.onOutput,
   });
@@ -297,14 +319,28 @@ function spawnService(
     emitter.subscribe((line) => opts.onOutput!(name, line));
   }
 
-  const cmd = opts.containerId
-    ? ["docker", "exec", opts.containerId, "sh", "-lc", svc.command]
-    : ["sh", "-lc", svc.command];
+  // Merge env: top-level opts.env + per-service svc.env
+  const mergedEnv = { ...(opts.env ?? {}), ...(svc.env ?? {}) };
+  const hasEnv = Object.keys(mergedEnv).length > 0;
+
+  let cmd: string[];
+  if (opts.containerId) {
+    cmd = ["docker", "exec"];
+    // Pass env vars via -e flags for container mode
+    if (hasEnv) {
+      for (const [k, v] of Object.entries(mergedEnv)) {
+        cmd.push("-e", `${k}=${v}`);
+      }
+    }
+    cmd.push(opts.containerId, "sh", "-lc", svc.command);
+  } else {
+    cmd = ["sh", "-lc", svc.command];
+  }
 
   const proc = spawn(cmd[0], cmd.slice(1), {
     cwd: opts.containerId ? undefined : opts.cwd,
     stdio: ["ignore", "pipe", "pipe"],
-    env: opts.containerId ? undefined : { ...process.env },
+    env: opts.containerId ? undefined : { ...process.env, ...mergedEnv },
   });
 
   pipeNodeStreamToEmitter(proc.stdout, emitter);

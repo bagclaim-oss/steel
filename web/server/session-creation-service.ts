@@ -14,7 +14,7 @@ import { getConnection } from "./linear-connections.js";
 import { buildLinearSystemPrompt } from "./linear-prompt-builder.js";
 import { discoverCommandsAndSkills } from "./commands-discovery.js";
 import { VSCODE_EDITOR_CONTAINER_PORT, CODEX_APP_SERVER_CONTAINER_PORT, NOVNC_CONTAINER_PORT } from "./constants.js";
-import { loadLaunchConfig, resolveForContext } from "./launch-config.js";
+import { loadLaunchConfig, resolveForContext, resolveEnvVars } from "./launch-config.js";
 import { runSetupScripts, startServices, reassociateServices } from "./launch-runner.js";
 import { startMonitoring, reassociateMonitoring } from "./port-monitor.js";
 import { buildCompanionMcpPrompt } from "./mcp-prompt-builder.js";
@@ -414,12 +414,20 @@ export async function executeSessionCreation(
         isWorktree: !!worktreeInfo,
       });
 
+      // Resolve environment variables (envFile + ${VAR} interpolation)
+      const resolvedEnv = resolveEnvVars(launchConfig, cwd, envVars);
+      if (resolvedEnv.warnings.length > 0) {
+        console.warn(`[session-creation] Env resolution warnings: ${resolvedEnv.warnings.join(", ")}`);
+      }
+
       // Run setup scripts (install deps, migrations, etc.)
       if (resolved.setup.length > 0) {
         await emit(onProgress, "running_launch_setup", "Running project setup...", "in_progress");
         const setupResult = await runSetupScripts(resolved.setup, {
           cwd,
           containerId,
+          env: resolvedEnv.topLevelEnv,
+          perScriptEnv: resolvedEnv.setupEnvs,
           onOutput: (scriptName, line) => {
             emit(onProgress, "running_launch_setup", scriptName, "in_progress", line).catch(() => {});
           },
@@ -445,6 +453,7 @@ export async function executeSessionCreation(
           cwd,
           containerId,
           sessionId: tempSessionId,
+          env: resolvedEnv.topLevelEnv,
           onProgress: (name, status, detail) => {
             emit(onProgress, "starting_services", `${name}: ${status}`, "in_progress", detail).catch(() => {});
           },

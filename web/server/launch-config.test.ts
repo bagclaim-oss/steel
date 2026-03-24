@@ -7,6 +7,8 @@ import {
   validateConfig,
   resolveForContext,
   buildStartupOrder,
+  parseEnvFile,
+  resolveEnvVars,
   type LaunchConfig,
   type ResolvedService,
 } from "./launch-config.js";
@@ -290,15 +292,15 @@ describe("launch-config", () => {
   describe("buildStartupOrder", () => {
     test("single service with no deps → one wave", () => {
       const services: Record<string, ResolvedService> = {
-        web: { name: "web", command: "npm dev", dependsOn: {}, readyTimeout: 60 },
+        web: { name: "web", command: "npm dev", env: {}, dependsOn: {}, readyTimeout: 60 },
       };
       expect(buildStartupOrder(services)).toEqual([["web"]]);
     });
 
     test("independent services → single wave with all", () => {
       const services: Record<string, ResolvedService> = {
-        web: { name: "web", command: "npm dev", dependsOn: {}, readyTimeout: 60 },
-        api: { name: "api", command: "npm api", dependsOn: {}, readyTimeout: 60 },
+        web: { name: "web", command: "npm dev", env: {}, dependsOn: {}, readyTimeout: 60 },
+        api: { name: "api", command: "npm api", env: {}, dependsOn: {}, readyTimeout: 60 },
       };
       const waves = buildStartupOrder(services);
       expect(waves).toHaveLength(1);
@@ -307,9 +309,9 @@ describe("launch-config", () => {
 
     test("linear chain → sequential waves", () => {
       const services: Record<string, ResolvedService> = {
-        db: { name: "db", command: "start-db", dependsOn: {}, readyPattern: "ready", readyTimeout: 60 },
-        api: { name: "api", command: "start-api", dependsOn: { db: "ready" }, readyPattern: "listening", readyTimeout: 60 },
-        web: { name: "web", command: "start-web", dependsOn: { api: "started" }, readyTimeout: 60 },
+        db: { name: "db", command: "start-db", env: {}, dependsOn: {}, readyPattern: "ready", readyTimeout: 60 },
+        api: { name: "api", command: "start-api", env: {}, dependsOn: { db: "ready" }, readyPattern: "listening", readyTimeout: 60 },
+        web: { name: "web", command: "start-web", env: {}, dependsOn: { api: "started" }, readyTimeout: 60 },
       };
       const waves = buildStartupOrder(services);
       expect(waves).toEqual([["db"], ["api"], ["web"]]);
@@ -318,10 +320,10 @@ describe("launch-config", () => {
     test("diamond dependency → correct wave grouping", () => {
       // db → api, db → worker, then app depends on both api and worker
       const services: Record<string, ResolvedService> = {
-        db: { name: "db", command: "start-db", dependsOn: {}, readyPattern: "ready", readyTimeout: 60 },
-        api: { name: "api", command: "start-api", dependsOn: { db: "ready" }, readyTimeout: 60 },
-        worker: { name: "worker", command: "start-worker", dependsOn: { db: "ready" }, readyTimeout: 60 },
-        app: { name: "app", command: "start-app", dependsOn: { api: "started", worker: "started" }, readyTimeout: 60 },
+        db: { name: "db", command: "start-db", env: {}, dependsOn: {}, readyPattern: "ready", readyTimeout: 60 },
+        api: { name: "api", command: "start-api", env: {}, dependsOn: { db: "ready" }, readyTimeout: 60 },
+        worker: { name: "worker", command: "start-worker", env: {}, dependsOn: { db: "ready" }, readyTimeout: 60 },
+        app: { name: "app", command: "start-app", env: {}, dependsOn: { api: "started", worker: "started" }, readyTimeout: 60 },
       };
       const waves = buildStartupOrder(services);
       expect(waves).toHaveLength(3);
@@ -332,23 +334,251 @@ describe("launch-config", () => {
 
     test("circular dependency → throws", () => {
       const services: Record<string, ResolvedService> = {
-        a: { name: "a", command: "start-a", dependsOn: { b: "started" }, readyTimeout: 60 },
-        b: { name: "b", command: "start-b", dependsOn: { a: "started" }, readyTimeout: 60 },
+        a: { name: "a", command: "start-a", env: {}, dependsOn: { b: "started" }, readyTimeout: 60 },
+        b: { name: "b", command: "start-b", env: {}, dependsOn: { a: "started" }, readyTimeout: 60 },
       };
       expect(() => buildStartupOrder(services)).toThrow(/Circular dependency/);
     });
 
     test("three-way circular → throws with all names", () => {
       const services: Record<string, ResolvedService> = {
-        a: { name: "a", command: "a", dependsOn: { c: "started" }, readyTimeout: 60 },
-        b: { name: "b", command: "b", dependsOn: { a: "started" }, readyTimeout: 60 },
-        c: { name: "c", command: "c", dependsOn: { b: "started" }, readyTimeout: 60 },
+        a: { name: "a", command: "a", env: {}, dependsOn: { c: "started" }, readyTimeout: 60 },
+        b: { name: "b", command: "b", env: {}, dependsOn: { a: "started" }, readyTimeout: 60 },
+        c: { name: "c", command: "c", env: {}, dependsOn: { b: "started" }, readyTimeout: 60 },
       };
       expect(() => buildStartupOrder(services)).toThrow(/a, b, c/);
     });
 
     test("empty services → empty waves", () => {
       expect(buildStartupOrder({})).toEqual([]);
+    });
+  });
+
+  // ── parseEnvFile ──────────────────────────────────────────────────────────
+
+  describe("parseEnvFile", () => {
+    test("parses KEY=VALUE pairs", () => {
+      const envPath = join(tmpDir, ".env");
+      writeFileSync(envPath, "FOO=bar\nBAZ=qux\n");
+      expect(parseEnvFile(envPath)).toEqual({ FOO: "bar", BAZ: "qux" });
+    });
+
+    test("strips double quotes from values", () => {
+      const envPath = join(tmpDir, ".env");
+      writeFileSync(envPath, 'DB_URL="postgres://localhost/mydb"\n');
+      expect(parseEnvFile(envPath)).toEqual({ DB_URL: "postgres://localhost/mydb" });
+    });
+
+    test("strips single quotes from values", () => {
+      const envPath = join(tmpDir, ".env");
+      writeFileSync(envPath, "SECRET='my secret value'\n");
+      expect(parseEnvFile(envPath)).toEqual({ SECRET: "my secret value" });
+    });
+
+    test("handles export prefix", () => {
+      const envPath = join(tmpDir, ".env");
+      writeFileSync(envPath, "export API_KEY=abc123\n");
+      expect(parseEnvFile(envPath)).toEqual({ API_KEY: "abc123" });
+    });
+
+    test("skips comments and blank lines", () => {
+      const envPath = join(tmpDir, ".env");
+      writeFileSync(envPath, "# This is a comment\n\nFOO=bar\n# Another comment\n");
+      expect(parseEnvFile(envPath)).toEqual({ FOO: "bar" });
+    });
+
+    test("returns empty object for missing file", () => {
+      expect(parseEnvFile(join(tmpDir, "nonexistent.env"))).toEqual({});
+    });
+
+    test("skips lines without valid key=value format", () => {
+      const envPath = join(tmpDir, ".env");
+      writeFileSync(envPath, "VALID=yes\n=no_key\njust_text\n");
+      expect(parseEnvFile(envPath)).toEqual({ VALID: "yes" });
+    });
+  });
+
+  // ── resolveEnvVars ────────────────────────────────────────────────────────
+
+  describe("resolveEnvVars", () => {
+    test("resolves ${VAR} from session env", () => {
+      const config: LaunchConfig = {
+        version: "1",
+        env: { vars: { MY_VAR: "${SESSION_VAR}" } },
+      };
+      const result = resolveEnvVars(config, tmpDir, { SESSION_VAR: "from-session" });
+      expect(result.topLevelEnv.MY_VAR).toBe("from-session");
+      expect(result.warnings).toHaveLength(0);
+    });
+
+    test("resolves ${VAR} from envFile", () => {
+      // Write an .env file
+      writeFileSync(join(tmpDir, ".env.local"), "FILE_VAR=from-file\n");
+      const config: LaunchConfig = {
+        version: "1",
+        env: { envFile: ".env.local", vars: { MY_VAR: "${FILE_VAR}" } },
+      };
+      const result = resolveEnvVars(config, tmpDir);
+      expect(result.topLevelEnv.MY_VAR).toBe("from-file");
+    });
+
+    test("resolves ${VAR:-default} with fallback when var not found", () => {
+      const config: LaunchConfig = {
+        version: "1",
+        env: { vars: { DB_URL: "${MISSING_DB:-postgres://localhost/dev}" } },
+      };
+      const result = resolveEnvVars(config, tmpDir);
+      expect(result.topLevelEnv.DB_URL).toBe("postgres://localhost/dev");
+      // No warning because default was used
+      expect(result.warnings).toHaveLength(0);
+    });
+
+    test("session env takes priority over envFile", () => {
+      writeFileSync(join(tmpDir, ".env.local"), "SHARED=from-file\n");
+      const config: LaunchConfig = {
+        version: "1",
+        env: { envFile: ".env.local", vars: { SHARED: "${SHARED}" } },
+      };
+      const result = resolveEnvVars(config, tmpDir, { SHARED: "from-session" });
+      expect(result.topLevelEnv.SHARED).toBe("from-session");
+    });
+
+    test("warns on unresolved vars without default", () => {
+      const config: LaunchConfig = {
+        version: "1",
+        env: { vars: { SECRET: "${TOTALLY_MISSING_VAR_12345}" } },
+      };
+      const result = resolveEnvVars(config, tmpDir);
+      expect(result.topLevelEnv.SECRET).toBe("");
+      expect(result.warnings).toContain("TOTALLY_MISSING_VAR_12345");
+    });
+
+    test("literal strings (no interpolation) pass through unchanged", () => {
+      const config: LaunchConfig = {
+        version: "1",
+        env: { vars: { NODE_ENV: "development" } },
+      };
+      const result = resolveEnvVars(config, tmpDir);
+      expect(result.topLevelEnv.NODE_ENV).toBe("development");
+    });
+
+    test("per-service env overrides top-level vars", () => {
+      const config: LaunchConfig = {
+        version: "1",
+        env: { vars: { PORT: "3000" } },
+        services: {
+          api: { command: "node server.js", env: { PORT: "4000" } },
+        },
+      };
+      const result = resolveEnvVars(config, tmpDir);
+      // Per-service PORT should override top-level PORT
+      expect(result.serviceEnvs.api.PORT).toBe("4000");
+    });
+
+    test("per-service env inherits top-level when no override", () => {
+      const config: LaunchConfig = {
+        version: "1",
+        env: { vars: { NODE_ENV: "development" } },
+        services: {
+          api: { command: "node server.js", env: { PORT: "3000" } },
+        },
+      };
+      const result = resolveEnvVars(config, tmpDir);
+      expect(result.serviceEnvs.api.NODE_ENV).toBe("development");
+      expect(result.serviceEnvs.api.PORT).toBe("3000");
+    });
+
+    test("setup script env merges with top-level", () => {
+      const config: LaunchConfig = {
+        version: "1",
+        env: { vars: { NODE_ENV: "development" } },
+        setup: [{ name: "migrate", command: "npm run migrate", env: { DB_URL: "postgres://localhost/test" } }],
+      };
+      const result = resolveEnvVars(config, tmpDir);
+      expect(result.setupEnvs.migrate.NODE_ENV).toBe("development");
+      expect(result.setupEnvs.migrate.DB_URL).toBe("postgres://localhost/test");
+    });
+
+    test("rejects absolute envFile path", () => {
+      const config: LaunchConfig = {
+        version: "1",
+        env: { envFile: "/etc/secrets" },
+      };
+      const result = resolveEnvVars(config, tmpDir);
+      expect(result.warnings.some(w => w.includes("relative path"))).toBe(true);
+    });
+
+    test("rejects envFile path traversal", () => {
+      const config: LaunchConfig = {
+        version: "1",
+        env: { envFile: "../../etc/secrets" },
+      };
+      const result = resolveEnvVars(config, tmpDir);
+      expect(result.warnings.some(w => w.includes("escape"))).toBe(true);
+    });
+
+    test("warns when envFile does not exist", () => {
+      const config: LaunchConfig = {
+        version: "1",
+        env: { envFile: ".env.local" },
+      };
+      const result = resolveEnvVars(config, tmpDir);
+      // No error, just a warning — graceful degradation
+      expect(result.warnings.some(w => w.includes("not found"))).toBe(true);
+    });
+
+    test("returns empty envs when no env config present", () => {
+      const config: LaunchConfig = { version: "1" };
+      const result = resolveEnvVars(config, tmpDir);
+      expect(result.topLevelEnv).toEqual({});
+      expect(result.serviceEnvs).toEqual({});
+      expect(result.setupEnvs).toEqual({});
+      expect(result.warnings).toHaveLength(0);
+    });
+  });
+
+  // ── validation: env fields ────────────────────────────────────────────────
+
+  describe("validateConfig — env fields", () => {
+    test("accepts valid env config", () => {
+      const config: LaunchConfig = {
+        version: "1",
+        env: { envFile: ".env.local", vars: { FOO: "bar" } },
+        services: { api: { command: "node server.js" } },
+      };
+      const result = validateConfig(config);
+      expect(result.valid).toBe(true);
+    });
+
+    test("rejects env.envFile that is not a string", () => {
+      const config = {
+        version: "1",
+        env: { envFile: 123 },
+      } as unknown as LaunchConfig;
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.toLowerCase().includes("envfile"))).toBe(true);
+    });
+
+    test("rejects env.vars with non-string values", () => {
+      const config = {
+        version: "1",
+        env: { vars: { FOO: 123 } },
+      } as unknown as LaunchConfig;
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.toLowerCase().includes("var"))).toBe(true);
+    });
+
+    test("rejects per-service env that is not an object", () => {
+      // Per-service env must be an object map, not an array or primitive
+      const config = {
+        version: "1",
+        services: { api: { command: "node server.js", env: "invalid" } },
+      } as unknown as LaunchConfig;
+      const result = validateConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes("env"))).toBe(true);
     });
   });
 });

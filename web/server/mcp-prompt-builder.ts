@@ -23,7 +23,7 @@ export function buildCompanionMcpPrompt(): string {
     "Workflow for creating a launch.json:",
     "1. Call get_launch_config_schema to learn the format",
     "2. Inspect the project (package.json, Makefile, docker-compose.yml, etc.)",
-    "3. Write .companion/launch.json using the schema",
+    "3. Write .companion/launch.json using the schema — use env.envFile for secrets (${VAR} interpolation), keep .env.local gitignored",
     "4. Call validate_launch_config to check for errors",
     "5. Call reload_launch_config to apply changes to the running session",
     "6. Call get_session_environment_status to verify services are running",

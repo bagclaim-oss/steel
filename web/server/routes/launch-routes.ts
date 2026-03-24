@@ -1,6 +1,6 @@
 import type { Hono } from "hono";
 import type { CliLauncher } from "../cli-launcher.js";
-import { loadLaunchConfig, resolveForContext } from "../launch-config.js";
+import { loadLaunchConfig, resolveForContext, resolveEnvVars } from "../launch-config.js";
 import { getPortStatuses, checkPort, startMonitoring, stopMonitoring } from "../port-monitor.js";
 import { getServiceStatuses, stopAllServices, startServices } from "../launch-runner.js";
 
@@ -69,6 +69,10 @@ export function registerLaunchRoutes(api: Hono, launcher: CliLauncher): void {
       isWorktree: false,
     });
 
+    // Resolve env vars (session env → envFile → process.env)
+    const sessionEnv = launcher.getSessionEnv(sessionId);
+    const resolvedEnv = resolveEnvVars(config, session.cwd, sessionEnv);
+
     // Start services
     const serviceNames = Object.keys(resolved.services);
     if (serviceNames.length > 0) {
@@ -76,6 +80,7 @@ export function registerLaunchRoutes(api: Hono, launcher: CliLauncher): void {
         cwd: session.cwd,
         containerId: session.containerId,
         sessionId,
+        env: resolvedEnv.topLevelEnv,
       });
     }
 

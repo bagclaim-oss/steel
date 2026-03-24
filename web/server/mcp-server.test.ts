@@ -9,6 +9,7 @@ vi.mock("./launch-config.js", () => ({
   validateConfig: vi.fn(),
   resolveForContext: vi.fn(),
   buildStartupOrder: vi.fn(),
+  resolveEnvVars: vi.fn().mockReturnValue({ topLevelEnv: {}, serviceEnvs: {}, setupEnvs: {}, warnings: [] }),
 }));
 
 vi.mock("./launch-runner.js", () => ({
@@ -40,6 +41,7 @@ function makeDeps(overrides: Partial<McpHandlerDeps> = {}): McpHandlerDeps {
     } as unknown as McpHandlerDeps["wsBridge"],
     launcher: {
       getSession: vi.fn().mockReturnValue(null),
+      getSessionEnv: vi.fn().mockReturnValue(undefined),
     } as unknown as McpHandlerDeps["launcher"],
     ...overrides,
   };
@@ -304,8 +306,8 @@ describe("MCP Server — handleMcpRequest", () => {
     mockResolveForContext.mockReturnValue({
       setup: [],
       services: {
-        a: { name: "a", command: "start-a", dependsOn: { b: "started" }, readyTimeout: 60 },
-        b: { name: "b", command: "start-b", dependsOn: { a: "started" }, readyTimeout: 60 },
+        a: { name: "a", command: "start-a", env: {}, dependsOn: { b: "started" }, readyTimeout: 60 },
+        b: { name: "b", command: "start-b", env: {}, dependsOn: { a: "started" }, readyTimeout: 60 },
       },
       ports: {},
     });
@@ -382,7 +384,7 @@ describe("MCP Server — handleMcpRequest", () => {
     mockValidateConfig.mockReturnValue({ valid: true, errors: [] });
     mockResolveForContext.mockReturnValue({
       setup: [],
-      services: { web: { name: "web", command: "node app.js", dependsOn: {}, readyTimeout: 60 } },
+      services: { web: { name: "web", command: "node app.js", env: {}, dependsOn: {}, readyTimeout: 60 } },
       ports: { "8080": { label: "Web", protocol: "http", healthCheck: { path: "/" } } },
     });
     mockBuildStartupOrder.mockReturnValue([["web"]]);
@@ -428,6 +430,7 @@ describe("MCP Server — handleMcpRequest", () => {
       } as unknown as McpHandlerDeps["wsBridge"],
       launcher: {
         getSession: vi.fn().mockReturnValue({ cwd: "/launcher/project" }),
+        getSessionEnv: vi.fn().mockReturnValue(undefined),
       } as unknown as McpHandlerDeps["launcher"],
     });
 
@@ -471,6 +474,7 @@ describe("MCP Server — handleMcpRequest", () => {
     const depsWithCwd = makeDeps({
       launcher: {
         getSession: vi.fn().mockReturnValue({ cwd: "/my/project" }),
+        getSessionEnv: vi.fn().mockReturnValue(undefined),
       } as unknown as McpHandlerDeps["launcher"],
     });
 
@@ -502,6 +506,7 @@ describe("MCP Server — handleMcpRequest", () => {
     const depsWithSession = makeDeps({
       launcher: {
         getSession: vi.fn().mockReturnValue({ cwd: "/my/project", containerId: null }),
+        getSessionEnv: vi.fn().mockReturnValue(undefined),
       } as unknown as McpHandlerDeps["launcher"],
     });
 

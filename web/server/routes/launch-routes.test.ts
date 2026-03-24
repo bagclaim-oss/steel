@@ -6,6 +6,7 @@ import { registerLaunchRoutes } from "./launch-routes.js";
 vi.mock("../launch-config.js", () => ({
   loadLaunchConfig: vi.fn(),
   resolveForContext: vi.fn(),
+  resolveEnvVars: vi.fn().mockReturnValue({ topLevelEnv: {}, serviceEnvs: {}, setupEnvs: {}, warnings: [] }),
 }));
 
 vi.mock("../port-monitor.js", () => ({
@@ -38,6 +39,7 @@ const mockStopMonitoring = vi.mocked(stopMonitoring);
 // Mock launcher that returns session info by ID
 const mockLauncher = {
   getSession: vi.fn().mockReturnValue(null),
+  getSessionEnv: vi.fn().mockReturnValue(undefined),
 } as any;
 
 describe("Launch Routes", () => {
@@ -160,7 +162,7 @@ describe("Launch Routes", () => {
     mockLoadLaunchConfig.mockReturnValue(config);
     mockResolveForContext.mockReturnValue({
       setup: [],
-      services: { api: { name: "api", command: "node server.js", dependsOn: {}, readyTimeout: 60 } },
+      services: { api: { name: "api", command: "node server.js", env: {}, dependsOn: {}, readyTimeout: 60 } },
       ports: { "3000": { label: "API", protocol: "http" as const } },
     });
 

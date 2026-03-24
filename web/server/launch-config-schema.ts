@@ -19,6 +19,24 @@ export const LAUNCH_CONFIG_JSON_SCHEMA = {
       type: "string",
       description: "Schema version (currently \"1\").",
     },
+    env: {
+      type: "object",
+      description:
+        "Environment variable configuration. Use envFile for secrets (gitignored) and vars for shared/interpolated values.",
+      properties: {
+        envFile: {
+          type: "string",
+          description:
+            "Relative path to a .env file (e.g. \".env.local\"). Must be inside the project directory. Variables are loaded and available for ${VAR} interpolation.",
+        },
+        vars: {
+          type: "object",
+          description:
+            "Key-value environment variables. Supports ${VAR} interpolation and ${VAR:-default} for fallback values. Resolution order: session env → envFile → process.env → default.",
+          additionalProperties: { type: "string" },
+        },
+      },
+    },
     setup: {
       type: "array",
       description:
@@ -34,6 +52,11 @@ export const LAUNCH_CONFIG_JSON_SCHEMA = {
           command: {
             type: "string",
             description: "Shell command to execute (run via sh -lc).",
+          },
+          env: {
+            type: "object",
+            description: "Per-script environment variables (merged with top-level env). Supports ${VAR} interpolation.",
+            additionalProperties: { type: "string" },
           },
           conditions: { $ref: "#/$defs/conditions" },
         },
@@ -68,6 +91,11 @@ export const LAUNCH_CONFIG_JSON_SCHEMA = {
           readyTimeout: {
             type: "number",
             description: "Seconds to wait for readyPattern before giving up. Default: 60.",
+          },
+          env: {
+            type: "object",
+            description: "Per-service environment variables (merged with top-level env). Supports ${VAR} interpolation.",
+            additionalProperties: { type: "string" },
           },
           conditions: { $ref: "#/$defs/conditions" },
         },
@@ -138,6 +166,14 @@ export const LAUNCH_CONFIG_JSON_SCHEMA = {
 
 export const LAUNCH_CONFIG_EXAMPLE = {
   version: "1",
+  env: {
+    envFile: ".env.local",
+    vars: {
+      NODE_ENV: "development",
+      DATABASE_URL: "${DATABASE_URL:-postgres://localhost:5432/myapp}",
+      API_SECRET: "${API_SECRET}",
+    },
+  },
   setup: [
     {
       name: "install-deps",
@@ -160,6 +196,10 @@ export const LAUNCH_CONFIG_EXAMPLE = {
       command: "npm run dev:api",
       dependsOn: { postgres: "ready" },
       readyPattern: "listening on port 3000",
+      env: {
+        PORT: "3000",
+        LOG_LEVEL: "debug",
+      },
     },
     web: {
       command: "npm run dev:web",
@@ -216,6 +256,11 @@ export function buildLaunchSchemaResponse(): string {
     "  - `dependsOn: { \"db\": \"started\" }` — waits for db process to spawn (not necessarily ready).",
     "- **ports**: Declare which ports to monitor. The Environment panel shows real-time health status.",
     "- **conditions**: Filter items by execution context (`local`, `sandbox`, `worktree`). Omit to always include.",
+    "- **env**: Environment variable configuration for services and setup scripts.",
+    "  - `envFile`: Relative path to a `.env` file (e.g. `.env.local`). Keep secrets here and gitignore it.",
+    "  - `vars`: Shared variables with `${VAR}` interpolation. Resolution: session env → envFile → process.env.",
+    "  - `${VAR:-default}`: Fallback syntax — uses `default` if `VAR` is not found in any source.",
+    "  - Per-service `env` overrides top-level `vars`. Both support interpolation.",
     "",
     "## Validation",
     "",

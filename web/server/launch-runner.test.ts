@@ -115,6 +115,7 @@ describe("launch-runner", () => {
         bg: {
           name: "bg",
           command: "sleep 30",
+          env: {},
           dependsOn: {},
           readyTimeout: 5,
         },
@@ -148,6 +149,7 @@ describe("launch-runner", () => {
           name: "web",
           // Echo ready marker then keep running
           command: "echo 'server listening on :3000' && sleep 30",
+          env: {},
           dependsOn: {},
           readyPattern: "listening on",
           readyTimeout: 5,
@@ -173,6 +175,7 @@ describe("launch-runner", () => {
         web: {
           name: "web",
           command: "echo 'no match here' && sleep 30",
+          env: {},
           dependsOn: {},
           readyPattern: "NEVER_MATCHES",
           readyTimeout: 1, // 1 second timeout
@@ -201,6 +204,7 @@ describe("launch-runner", () => {
         db: {
           name: "db",
           command: "echo 'db ready' && sleep 30",
+          env: {},
           dependsOn: {},
           readyPattern: "db ready",
           readyTimeout: 5,
@@ -208,6 +212,7 @@ describe("launch-runner", () => {
         api: {
           name: "api",
           command: "sleep 30",
+          env: {},
           dependsOn: { db: "ready" },
           readyTimeout: 5,
         },
@@ -233,8 +238,8 @@ describe("launch-runner", () => {
       sessionIds.push(sessionId);
 
       const resolved = makeResolved({
-        a: { name: "a", command: "sleep 30", dependsOn: {}, readyTimeout: 5 },
-        b: { name: "b", command: "sleep 30", dependsOn: {}, readyTimeout: 5 },
+        a: { name: "a", command: "sleep 30", env: {}, dependsOn: {}, readyTimeout: 5 },
+        b: { name: "b", command: "sleep 30", env: {}, dependsOn: {}, readyTimeout: 5 },
       });
 
       const startTimes: Record<string, number> = {};
@@ -261,7 +266,7 @@ describe("launch-runner", () => {
       sessionIds.push(sessionId);
 
       const resolved = makeResolved({
-        bg: { name: "bg", command: "sleep 60", dependsOn: {}, readyTimeout: 5 },
+        bg: { name: "bg", command: "sleep 60", env: {}, dependsOn: {}, readyTimeout: 5 },
       });
 
       await startServices(resolved, { cwd: tmpDir, sessionId });
@@ -277,7 +282,7 @@ describe("launch-runner", () => {
       sessionIds.push(sessionId);
 
       const resolved = makeResolved({
-        web: { name: "web", command: "sleep 30", dependsOn: {}, readyTimeout: 5 },
+        web: { name: "web", command: "sleep 30", env: {}, dependsOn: {}, readyTimeout: 5 },
       });
 
       await startServices(resolved, { cwd: tmpDir, sessionId });
@@ -295,7 +300,7 @@ describe("launch-runner", () => {
       sessionIds.push(s1, s2);
 
       const resolved = makeResolved({
-        bg: { name: "bg", command: "sleep 30", dependsOn: {}, readyTimeout: 5 },
+        bg: { name: "bg", command: "sleep 30", env: {}, dependsOn: {}, readyTimeout: 5 },
       });
 
       await startServices(resolved, { cwd: tmpDir, sessionId: s1 });

@@ -60,6 +60,18 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
     [sessionId],
   );
 
+  const [reloading, setReloading] = useState(false);
+  const reloadConfig = useCallback(async () => {
+    setReloading(true);
+    try {
+      await api.reloadLaunchConfig(sessionId);
+    } catch {
+      // ignore — ports will update via WS if reload succeeds
+    } finally {
+      setReloading(false);
+    }
+  }, [sessionId]);
+
   const hasLaunchPorts = portStatuses.length > 0;
 
   return (
@@ -81,6 +93,19 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
             No ports configured. Add a <code>.companion/launch.json</code> to your project.
           </span>
         )}
+
+        {/* Reload button */}
+        <button
+          onClick={reloadConfig}
+          disabled={reloading}
+          title="Reload .companion/launch.json"
+          className="p-1 text-text-tertiary hover:text-text-primary rounded transition-colors disabled:opacity-50"
+        >
+          <svg className={`w-3.5 h-3.5 ${reloading ? "animate-spin" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M13.5 8a5.5 5.5 0 0 1-10.39 2.5M2.5 8a5.5 5.5 0 0 1 10.39-2.5" />
+            <path d="M13.5 3v3h-3M2.5 13v-3h3" />
+          </svg>
+        </button>
 
         {/* URL input */}
         <div className="flex items-center gap-1 ml-auto shrink-0">

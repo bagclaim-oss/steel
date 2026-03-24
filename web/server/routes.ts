@@ -1240,7 +1240,7 @@ export function createRoutes(
   registerFsRoutes(api);
   registerEnvRoutes(api, { webDir: WEB_DIR });
   registerSandboxRoutes(api);
-  registerLaunchRoutes(api);
+  registerLaunchRoutes(api, launcher);
   registerMcpRoutes(api, wsBridge, launcher);
 
   registerPromptRoutes(api);

@@ -20,6 +20,8 @@ vi.mock("./launch-runner.js", () => ({
 
 vi.mock("./port-monitor.js", () => ({
   getPortStatuses: vi.fn().mockReturnValue([]),
+  startMonitoring: vi.fn(),
+  stopMonitoring: vi.fn(),
 }));
 
 import { loadLaunchConfig, validateConfig, resolveForContext, buildStartupOrder } from "./launch-config.js";
@@ -82,14 +84,15 @@ describe("MCP Server — handleMcpRequest", () => {
 
   // ── tools/list ────────────────────────────────────────────────────────────
 
-  it("tools/list returns all four tools", async () => {
+  it("tools/list returns all five tools", async () => {
     const res = await handleMcpRequest(rpc("tools/list"), null, deps);
     const result = res.result as { tools: Array<{ name: string; inputSchema: unknown }> };
-    expect(result.tools).toHaveLength(4);
+    expect(result.tools).toHaveLength(5);
     const names = result.tools.map((t) => t.name);
     expect(names).toContain("get_launch_config_schema");
     expect(names).toContain("validate_launch_config");
     expect(names).toContain("test_launch_config");
+    expect(names).toContain("reload_launch_config");
     expect(names).toContain("get_session_environment_status");
     // Each tool should have an inputSchema
     for (const tool of result.tools) {
@@ -434,6 +437,86 @@ describe("MCP Server — handleMcpRequest", () => {
       depsWithLauncher,
     );
     expect(mockLoadLaunchConfig).toHaveBeenCalledWith("/launcher/project");
+  });
+
+  // ── reload_launch_config ─────────────────────────────────────────────────
+
+  it("reload_launch_config returns error when no session ID", async () => {
+    const res = await handleMcpRequest(
+      rpc("tools/call", { name: "reload_launch_config", arguments: {} }),
+      null, // no session
+      deps,
+    );
+    expect(res.error).toBeUndefined();
+    const result = res.result as { content: Array<{ text: string }> };
+    const data = JSON.parse(result.content[0].text);
+    expect(data.error).toContain("No session ID");
+  });
+
+  it("reload_launch_config returns error when no cwd available", async () => {
+    // Session exists but no cwd available from any source
+    const res = await handleMcpRequest(
+      rpc("tools/call", { name: "reload_launch_config", arguments: {} }),
+      "session-no-cwd",
+      deps,
+    );
+    expect(res.error).toBeUndefined();
+    const result = res.result as { content: Array<{ text: string }> };
+    const data = JSON.parse(result.content[0].text);
+    expect(data.error).toContain("working directory");
+  });
+
+  it("reload_launch_config returns error when no config found", async () => {
+    mockLoadLaunchConfig.mockReturnValue(null);
+    const depsWithCwd = makeDeps({
+      launcher: {
+        getSession: vi.fn().mockReturnValue({ cwd: "/my/project" }),
+      } as unknown as McpHandlerDeps["launcher"],
+    });
+
+    const res = await handleMcpRequest(
+      rpc("tools/call", { name: "reload_launch_config", arguments: {} }),
+      "session-123",
+      depsWithCwd,
+    );
+    expect(res.error).toBeUndefined();
+    const result = res.result as { content: Array<{ text: string }> };
+    const data = JSON.parse(result.content[0].text);
+    expect(data.reloaded).toBe(false);
+    expect(data.error).toContain("launch.json");
+  });
+
+  it("reload_launch_config succeeds with valid config and session", async () => {
+    const config = {
+      version: "1",
+      services: { api: { command: "node server.js" } },
+      ports: { "3000": { label: "API", protocol: "http" } },
+    };
+    mockLoadLaunchConfig.mockReturnValue(config);
+    mockResolveForContext.mockReturnValue({
+      setup: [],
+      services: { api: { name: "api", command: "node server.js" } },
+      ports: { "3000": { label: "API", protocol: "http" } },
+    });
+
+    const depsWithSession = makeDeps({
+      launcher: {
+        getSession: vi.fn().mockReturnValue({ cwd: "/my/project", containerId: null }),
+      } as unknown as McpHandlerDeps["launcher"],
+    });
+
+    const res = await handleMcpRequest(
+      rpc("tools/call", { name: "reload_launch_config", arguments: {} }),
+      "session-456",
+      depsWithSession,
+    );
+    expect(res.error).toBeUndefined();
+    const result = res.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBeFalsy();
+    const data = JSON.parse(result.content[0].text);
+    expect(data.reloaded).toBe(true);
+    expect(data.services).toEqual(["api"]);
+    expect(data.ports).toEqual(["3000"]);
   });
 
   // ── JSON-RPC ID propagation ───────────────────────────────────────────────

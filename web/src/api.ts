@@ -1339,4 +1339,6 @@ export const api = {
     get<Array<{ name: string; status: string; pid?: number }>>(`/sessions/${encodeURIComponent(sessionId)}/services`),
   checkPort: (sessionId: string, port: number) =>
     post<{ port: number; status: string }>(`/sessions/${encodeURIComponent(sessionId)}/ports/${port}/check`),
+  reloadLaunchConfig: (sessionId: string) =>
+    post<{ reloaded: boolean; error?: string; services?: string[]; ports?: string[] }>(`/sessions/${encodeURIComponent(sessionId)}/launch-config/reload`),
 };

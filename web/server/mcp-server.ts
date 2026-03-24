@@ -14,7 +14,7 @@ import { loadLaunchConfig, validateConfig, resolveForContext, buildStartupOrder 
 import { buildLaunchSchemaResponse } from "./launch-config-schema.js";
 import type { LaunchConfig } from "./launch-config.js";
 import { runSetupScripts, startServices, stopAllServices, getServiceStatuses } from "./launch-runner.js";
-import { getPortStatuses } from "./port-monitor.js";
+import { getPortStatuses, startMonitoring, stopMonitoring } from "./port-monitor.js";
 import type { WsBridge } from "./ws-bridge.js";
 import type { CliLauncher } from "./cli-launcher.js";
 
@@ -80,6 +80,15 @@ const TOOLS = [
           },
         },
       },
+    },
+  },
+  {
+    name: "reload_launch_config",
+    description:
+      "Reload .companion/launch.json and restart services/ports for the current session. Use after creating or modifying a launch config to apply changes without creating a new session.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
     },
   },
   {
@@ -197,6 +206,9 @@ async function handleToolCall(
 
       case "test_launch_config":
         return { jsonrpc: "2.0", id, result: toolResult(await toolTest(cwd, args)) };
+
+      case "reload_launch_config":
+        return { jsonrpc: "2.0", id, result: toolResult(await toolReload(cwd, sessionId, deps)) };
 
       case "get_session_environment_status":
         return { jsonrpc: "2.0", id, result: toolResult(toolEnvironmentStatus(args, sessionId)) };
@@ -383,6 +395,65 @@ async function toolTest(cwd: string | null, args: Record<string, unknown>) {
     setup_results: setupResults,
     service_results: serviceResults,
     port_results: portResults,
+  };
+}
+
+// ── Reload ────────────────────────────────────────────────────────────────
+
+async function toolReload(
+  cwd: string | null,
+  sessionId: string | null,
+  deps: McpHandlerDeps,
+): Promise<unknown> {
+  if (!sessionId) {
+    return { error: "No session ID available. Cannot reload without a session context." };
+  }
+
+  // Get session info for container context
+  const launcherSession = deps.launcher.getSession(sessionId);
+  const effectiveCwd = cwd ?? launcherSession?.cwd ?? null;
+  if (!effectiveCwd) {
+    return { error: "No working directory available for this session." };
+  }
+
+  // Stop existing services and monitoring
+  stopAllServices(sessionId);
+  stopMonitoring(sessionId);
+
+  // Reload config from disk
+  const config = loadLaunchConfig(effectiveCwd);
+  if (!config) {
+    return { reloaded: false, error: "No .companion/launch.json found at " + effectiveCwd };
+  }
+
+  const resolved = resolveForContext(config, {
+    isSandbox: !!launcherSession?.containerId,
+    isWorktree: false,
+  });
+
+  // Start services
+  const serviceNames = Object.keys(resolved.services);
+  if (serviceNames.length > 0) {
+    const svcResult = await startServices(resolved, {
+      cwd: effectiveCwd,
+      containerId: launcherSession?.containerId,
+      sessionId,
+    });
+    if (!svcResult.ok) {
+      return { reloaded: false, error: svcResult.error ?? "Service startup failed", services: serviceNames };
+    }
+  }
+
+  // Start port monitoring
+  const portKeys = Object.keys(resolved.ports);
+  if (portKeys.length > 0) {
+    startMonitoring(sessionId, resolved.ports);
+  }
+
+  return {
+    reloaded: true,
+    services: serviceNames,
+    ports: portKeys,
   };
 }
 

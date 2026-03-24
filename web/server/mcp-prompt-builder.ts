@@ -17,6 +17,7 @@ export function buildCompanionMcpPrompt(): string {
     "- get_launch_config_schema: Get the full JSON Schema, a complete example, and usage guide",
     "- validate_launch_config: Validate an existing .companion/launch.json file and see errors",
     "- test_launch_config: Dry-run test — starts services, checks ports, then cleans up",
+    "- reload_launch_config: Reload config and restart services/ports in the current session",
     "- get_session_environment_status: Check running services and port health in the current session",
     "",
     "Workflow for creating a launch.json:",
@@ -24,6 +25,7 @@ export function buildCompanionMcpPrompt(): string {
     "2. Inspect the project (package.json, Makefile, docker-compose.yml, etc.)",
     "3. Write .companion/launch.json using the schema",
     "4. Call validate_launch_config to check for errors",
-    "5. Call test_launch_config for a full dry-run",
+    "5. Call reload_launch_config to apply changes to the running session",
+    "6. Call get_session_environment_status to verify services are running",
   ].join("\n");
 }

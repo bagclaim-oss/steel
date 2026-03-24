@@ -1,9 +1,10 @@
 import type { Hono } from "hono";
-import { loadLaunchConfig } from "../launch-config.js";
-import { getPortStatuses, checkPort } from "../port-monitor.js";
-import { getServiceStatuses } from "../launch-runner.js";
+import type { CliLauncher } from "../cli-launcher.js";
+import { loadLaunchConfig, resolveForContext } from "../launch-config.js";
+import { getPortStatuses, checkPort, startMonitoring, stopMonitoring } from "../port-monitor.js";
+import { getServiceStatuses, stopAllServices, startServices } from "../launch-runner.js";
 
-export function registerLaunchRoutes(api: Hono): void {
+export function registerLaunchRoutes(api: Hono, launcher: CliLauncher): void {
   // Check if a launch config exists for a given working directory
   api.get("/launch-config", (c) => {
     const cwd = c.req.query("cwd");
@@ -42,5 +43,52 @@ export function registerLaunchRoutes(api: Hono): void {
     const sessionId = c.req.param("id");
     const statuses = getServiceStatuses(sessionId);
     return c.json(statuses);
+  });
+
+  // Reload .companion/launch.json — stops existing services/monitoring,
+  // re-reads config, starts services and port monitoring fresh.
+  api.post("/sessions/:id/launch-config/reload", async (c) => {
+    const sessionId = c.req.param("id");
+    const session = launcher.getSession(sessionId);
+    if (!session) {
+      return c.json({ error: "Session not found" }, 404);
+    }
+
+    // Stop existing services and port monitoring
+    stopAllServices(sessionId);
+    stopMonitoring(sessionId);
+
+    // Reload config from disk
+    const config = loadLaunchConfig(session.cwd);
+    if (!config) {
+      return c.json({ reloaded: false, error: "No .companion/launch.json found" });
+    }
+
+    const resolved = resolveForContext(config, {
+      isSandbox: !!session.containerId,
+      isWorktree: false,
+    });
+
+    // Start services
+    const serviceNames = Object.keys(resolved.services);
+    if (serviceNames.length > 0) {
+      await startServices(resolved, {
+        cwd: session.cwd,
+        containerId: session.containerId,
+        sessionId,
+      });
+    }
+
+    // Start port monitoring (health checks auto-broadcast via companionBus)
+    const portKeys = Object.keys(resolved.ports);
+    if (portKeys.length > 0) {
+      startMonitoring(sessionId, resolved.ports);
+    }
+
+    return c.json({
+      reloaded: true,
+      services: serviceNames,
+      ports: portKeys,
+    });
   });
 }

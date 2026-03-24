@@ -2089,3 +2089,20 @@ describe("listExecutions", () => {
     expect(url).toBe("/api/executions?status=running");
   });
 });
+
+// ── reloadLaunchConfig ──────────────────────────────────────────────────────
+
+describe("reloadLaunchConfig", () => {
+  it("sends POST to the reload endpoint and returns the result", async () => {
+    const responseData = { reloaded: true, services: ["api"], ports: ["3000"] };
+    mockFetch.mockResolvedValueOnce(mockResponse(responseData));
+
+    const result = await api.reloadLaunchConfig("sess-123");
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/sessions/sess-123/launch-config/reload",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(result).toEqual(responseData);
+  });
+});

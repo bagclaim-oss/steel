@@ -54,15 +54,15 @@ export function registerLaunchRoutes(api: Hono, launcher: CliLauncher): void {
       return c.json({ error: "Session not found" }, 404);
     }
 
-    // Stop existing services and port monitoring
-    stopAllServices(sessionId);
-    stopMonitoring(sessionId);
-
-    // Reload config from disk
+    // Validate config exists before tearing down running services
     const config = loadLaunchConfig(session.cwd);
     if (!config) {
       return c.json({ reloaded: false, error: "No .companion/launch.json found" });
     }
+
+    // Stop existing services and port monitoring only after confirming valid config
+    stopAllServices(sessionId);
+    stopMonitoring(sessionId);
 
     const resolved = resolveForContext(config, {
       isSandbox: !!session.containerId,

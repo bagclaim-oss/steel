@@ -416,15 +416,15 @@ async function toolReload(
     return { error: "No working directory available for this session." };
   }
 
-  // Stop existing services and monitoring
-  stopAllServices(sessionId);
-  stopMonitoring(sessionId);
-
-  // Reload config from disk
+  // Validate config exists before tearing down running services
   const config = loadLaunchConfig(effectiveCwd);
   if (!config) {
     return { reloaded: false, error: "No .companion/launch.json found at " + effectiveCwd };
   }
+
+  // Stop existing services and monitoring only after confirming valid config
+  stopAllServices(sessionId);
+  stopMonitoring(sessionId);
 
   const resolved = resolveForContext(config, {
     isSandbox: !!launcherSession?.containerId,

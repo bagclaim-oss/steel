@@ -145,9 +145,9 @@ describe("Launch Routes", () => {
     const body = await res.json();
     expect(body.reloaded).toBe(false);
     expect(body.error).toContain("launch.json");
-    // Should have stopped existing services and monitoring before checking config
-    expect(mockStopAllServices).toHaveBeenCalledWith("sess-1");
-    expect(mockStopMonitoring).toHaveBeenCalledWith("sess-1");
+    // Should NOT stop services when config is missing (avoid leaving session in stopped state)
+    expect(mockStopAllServices).not.toHaveBeenCalled();
+    expect(mockStopMonitoring).not.toHaveBeenCalled();
   });
 
   it("POST reload succeeds with valid config, starts services and monitoring", async () => {

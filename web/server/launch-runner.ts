@@ -408,6 +408,19 @@ export function getServiceStatuses(
   }));
 }
 
+/**
+ * Re-associate services from a temporary session ID to the real one.
+ * Used during session creation when services start before the CLI assigns
+ * the real session ID.
+ */
+export function reassociateServices(oldSessionId: string, newSessionId: string): void {
+  const handles = sessionServices.get(oldSessionId);
+  if (!handles) return;
+  sessionServices.delete(oldSessionId);
+  sessionServices.set(newSessionId, handles);
+  log.info("launch-runner", ` Re-associated ${handles.length} service(s): ${oldSessionId} → ${newSessionId}`);
+}
+
 /** Stop all services across all sessions (for server shutdown). */
 export function stopAll(): void {
   for (const [sessionId] of sessionServices) {

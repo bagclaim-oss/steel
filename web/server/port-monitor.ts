@@ -18,6 +18,7 @@ export interface PortStatus {
   status: PortHealthStatus;
   lastCheck: number; // timestamp ms
   service?: string;  // associated service name
+  healthCheckPath?: string; // stored for manual refresh
 }
 
 interface MonitorEntry {
@@ -78,6 +79,7 @@ export function startMonitoring(
       status: "unknown",
       lastCheck: 0,
       service: portToService.get(port),
+      healthCheckPath: config.healthCheck?.path ?? "/",
     };
     entry.ports.set(port, status);
 
@@ -133,11 +135,24 @@ export async function checkPort(
   if (status.protocol === "tcp") {
     await checkTcp(sessionId, entry, port, entry.hostname);
   } else {
-    // Find the health check path from the original config
-    await checkHttp(sessionId, entry, port, entry.hostname, "/");
+    await checkHttp(sessionId, entry, port, entry.hostname, status.healthCheckPath ?? "/");
   }
 
   return entry.ports.get(port)?.status ?? "unknown";
+}
+
+/**
+ * Re-associate port monitoring from a temporary session ID to the real one.
+ * Existing timers continue running but emit events under the new session ID.
+ */
+export function reassociateMonitoring(oldSessionId: string, newSessionId: string): void {
+  const entry = monitors.get(oldSessionId);
+  if (!entry) return;
+  monitors.delete(oldSessionId);
+  monitors.set(newSessionId, entry);
+  // Emit current status under the new session ID so browsers pick it up
+  emitStatusChange(newSessionId, entry);
+  log.info("port-monitor", ` Re-associated monitoring: ${oldSessionId} → ${newSessionId}`);
 }
 
 /** Stop all monitors (for server shutdown). */

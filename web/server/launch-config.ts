@@ -186,7 +186,8 @@ function validate(config: LaunchConfig): void {
 
 /**
  * Validate a launch config object and return structured results.
- * Unlike the internal `validate()` which throws, this collects all errors.
+ * Unlike the internal `validate()` which throws on the first issue,
+ * this collects all validation errors so agents see them in one pass.
  */
 export function validateConfig(raw: unknown): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
@@ -197,10 +198,75 @@ export function validateConfig(raw: unknown): { valid: boolean; errors: string[]
 
   const config = raw as LaunchConfig;
 
-  try {
-    validate(config);
-  } catch (e) {
-    errors.push(e instanceof Error ? e.message : String(e));
+  // Version
+  if (!config.version || typeof config.version !== "string") {
+    errors.push("launch.json requires a 'version' field");
+  }
+
+  // Setup
+  if (config.setup !== undefined) {
+    if (!Array.isArray(config.setup)) {
+      errors.push("'setup' must be an array");
+    } else {
+      for (const s of config.setup) {
+        if (!s.name || typeof s.name !== "string") {
+          errors.push("Each setup script requires a 'name' string");
+        }
+        if (!s.command || typeof s.command !== "string") {
+          errors.push(`Setup script "${s.name || "?"}" requires a 'command' string`);
+        }
+      }
+    }
+  }
+
+  // Services
+  if (config.services !== undefined) {
+    if (typeof config.services !== "object" || Array.isArray(config.services)) {
+      errors.push("'services' must be an object map");
+    } else {
+      for (const [name, svc] of Object.entries(config.services)) {
+        if (!svc.command || typeof svc.command !== "string") {
+          errors.push(`Service "${name}" requires a 'command' string`);
+        }
+        if (svc.dependsOn) {
+          for (const [dep, cond] of Object.entries(svc.dependsOn)) {
+            if (cond !== "started" && cond !== "ready") {
+              errors.push(
+                `Service "${name}" has invalid dependsOn condition for "${dep}": must be "started" or "ready"`,
+              );
+            }
+            if (cond === "ready") {
+              const depSvc = config.services[dep];
+              if (depSvc && !depSvc.readyPattern) {
+                errors.push(
+                  `Service "${name}" depends on "${dep}" with condition "ready", but "${dep}" has no readyPattern`,
+                );
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Ports
+  if (config.ports !== undefined) {
+    if (typeof config.ports !== "object" || Array.isArray(config.ports)) {
+      errors.push("'ports' must be an object map keyed by port number");
+    } else {
+      for (const [portStr, portConfig] of Object.entries(config.ports)) {
+        const portNum = Number(portStr);
+        if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
+          errors.push(`Invalid port number: "${portStr}"`);
+        }
+        if (!portConfig.label || typeof portConfig.label !== "string") {
+          errors.push(`Port "${portStr}" requires a 'label' string`);
+        }
+        if (portConfig.protocol && portConfig.protocol !== "http" && portConfig.protocol !== "tcp") {
+          errors.push(`Port "${portStr}" protocol must be "http" or "tcp"`);
+        }
+      }
+    }
   }
 
   return { valid: errors.length === 0, errors };

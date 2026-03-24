@@ -147,8 +147,8 @@ export function createRoutes(
   // ─── Auth middleware (protects all routes below) ───────────────────
 
   api.use("/*", async (c, next) => {
-    // Skip auth for the verify endpoint (handled above)
-    if (c.req.path === "/auth/verify") {
+    // Skip auth for endpoints that handle their own authentication
+    if (c.req.path === "/auth/verify" || c.req.path === "/mcp") {
       return next();
     }
 
@@ -162,10 +162,7 @@ export function createRoutes(
     // Also check the companion_auth cookie — iframes (browser preview) can't
     // send Authorization headers, but browsers do forward cookies automatically.
     const cookieToken = getCookie(c, "companion_auth") ?? null;
-    // Token in query param — used by MCP HTTP clients in containerized sessions
-    // where the agent can't set custom headers easily.
-    const queryToken = c.req.query("token") ?? null;
-    if (!verifyToken(token) && !verifyToken(cookieToken) && !verifyToken(queryToken)) {
+    if (!verifyToken(token) && !verifyToken(cookieToken)) {
       return c.json({ error: "unauthorized" }, 401);
     }
     return next();

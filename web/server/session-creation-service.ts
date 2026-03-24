@@ -15,8 +15,8 @@ import { buildLinearSystemPrompt } from "./linear-prompt-builder.js";
 import { discoverCommandsAndSkills } from "./commands-discovery.js";
 import { VSCODE_EDITOR_CONTAINER_PORT, CODEX_APP_SERVER_CONTAINER_PORT, NOVNC_CONTAINER_PORT } from "./constants.js";
 import { loadLaunchConfig, resolveForContext } from "./launch-config.js";
-import { runSetupScripts, startServices } from "./launch-runner.js";
-import { startMonitoring } from "./port-monitor.js";
+import { runSetupScripts, startServices, reassociateServices } from "./launch-runner.js";
+import { startMonitoring, reassociateMonitoring } from "./port-monitor.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -511,6 +511,15 @@ export async function executeSessionCreation(
   }
 
   // -- Post-launch tracking --
+
+  // Re-associate services and port monitors from the temp ID to the real session ID.
+  // This ensures cleanup and port-status events use the correct session key.
+  const launchTempId = (body as Record<string, unknown>).__launchTempSessionId as string | undefined;
+  if (launchTempId) {
+    reassociateServices(launchTempId, session.sessionId);
+    reassociateMonitoring(launchTempId, session.sessionId);
+  }
+
   if (containerInfo) {
     containerManager.retrack(containerInfo.containerId, session.sessionId);
     wsBridge.markContainerized(session.sessionId, cwd!);

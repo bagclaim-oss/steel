@@ -3,6 +3,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Hono } from "hono";
 import { registerMcpRoutes } from "./mcp-routes.js";
 
+// Mock auth — in tests, requestIP is undefined so isLocalhostRequest returns false.
+// Mock verifyToken to simulate authenticated requests.
+vi.mock("../auth-manager.js", () => ({
+  verifyToken: vi.fn().mockReturnValue(true),
+}));
+
 // Mock the MCP server handler so we don't need full deps
 vi.mock("../mcp-server.js", () => ({
   handleMcpRequest: vi.fn().mockResolvedValue({
@@ -12,14 +18,24 @@ vi.mock("../mcp-server.js", () => ({
   }),
 }));
 
+import { verifyToken } from "../auth-manager.js";
 import { handleMcpRequest } from "../mcp-server.js";
-const mockHandleMcpRequest = handleMcpRequest as ReturnType<typeof vi.fn>;
+const mockVerifyToken = vi.mocked(verifyToken);
+const mockHandleMcpRequest = vi.mocked(handleMcpRequest);
 
 describe("MCP Routes — POST /mcp", () => {
   let app: Hono;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Re-set default mock behavior after clearAllMocks
+    mockVerifyToken.mockReturnValue(true);
+    mockHandleMcpRequest.mockResolvedValue({
+      jsonrpc: "2.0",
+      id: 1,
+      result: { protocolVersion: "2024-11-05" },
+    });
+
     app = new Hono();
     const wsBridge = {} as any;
     const launcher = {} as any;
@@ -47,7 +63,6 @@ describe("MCP Routes — POST /mcp", () => {
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
     });
 
-    // Second argument to handleMcpRequest should be the sessionId
     expect(mockHandleMcpRequest).toHaveBeenCalledWith(
       expect.objectContaining({ method: "tools/list" }),
       "test-session",
@@ -93,5 +108,18 @@ describe("MCP Routes — POST /mcp", () => {
     const body = await res.json();
     expect(body.error.code).toBe(-32600);
     expect(body.error.message).toContain("Invalid JSON-RPC");
+  });
+
+  it("returns 401 when auth fails for non-localhost requests", async () => {
+    // Simulate failed auth — no valid token provided
+    mockVerifyToken.mockReturnValue(false);
+
+    const res = await app.request("/mcp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize" }),
+    });
+
+    expect(res.status).toBe(401);
   });
 });

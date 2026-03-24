@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   loadLaunchConfig,
+  validateConfig,
   resolveForContext,
   buildStartupOrder,
   type LaunchConfig,
@@ -178,6 +179,20 @@ describe("launch-config", () => {
         ports: { "3000": { label: "App", protocol: "udp" } },
       });
       expect(loadLaunchConfig(tmpDir)).toBeNull();
+    });
+
+    test("validateConfig collects all errors in one pass", () => {
+      // Config has multiple issues: missing version, invalid port, service without command
+      const result = validateConfig({
+        services: { broken: { readyPattern: "ready" } },
+        ports: { abc: { label: "App" }, "3000": {} },
+      });
+      expect(result.valid).toBe(false);
+      // Should collect at least 3 distinct errors (version, service command, port number, port label)
+      expect(result.errors.length).toBeGreaterThanOrEqual(3);
+      expect(result.errors.some((e) => e.includes("version"))).toBe(true);
+      expect(result.errors.some((e) => e.includes("broken"))).toBe(true);
+      expect(result.errors.some((e) => e.includes("abc"))).toBe(true);
     });
 
     test("accepts valid complete config", () => {

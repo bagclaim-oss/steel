@@ -3,11 +3,12 @@ import { describe, test, expect } from "vitest";
 import { buildCompanionMcpPrompt } from "./mcp-prompt-builder.js";
 
 describe("mcp-prompt-builder", () => {
-  test("prompt mentions all three MCP tool names", () => {
+  test("prompt mentions all four MCP tool names", () => {
     const prompt = buildCompanionMcpPrompt();
     expect(prompt).toContain("get_launch_config_schema");
     expect(prompt).toContain("validate_launch_config");
     expect(prompt).toContain("test_launch_config");
+    expect(prompt).toContain("get_session_environment_status");
   });
 
   test("prompt is a non-empty string", () => {
@@ -16,9 +17,11 @@ describe("mcp-prompt-builder", () => {
     expect(prompt.length).toBeGreaterThan(50);
   });
 
-  test("prompt includes usage guidance", () => {
+  test("prompt includes workflow guidance", () => {
     const prompt = buildCompanionMcpPrompt();
-    // Should tell the agent to use get_launch_config_schema first
-    expect(prompt).toContain("get_launch_config_schema first");
+    // Should describe the step-by-step workflow
+    expect(prompt).toContain("get_launch_config_schema");
+    expect(prompt).toContain("validate_launch_config");
+    expect(prompt).toContain("Workflow");
   });
 });

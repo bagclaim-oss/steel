@@ -15,6 +15,11 @@ vi.mock("./launch-runner.js", () => ({
   runSetupScripts: vi.fn().mockResolvedValue({ ok: true }),
   startServices: vi.fn().mockResolvedValue({ ok: true }),
   stopAllServices: vi.fn(),
+  getServiceStatuses: vi.fn().mockReturnValue([]),
+}));
+
+vi.mock("./port-monitor.js", () => ({
+  getPortStatuses: vi.fn().mockReturnValue([]),
 }));
 
 import { loadLaunchConfig, validateConfig, resolveForContext, buildStartupOrder } from "./launch-config.js";
@@ -77,14 +82,15 @@ describe("MCP Server — handleMcpRequest", () => {
 
   // ── tools/list ────────────────────────────────────────────────────────────
 
-  it("tools/list returns all three tools including get_launch_config_schema", async () => {
+  it("tools/list returns all four tools", async () => {
     const res = await handleMcpRequest(rpc("tools/list"), null, deps);
     const result = res.result as { tools: Array<{ name: string; inputSchema: unknown }> };
-    expect(result.tools).toHaveLength(3);
+    expect(result.tools).toHaveLength(4);
     const names = result.tools.map((t) => t.name);
     expect(names).toContain("get_launch_config_schema");
     expect(names).toContain("validate_launch_config");
     expect(names).toContain("test_launch_config");
+    expect(names).toContain("get_session_environment_status");
     // Each tool should have an inputSchema
     for (const tool of result.tools) {
       expect(tool.inputSchema).toBeDefined();
@@ -148,6 +154,37 @@ describe("MCP Server — handleMcpRequest", () => {
     expect(text).toContain("services");
     expect(text).toContain("ports");
     expect(text).toContain("dependsOn");
+  });
+
+  // ── get_session_environment_status ─────────────────────────────────────────
+
+  it("get_session_environment_status returns services and ports for a session", async () => {
+    // The tool should return empty arrays when no services/ports are tracked for this session
+    const res = await handleMcpRequest(
+      rpc("tools/call", { name: "get_session_environment_status", arguments: {} }),
+      "test-session-123",
+      deps,
+    );
+    expect(res.error).toBeUndefined();
+    const result = res.result as { content: Array<{ type: string; text: string }>; isError?: boolean };
+    expect(result.isError).toBe(false);
+    const data = JSON.parse(result.content[0].text);
+    expect(data.sessionId).toBe("test-session-123");
+    expect(Array.isArray(data.services)).toBe(true);
+    expect(Array.isArray(data.ports)).toBe(true);
+  });
+
+  it("get_session_environment_status returns error when no session ID available", async () => {
+    const res = await handleMcpRequest(
+      rpc("tools/call", { name: "get_session_environment_status", arguments: {} }),
+      null, // no session
+      deps,
+    );
+    expect(res.error).toBeUndefined();
+    const result = res.result as { content: Array<{ type: string; text: string }> };
+    const data = JSON.parse(result.content[0].text);
+    expect(data.error).toBeDefined();
+    expect(typeof data.error).toBe("string");
   });
 
   // ── validate_launch_config ────────────────────────────────────────────────

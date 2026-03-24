@@ -13,7 +13,8 @@ import { connect } from "node:net";
 import { loadLaunchConfig, validateConfig, resolveForContext, buildStartupOrder } from "./launch-config.js";
 import { buildLaunchSchemaResponse } from "./launch-config-schema.js";
 import type { LaunchConfig } from "./launch-config.js";
-import { runSetupScripts, startServices, stopAllServices } from "./launch-runner.js";
+import { runSetupScripts, startServices, stopAllServices, getServiceStatuses } from "./launch-runner.js";
+import { getPortStatuses } from "./port-monitor.js";
 import type { WsBridge } from "./ws-bridge.js";
 import type { CliLauncher } from "./cli-launcher.js";
 
@@ -77,6 +78,20 @@ const TOOLS = [
             isSandbox: { type: "boolean" },
             isWorktree: { type: "boolean" },
           },
+        },
+      },
+    },
+  },
+  {
+    name: "get_session_environment_status",
+    description:
+      "Get the current status of services and ports for a running session. Returns service statuses (running/stopped/crashed) and port health (healthy/unhealthy/unknown).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        sessionId: {
+          type: "string",
+          description: "Session ID to check. Defaults to the current session.",
         },
       },
     },
@@ -182,6 +197,9 @@ async function handleToolCall(
 
       case "test_launch_config":
         return { jsonrpc: "2.0", id, result: toolResult(await toolTest(cwd, args)) };
+
+      case "get_session_environment_status":
+        return { jsonrpc: "2.0", id, result: toolResult(toolEnvironmentStatus(args, sessionId)) };
 
       default:
         return {
@@ -365,6 +383,38 @@ async function toolTest(cwd: string | null, args: Record<string, unknown>) {
     setup_results: setupResults,
     service_results: serviceResults,
     port_results: portResults,
+  };
+}
+
+// ── Environment Status ────────────────────────────────────────────────────
+
+function toolEnvironmentStatus(
+  args: Record<string, unknown>,
+  requestSessionId: string | null,
+): { error: string } | { sessionId: string; services: unknown[]; ports: unknown[] } {
+  const sid = (args.sessionId as string | undefined) ?? requestSessionId;
+  if (!sid) {
+    return { error: "No session ID available. Pass sessionId or call from within a session." };
+  }
+
+  const services = getServiceStatuses(sid);
+  const ports = getPortStatuses(sid);
+
+  return {
+    sessionId: sid,
+    services: services.map((s) => ({
+      name: s.name,
+      status: s.status,
+      pid: s.pid,
+    })),
+    ports: ports.map((p) => ({
+      port: p.port,
+      label: p.label,
+      protocol: p.protocol,
+      status: p.status,
+      service: p.service,
+      lastCheck: p.lastCheck,
+    })),
   };
 }
 

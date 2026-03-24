@@ -1250,12 +1250,10 @@ export function HomePage() {
             <button
               onClick={() => {
                 const setupPrompt = [
-                  "Inspect this project and create a .companion/launch.json file.",
-                  "Look at package.json, Makefile, docker-compose.yml, etc. Define:",
-                  "1. setup: dependency install commands",
-                  "2. services: dev server commands with readyPattern",
-                  "3. ports: all ports to monitor with labels and health checks",
-                  'Use conditions for sandbox/local/worktree variants if needed.',
+                  "Create a .companion/launch.json file for this project.",
+                  "Start by calling get_launch_config_schema to learn the format.",
+                  "Then inspect the project (package.json, Makefile, docker-compose.yml, etc.) and define setup scripts, services with readyPattern, and ports with health checks.",
+                  "After writing the file, call validate_launch_config to verify it.",
                 ].join(" ");
                 doCreateSession(setupPrompt);
               }}

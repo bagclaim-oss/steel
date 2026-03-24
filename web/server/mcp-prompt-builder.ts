@@ -11,11 +11,19 @@
  */
 export function buildCompanionMcpPrompt(): string {
   return [
-    "You have access to Companion MCP tools for managing .companion/launch.json project environment configs:",
-    "- get_launch_config_schema: Get the full schema and example before creating/editing a launch config",
-    "- validate_launch_config: Validate an existing .companion/launch.json file",
-    "- test_launch_config: Dry-run test that starts services, checks ports, then cleans up",
+    "You have access to Companion MCP tools for managing .companion/launch.json project environment configs.",
     "",
-    "Use get_launch_config_schema first when asked to create or modify a launch.json.",
+    "Available tools:",
+    "- get_launch_config_schema: Get the full JSON Schema, a complete example, and usage guide",
+    "- validate_launch_config: Validate an existing .companion/launch.json file and see errors",
+    "- test_launch_config: Dry-run test — starts services, checks ports, then cleans up",
+    "- get_session_environment_status: Check running services and port health in the current session",
+    "",
+    "Workflow for creating a launch.json:",
+    "1. Call get_launch_config_schema to learn the format",
+    "2. Inspect the project (package.json, Makefile, docker-compose.yml, etc.)",
+    "3. Write .companion/launch.json using the schema",
+    "4. Call validate_launch_config to check for errors",
+    "5. Call test_launch_config for a full dry-run",
   ].join("\n");
 }

@@ -28,13 +28,13 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
   const setActivePort = useStore((s) => s.setActivePort);
   const isSandbox = useStore((s) => s.sessions.get(sessionId)?.is_containerized ?? false);
   const setPendingBrowserUrl = useStore((s) => s.setPendingBrowserUrl);
-
   const setServiceStatuses = useStore((s) => s.setServiceStatuses);
+  const serviceLogs = useStore((s) => s.serviceLogs.get(sessionId) ?? new Map());
 
   const [iframeUrl, setIframeUrl] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR);
   const [reloading, setReloading] = useState(false);
-  const [restartingService, setRestartingService] = useState<string | null>(null);
+  const [pendingServiceActions, setPendingServiceActions] = useState<Record<string, "restart" | "stop" | undefined>>({});
   const [panelMode, setPanelMode] = useState<RightPanelMode>({ kind: "none" });
 
   // Fetch configured services on mount (includes stopped/not-yet-started services from launch.json)
@@ -92,14 +92,28 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
 
   // Restart a service
   const handleRestart = useCallback(async (serviceName: string) => {
-    setRestartingService(serviceName);
+    setPendingServiceActions((current) => ({ ...current, [serviceName]: "restart" }));
     try { await api.restartService(sessionId, serviceName); } catch { /* ignore */ }
-    finally { setRestartingService(null); }
+    finally {
+      setPendingServiceActions((current) => {
+        const next = { ...current };
+        delete next[serviceName];
+        return next;
+      });
+    }
   }, [sessionId]);
 
   // Stop a service
   const handleStop = useCallback(async (serviceName: string) => {
+    setPendingServiceActions((current) => ({ ...current, [serviceName]: "stop" }));
     try { await api.stopService(sessionId, serviceName); } catch { /* ignore */ }
+    finally {
+      setPendingServiceActions((current) => {
+        const next = { ...current };
+        delete next[serviceName];
+        return next;
+      });
+    }
   }, [sessionId]);
 
   // Auto-navigate on openOnReady
@@ -146,6 +160,12 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
   const hasPorts = portStatuses.length > 0;
   const hasContent = hasServices || hasPorts;
   const showBrowser = panelMode.kind === "browser";
+  const canOpenSandboxBrowser = isSandbox && (!hasPorts || !showBrowser);
+
+  const openSandboxBrowser = useCallback(() => {
+    setPendingBrowserUrl(sessionId, "http://localhost:3000");
+    setPanelMode({ kind: "browser" });
+  }, [sessionId, setPendingBrowserUrl]);
 
   return (
     <div className="flex h-full bg-cc-bg">
@@ -185,7 +205,7 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
                   <ServiceCard
                     key={svc.name}
                     service={svc}
-                    isRestarting={restartingService === svc.name}
+                    pendingAction={pendingServiceActions[svc.name]}
                     isSelected={panelMode.kind === "service" && panelMode.serviceName === svc.name}
                     onClick={() => selectService(svc.name)}
                     onRestart={() => handleRestart(svc.name)}
@@ -220,10 +240,19 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
             <div className="px-4 py-8 text-center">
               <div className="text-cc-muted text-xs leading-relaxed">
                 {isSandbox
-                  ? "No services configured. Use the browser preview to navigate."
+                  ? "No services configured yet. Open the browser preview or add a launch config to make this sandbox feel automatic."
                   : <>No services or ports configured. Add a <code className="px-1 py-0.5 bg-cc-hover rounded text-[10px]">.companion/launch.json</code> to your project.</>
                 }
               </div>
+              {canOpenSandboxBrowser && (
+                <button
+                  type="button"
+                  onClick={openSandboxBrowser}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-cc-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-cc-primary-hover transition-colors cursor-pointer"
+                >
+                  Open browser preview
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -244,7 +273,8 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
             sessionId={sessionId}
             serviceName={panelMode.serviceName}
             service={serviceStatuses.find((s) => s.name === panelMode.serviceName)}
-            isRestarting={restartingService === panelMode.serviceName}
+            isRestarting={pendingServiceActions[panelMode.serviceName] === "restart"}
+            initialLogCount={serviceLogs.get(panelMode.serviceName)?.length ?? 0}
             onRestart={() => handleRestart(panelMode.serviceName)}
             onStop={() => handleStop(panelMode.serviceName)}
           />
@@ -258,7 +288,11 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
             proxyUrlForPort={proxyUrlForPort}
           />
         ) : (
-          <EmptyBrowserState isSandbox={isSandbox} hasPorts={hasPorts} />
+          <EmptyBrowserState
+            isSandbox={isSandbox}
+            hasPorts={hasPorts}
+            onOpenSandboxBrowser={canOpenSandboxBrowser ? openSandboxBrowser : undefined}
+          />
         )}
       </div>
     </div>
@@ -272,6 +306,7 @@ function ServiceLogView({
   serviceName,
   service,
   isRestarting,
+  initialLogCount,
   onRestart,
   onStop,
 }: {
@@ -279,11 +314,12 @@ function ServiceLogView({
   serviceName: string;
   service?: ServiceInfo;
   isRestarting: boolean;
+  initialLogCount: number;
   onRestart: () => void;
   onStop: () => void;
 }) {
   const logLines = useStore((s) => s.serviceLogs.get(sessionId)?.get(serviceName) ?? []);
-  const appendServiceLog = useStore((s) => s.appendServiceLog);
+  const setServiceLogs = useStore((s) => s.setServiceLogs);
   const logContainerRef = useRef<HTMLPreElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [historicalLoaded, setHistoricalLoaded] = useState(false);
@@ -294,18 +330,15 @@ function ServiceLogView({
     let cancelled = false;
     api.getServiceLogs(sessionId, serviceName).then((res) => {
       if (cancelled) return;
-      // Prepend historical logs that aren't already in the store
-      if (res.logs && res.logs.length > 0) {
-        for (const line of res.logs) {
-          appendServiceLog(sessionId, serviceName, line);
-        }
+      if (res.logs && (initialLogCount === 0 || res.logs.length > initialLogCount)) {
+        setServiceLogs(sessionId, serviceName, res.logs);
       }
       setHistoricalLoaded(true);
     }).catch(() => {
       if (!cancelled) setHistoricalLoaded(true);
     });
     return () => { cancelled = true; };
-  }, [sessionId, serviceName, appendServiceLog]);
+  }, [sessionId, serviceName, initialLogCount, setServiceLogs]);
 
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
@@ -409,20 +442,22 @@ const STATUS_COLORS: Record<string, string> = {
 
 function ServiceCard({
   service,
-  isRestarting,
+  pendingAction,
   isSelected,
   onClick,
   onRestart,
   onStop,
 }: {
   service: ServiceInfo;
-  isRestarting: boolean;
+  pendingAction?: "restart" | "stop";
   isSelected: boolean;
   onClick: () => void;
   onRestart: () => void;
   onStop: () => void;
 }) {
   const isRunning = service.status === "ready" || service.status === "started" || service.status === "starting";
+  const isRestarting = pendingAction === "restart";
+  const isStopping = pendingAction === "stop";
 
   return (
     <div
@@ -447,8 +482,9 @@ function ServiceCard({
         {isRunning && (
           <button
             onClick={(e) => { e.stopPropagation(); onStop(); }}
+            disabled={isStopping}
             title={`Stop ${service.name}`}
-            className="p-0.5 text-cc-muted hover:text-cc-error rounded transition-colors cursor-pointer"
+            className="p-0.5 text-cc-muted hover:text-cc-error rounded transition-colors disabled:opacity-40 cursor-pointer"
           >
             <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
               <rect x="4" y="4" width="8" height="8" rx="1" />
@@ -590,7 +626,15 @@ function BrowserPreview({
 
 // -- Empty Browser State -----------------------------------------------------
 
-function EmptyBrowserState({ isSandbox, hasPorts }: { isSandbox: boolean; hasPorts: boolean }) {
+function EmptyBrowserState({
+  isSandbox,
+  hasPorts,
+  onOpenSandboxBrowser,
+}: {
+  isSandbox: boolean;
+  hasPorts: boolean;
+  onOpenSandboxBrowser?: () => void;
+}) {
   return (
     <div className="flex items-center justify-center h-full">
       <div className="text-center px-6">
@@ -606,10 +650,19 @@ function EmptyBrowserState({ isSandbox, hasPorts }: { isSandbox: boolean; hasPor
           {hasPorts
             ? "Select a service or port to preview"
             : isSandbox
-              ? "No services configured yet"
+              ? "No services configured yet — you can still open the sandbox browser now."
               : <>Add a <code className="px-1 py-0.5 bg-cc-hover rounded text-[10px]">.companion/launch.json</code> to get started</>
           }
         </p>
+        {onOpenSandboxBrowser && (
+          <button
+            type="button"
+            onClick={onOpenSandboxBrowser}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-cc-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-cc-primary-hover transition-colors cursor-pointer"
+          >
+            Open browser preview
+          </button>
+        )}
       </div>
     </div>
   );

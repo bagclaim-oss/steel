@@ -30,6 +30,7 @@ export interface EnvironmentSlice {
   /** Service log lines: sessionId -> serviceName -> lines[] */
   serviceLogs: Map<string, Map<string, string[]>>;
   appendServiceLog: (sessionId: string, serviceName: string, line: string) => void;
+  setServiceLogs: (sessionId: string, serviceName: string, lines: string[]) => void;
   getServiceLogs: (sessionId: string, serviceName: string) => string[];
 
   setPortStatuses: (sessionId: string, ports: PortStatusInfo[]) => void;
@@ -59,6 +60,16 @@ export const createEnvironmentSlice: StateCreator<AppState, [], [], EnvironmentS
         updated.splice(0, updated.length - MAX_LOG_LINES);
       }
       inner.set(serviceName, updated);
+      outer.set(sessionId, inner);
+      return { serviceLogs: outer };
+    }),
+
+  setServiceLogs: (sessionId, serviceName, lines) =>
+    set((state) => {
+      const outer = new Map(state.serviceLogs);
+      const inner = new Map(outer.get(sessionId) ?? new Map<string, string[]>());
+      const normalized = lines.slice(-MAX_LOG_LINES);
+      inner.set(serviceName, normalized);
       outer.set(sessionId, inner);
       return { serviceLogs: outer };
     }),

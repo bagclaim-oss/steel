@@ -422,7 +422,7 @@ describe("SessionOrchestrator", () => {
       orchestrator.initialize();
       companionBus.emit("session:phase-changed", {
         sessionId: "s1",
-        from: "connecting",
+        from: "reconnecting",
         to: "ready",
         trigger: "system_init",
       });

@@ -170,7 +170,7 @@ async function runInContainer(
   opts: { timeout: number; onOutput?: (line: string) => void; env?: Record<string, string> },
 ): Promise<{ exitCode: number; output: string }> {
   const envPrefix = Object.entries(opts.env ?? {})
-    .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+    .map(([k, v]) => `${quoteForShellWord(k)}=${quoteForShellWord(v)}`)
     .join(" ");
   const wrappedCommand = envPrefix ? `env ${envPrefix} sh -lc ${JSON.stringify(command)}` : command;
   const cmdWithEnv = ["sh", "-lc", wrappedCommand];
@@ -223,6 +223,10 @@ class LineEmitter {
     }
     return this.buffer.slice(-limit);
   }
+}
+
+function quoteForShellWord(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 /** Pipe a Node.js readable stream line by line into a LineEmitter. */
@@ -302,6 +306,11 @@ export async function startServices(
       try {
         const handle = spawnService(name, svc, opts);
         handles.push(handle);
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        if (handle.status === "failed") {
+          throw new Error(`Service "${name}" exited before becoming ready`);
+        }
 
         // Mark as started immediately (process is spawned)
         handle.status = "started";
@@ -442,17 +451,19 @@ function waitForReady(
 
   return new Promise<boolean>((resolve) => {
     let resolved = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     const unsub = handle.onLine((line) => {
       if (resolved) return;
       if (regex.test(line)) {
         resolved = true;
         unsub();
+        if (timeoutId) clearTimeout(timeoutId);
         resolve(true);
       }
     });
 
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       if (!resolved) {
         resolved = true;
         unsub();
@@ -460,6 +471,11 @@ function waitForReady(
       }
     }, timeoutMs);
   });
+}
+
+async function ensureProcessStillRunning(handle: ServiceHandle): Promise<boolean> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return handle.status !== "failed";
 }
 
 // ── Lifecycle Management ────────────────────────────────────────────────────
@@ -518,26 +534,27 @@ export async function restartService(
       env: serviceEnvFor(opts, serviceName),
     });
     handles[idx] = handle;
+    let restartFailed = false;
     handle.status = "started";
     emitServiceStatus(sessionId);
 
     if (svc.readyPattern) {
       const matched = await waitForReady(handle, svc);
+      restartFailed = (handle.status as ServiceStatus) === "failed";
       if (matched) {
-        if (handle.status !== "failed") {
+        if (!restartFailed) {
           handle.status = "ready";
         }
-      } else if (handle.status !== "failed") {
+      } else if (!restartFailed) {
         handle.status = "started";
       }
-    } else {
-      if (handle.status !== "failed") {
-        handle.status = "ready";
-      }
+    } else if (!restartFailed) {
+      handle.status = "ready";
     }
 
+    restartFailed = (handle.status as ServiceStatus) === "failed";
     emitServiceStatus(sessionId);
-    return handle.status === "failed"
+    return restartFailed
       ? { ok: false, error: `Service "${serviceName}" failed to restart` }
       : { ok: true };
   } catch (e) {

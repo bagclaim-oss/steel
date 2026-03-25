@@ -50,8 +50,7 @@ const mockLauncher = {
 
 describe("Launch Routes", () => {
   let app: Hono;
-  const originalCwd = process.cwd();
-  const originalHome = process.env.HOME;
+  const allowedBase = process.cwd();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -66,15 +65,6 @@ describe("Launch Routes", () => {
     registerLaunchRoutes(app, mockLauncher);
   });
 
-  afterEach(() => {
-    process.chdir(originalCwd);
-    if (originalHome === undefined) {
-      delete process.env.HOME;
-    } else {
-      process.env.HOME = originalHome;
-    }
-  });
-
   // ── GET /launch-config ────────────────────────────────────────────────────
 
   it("GET /launch-config returns 400 when cwd is missing", async () => {
@@ -86,7 +76,7 @@ describe("Launch Routes", () => {
 
   it("GET /launch-config returns exists: false when no config found", async () => {
     mockLoadLaunchConfig.mockReturnValue(null);
-    const res = await app.request("/launch-config?cwd=/tmp/test");
+    const res = await app.request(`/launch-config?cwd=${encodeURIComponent(`${allowedBase}/test`)}`);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.exists).toBe(false);
@@ -95,7 +85,7 @@ describe("Launch Routes", () => {
   it("GET /launch-config returns config when found", async () => {
     const mockConfig = { version: "1", services: {} } as any;
     mockLoadLaunchConfig.mockReturnValue(mockConfig);
-    const res = await app.request("/launch-config?cwd=/tmp/test");
+    const res = await app.request(`/launch-config?cwd=${encodeURIComponent(`${allowedBase}/test`)}`);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.exists).toBe(true);
@@ -103,7 +93,6 @@ describe("Launch Routes", () => {
   });
 
   it("GET /launch-config rejects cwd outside workspace and home", async () => {
-    process.env.HOME = "/home/test-user";
     const res = await app.request("/launch-config?cwd=/etc");
     expect(res.status).toBe(403);
     const body = await res.json();

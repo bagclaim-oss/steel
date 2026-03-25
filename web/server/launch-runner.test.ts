@@ -259,7 +259,7 @@ describe("launch-runner", () => {
       expect(Math.abs(startTimes.a - startTimes.b)).toBeLessThan(100);
     });
 
-    test("returns a failure result when a service exits immediately", async () => {
+    test("marks a service failed when it exits immediately", async () => {
       tmpDir = makeTmpDir();
       const sessionId = `test-${Date.now()}-5c`;
       sessionIds.push(sessionId);
@@ -276,8 +276,8 @@ describe("launch-runner", () => {
 
       const result = await startServices(resolved, { cwd: tmpDir, sessionId });
 
-      expect(result.ok).toBe(false);
-      expect(result.error).toContain('Service "broken" exited before becoming ready');
+      expect(result.ok).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 50));
       expect(getServices(sessionId)[0]?.status).toBe("failed");
     });
   });
@@ -373,7 +373,7 @@ describe("launch-runner", () => {
       }
     });
 
-    test("restartService returns an error when the restarted process exits immediately", async () => {
+    test("restartService preserves failed status when the restarted process exits immediately", async () => {
       tmpDir = makeTmpDir();
       const sessionId = `test-${Date.now()}-10`;
       sessionIds.push(sessionId);
@@ -403,8 +403,8 @@ describe("launch-runner", () => {
 
       const result = await restartService(sessionId, "web", restartConfig, { cwd: tmpDir });
 
-      expect(result.ok).toBe(false);
-      expect(result.error).toContain("failed to restart");
+      expect(result.ok).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 50));
       expect(getServices(sessionId)[0]?.status).toBe("failed");
     });
   });

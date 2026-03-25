@@ -503,7 +503,7 @@ async function toolReload(
       cwd: effectiveCwd,
       containerId: launcherSession?.containerId,
       sessionId,
-      env: Object.keys(resolvedEnv.serviceEnvs).length > 0 ? resolvedEnv.serviceEnvs : resolvedEnv.topLevelEnv,
+      env: resolvedEnv.topLevelEnv,
     });
     if (!svcResult.ok) {
       return { reloaded: false, error: svcResult.error ?? "Service startup failed", services: serviceNames };

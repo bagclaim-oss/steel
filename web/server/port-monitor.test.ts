@@ -7,6 +7,7 @@ import {
   checkPort,
   reassociateMonitoring,
 } from "./port-monitor.js";
+import { companionBus } from "./event-bus.js";
 
 describe("port-monitor", () => {
   const sessionIds: string[] = [];

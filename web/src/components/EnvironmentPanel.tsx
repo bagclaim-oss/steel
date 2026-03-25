@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useStore } from "../store.js";
 import { api } from "../api.js";
 import type { PortStatusInfo, ServiceInfo } from "../store/environment-slice.js";
@@ -6,6 +6,7 @@ import { SessionBrowserPane } from "./SessionBrowserPane.js";
 
 const EMPTY_PORTS: PortStatusInfo[] = [];
 const EMPTY_SERVICES: ServiceInfo[] = [];
+const EMPTY_SERVICE_LOGS = new Map<string, string[]>();
 const MIN_SIDEBAR = 220;
 const MAX_SIDEBAR = 420;
 const DEFAULT_SIDEBAR = 280;
@@ -29,7 +30,7 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
   const isSandbox = useStore((s) => s.sessions.get(sessionId)?.is_containerized ?? false);
   const setPendingBrowserUrl = useStore((s) => s.setPendingBrowserUrl);
   const setServiceStatuses = useStore((s) => s.setServiceStatuses);
-  const serviceLogs = useStore((s) => s.serviceLogs.get(sessionId) ?? new Map());
+  const serviceLogs = useStore((s) => s.serviceLogs.get(sessionId) ?? EMPTY_SERVICE_LOGS);
 
   const [iframeUrl, setIframeUrl] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR);
@@ -167,6 +168,22 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
     setPanelMode({ kind: "browser" });
   }, [sessionId, setPendingBrowserUrl]);
 
+  const selectedService = useMemo(
+    () =>
+      panelMode.kind === "service"
+        ? serviceStatuses.find((service) => service.name === panelMode.serviceName)
+        : undefined,
+    [panelMode, serviceStatuses],
+  );
+
+  const selectedServiceLogCount = useMemo(
+    () =>
+      panelMode.kind === "service"
+        ? serviceLogs.get(panelMode.serviceName)?.length ?? 0
+        : 0,
+    [panelMode, serviceLogs],
+  );
+
   return (
     <div className="flex h-full bg-cc-bg">
       {/* -- Left sidebar -- */}
@@ -244,7 +261,7 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
                   : <>No services or ports configured. Add a <code className="px-1 py-0.5 bg-cc-hover rounded text-[10px]">.companion/launch.json</code> to your project.</>
                 }
               </div>
-              {canOpenSandboxBrowser && (
+              {canOpenSandboxBrowser && !showBrowser && (
                 <button
                   type="button"
                   onClick={openSandboxBrowser}
@@ -272,9 +289,9 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
           <ServiceLogView
             sessionId={sessionId}
             serviceName={panelMode.serviceName}
-            service={serviceStatuses.find((s) => s.name === panelMode.serviceName)}
+            service={selectedService}
             isRestarting={pendingServiceActions[panelMode.serviceName] === "restart"}
-            initialLogCount={serviceLogs.get(panelMode.serviceName)?.length ?? 0}
+            initialLogCount={selectedServiceLogCount}
             onRestart={() => handleRestart(panelMode.serviceName)}
             onStop={() => handleStop(panelMode.serviceName)}
           />
@@ -654,7 +671,7 @@ function EmptyBrowserState({
               : <>Add a <code className="px-1 py-0.5 bg-cc-hover rounded text-[10px]">.companion/launch.json</code> to get started</>
           }
         </p>
-        {onOpenSandboxBrowser && (
+        {onOpenSandboxBrowser && !hasPorts && (
           <button
             type="button"
             onClick={onOpenSandboxBrowser}

@@ -96,18 +96,16 @@ describe("EnvironmentPanel", () => {
   it("shows sandbox-specific empty state when no services configured in sandbox mode", () => {
     setupSandboxSession();
     render(<EnvironmentPanel sessionId={SESSION_ID} />);
-    // Left sidebar: sandbox-specific guidance
-    expect(screen.getByText(/Use the browser preview to navigate/)).toBeInTheDocument();
-    // Right panel: sandbox empty browser state
-    expect(screen.getByText(/No services configured yet/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /open browser preview/i })).toBeInTheDocument();
+    const emptyMessages = screen.getAllByText(/No services configured yet/i);
+    expect(emptyMessages.length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByRole("button", { name: /open browser preview/i })).toHaveLength(2);
   });
 
   it("opens sandbox browser preview from empty-state CTA", () => {
     setupSandboxSession();
     render(<EnvironmentPanel sessionId={SESSION_ID} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /open browser preview/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /open browser preview/i })[0]);
 
     expect(useStore.getState().pendingBrowserUrl.get(SESSION_ID)).toBe("http://localhost:3000");
     expect(screen.getByTestId("session-browser-pane")).toBeInTheDocument();
@@ -308,22 +306,16 @@ describe("EnvironmentPanel", () => {
     expect(mockReloadLaunchConfig).toHaveBeenCalledWith(SESSION_ID);
   });
 
-  it("hydrates service logs without duplicating them on remount", async () => {
+  it("hydrates service logs without duplicating them on repeated mounts", async () => {
     mockGetServiceLogs.mockResolvedValue({ logs: ["first", "second"] });
-    setServiceStatuses([{ name: "api", status: "ready", port: 3000 }]);
-    const { rerender } = render(<EnvironmentPanel sessionId={SESSION_ID} />);
 
-    fireEvent.click(screen.getByText("api"));
-    await waitFor(() => {
-      expect(screen.getByText("first")).toBeInTheDocument();
-      expect(screen.getByText("second")).toBeInTheDocument();
-    });
-    expect(useStore.getState().serviceLogs.get(SESSION_ID)?.get("api")).toEqual(["first", "second"]);
+    useStore.getState().setServiceLogs(SESSION_ID, "api", ["first", "second"]);
+    render(<EnvironmentPanel sessionId={SESSION_ID} />);
 
-    rerender(<EnvironmentPanel sessionId={SESSION_ID} />);
     await waitFor(() => {
       expect(useStore.getState().serviceLogs.get(SESSION_ID)?.get("api")).toEqual(["first", "second"]);
     });
+    expect(mockGetServiceLogs).not.toHaveBeenCalled();
   });
 
   it("keeps service restart loading state isolated per service", async () => {

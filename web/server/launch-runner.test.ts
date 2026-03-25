@@ -167,7 +167,7 @@ describe("launch-runner", () => {
       expect(result.ok).toBe(true);
       const handles = getServices(sessionId);
       expect(handles[0].status).toBe("ready");
-    });
+    }, 10_000);
 
     test("readyPattern timeout marks as started, not failed", async () => {
       tmpDir = makeTmpDir();

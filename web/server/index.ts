@@ -73,6 +73,9 @@ const orchestrator = new SessionOrchestrator({
 // Subscribe to port health status events for broadcasting to browsers
 wsBridge.subscribePortStatus();
 
+// Subscribe to service status events for broadcasting to browsers
+wsBridge.subscribeServiceStatus();
+
 // ── Cloud relay connection (for receiving webhooks behind a firewall) ────────
 // The relay forwards platform webhooks (e.g. GitHub, Slack) to the Companion
 // instance via an outbound WebSocket. Currently no webhook handlers are

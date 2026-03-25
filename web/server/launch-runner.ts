@@ -8,6 +8,7 @@ import type { ResolvedService, LaunchSetupScript, ResolvedLaunchConfig } from ".
 import { buildStartupOrder } from "./launch-config.js";
 import { containerManager } from "./container-manager.js";
 import { log } from "./logger.js";
+import { companionBus } from "./event-bus.js";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -48,6 +49,13 @@ export interface StartServicesOpts {
 // ── Module state ────────────────────────────────────────────────────────────
 
 const sessionServices = new Map<string, ServiceHandle[]>();
+
+function emitServiceStatus(sessionId: string): void {
+  companionBus.emit("service:status", {
+    sessionId,
+    services: getServiceStatuses(sessionId),
+  });
+}
 
 // ── Setup Scripts ───────────────────────────────────────────────────────────
 
@@ -229,6 +237,7 @@ export async function startServices(
 
   const waves = buildStartupOrder(services);
   const handles: ServiceHandle[] = [];
+  sessionServices.set(opts.sessionId, handles);
   const readyPromises = new Map<string, Promise<void>>();
   const readyResolvers = new Map<string, () => void>();
   const startedPromises = new Map<string, Promise<void>>();
@@ -270,6 +279,7 @@ export async function startServices(
 
         // Mark as started immediately (process is spawned)
         handle.status = "started";
+        emitServiceStatus(opts.sessionId);
         startedResolvers.get(name)?.();
         opts.onProgress?.(name, "started");
 
@@ -278,6 +288,7 @@ export async function startServices(
           const matched = await waitForReady(handle, svc);
           if (matched) {
             handle.status = "ready";
+            emitServiceStatus(opts.sessionId);
             opts.onProgress?.(name, "ready", `Matched: ${svc.readyPattern}`);
           } else {
             opts.onProgress?.(name, "started", `readyPattern timeout after ${svc.readyTimeout}s`);
@@ -285,6 +296,7 @@ export async function startServices(
           }
         } else {
           handle.status = "ready";
+          emitServiceStatus(opts.sessionId);
           opts.onProgress?.(name, "ready");
         }
 
@@ -294,6 +306,7 @@ export async function startServices(
         const msg = e instanceof Error ? e.message : String(e);
         log.error("launch-runner", ` Service "${name}" failed to start: ${msg}`);
         opts.onProgress?.(name, "failed", msg);
+        emitServiceStatus(opts.sessionId);
         // Unblock dependents
         startedResolvers.get(name)?.();
         readyResolvers.get(name)?.();
@@ -303,7 +316,6 @@ export async function startServices(
     await Promise.all(wavePromises);
   }
 
-  sessionServices.set(opts.sessionId, handles);
   return { ok: true };
 }
 
@@ -425,7 +437,61 @@ export function stopAllServices(sessionId: string): void {
     handles[i].kill();
   }
 
+  emitServiceStatus(sessionId);
   sessionServices.delete(sessionId);
+}
+
+/** Stop a single service by name. */
+export function stopService(sessionId: string, serviceName: string): boolean {
+  const handles = sessionServices.get(sessionId);
+  if (!handles) return false;
+  const handle = handles.find((h) => h.name === serviceName);
+  if (!handle) return false;
+  handle.kill();
+  emitServiceStatus(sessionId);
+  return true;
+}
+
+/** Restart a single service by name. Requires the resolved config to respawn. */
+export async function restartService(
+  sessionId: string,
+  serviceName: string,
+  resolved: ResolvedLaunchConfig,
+  opts: Omit<StartServicesOpts, "sessionId">,
+): Promise<{ ok: boolean; error?: string }> {
+  const handles = sessionServices.get(sessionId);
+  if (!handles) return { ok: false, error: "No services found for session" };
+
+  const idx = handles.findIndex((h) => h.name === serviceName);
+  if (idx === -1) return { ok: false, error: `Service "${serviceName}" not found` };
+
+  const svc = resolved.services[serviceName];
+  if (!svc) return { ok: false, error: `Service "${serviceName}" not in config` };
+
+  // Kill existing
+  handles[idx].kill();
+
+  // Respawn
+  try {
+    const handle = spawnService(serviceName, svc, { ...opts, sessionId });
+    handle.status = "started";
+    emitServiceStatus(sessionId);
+
+    if (svc.readyPattern) {
+      const matched = await waitForReady(handle, svc);
+      handle.status = matched ? "ready" : "started";
+    } else {
+      handle.status = "ready";
+    }
+
+    emitServiceStatus(sessionId);
+
+    // Replace in handles array
+    handles[idx] = handle;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 /** Get all running service handles for a session. */
@@ -436,11 +502,12 @@ export function getServices(sessionId: string): ServiceHandle[] {
 /** Get service statuses in a serializable format. */
 export function getServiceStatuses(
   sessionId: string,
-): Array<{ name: string; status: ServiceStatus; pid?: number }> {
+): Array<{ name: string; status: ServiceStatus; pid?: number; port?: number }> {
   return getServices(sessionId).map((h) => ({
     name: h.name,
     status: h.status,
     pid: h.pid,
+    port: h.port,
   }));
 }
 

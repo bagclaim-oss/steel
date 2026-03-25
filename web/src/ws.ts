@@ -1176,6 +1176,13 @@ function handleParsedMessage(
       break;
     }
 
+    case "service_status": {
+      if ("services" in data && Array.isArray(data.services)) {
+        store.setServiceStatuses(sessionId, data.services as import("./store/environment-slice.js").ServiceInfo[]);
+      }
+      break;
+    }
+
     default: {
       console.debug("[ws] Unhandled message type:", (data as { type: string }).type);
       break;

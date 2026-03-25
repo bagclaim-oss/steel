@@ -1341,4 +1341,8 @@ export const api = {
     post<{ port: number; status: string }>(`/sessions/${encodeURIComponent(sessionId)}/ports/${port}/check`),
   reloadLaunchConfig: (sessionId: string) =>
     post<{ reloaded: boolean; error?: string; services?: string[]; ports?: string[] }>(`/sessions/${encodeURIComponent(sessionId)}/launch-config/reload`),
+  restartService: (sessionId: string, serviceName: string) =>
+    post<{ restarted: boolean; service: string }>(`/sessions/${encodeURIComponent(sessionId)}/services/${encodeURIComponent(serviceName)}/restart`),
+  stopService: (sessionId: string, serviceName: string) =>
+    post<{ stopped: boolean; service: string }>(`/sessions/${encodeURIComponent(sessionId)}/services/${encodeURIComponent(serviceName)}/stop`),
 };

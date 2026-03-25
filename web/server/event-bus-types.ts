@@ -5,6 +5,7 @@ import type { BrowserIncomingMessage } from "./session-types.js";
 import type { CodexAdapter } from "./codex-adapter.js";
 import type { SessionPhase } from "./session-state-machine.js";
 import type { PortStatus } from "./port-monitor.js";
+import type { ServiceStatus } from "./launch-runner.js";
 
 export interface CompanionEventMap {
   // ── Session lifecycle ──────────────────────────────────────────────
@@ -67,4 +68,12 @@ export interface CompanionEventMap {
 
   /** Port health status changed (emitted by port-monitor). */
   "port:status": { sessionId: string; ports: PortStatus[] };
+
+  // ── Service monitoring ──────────────────────────────────────────────
+
+  /** Service status changed (emitted by launch-runner). */
+  "service:status": {
+    sessionId: string;
+    services: Array<{ name: string; status: ServiceStatus; pid?: number; port?: number }>;
+  };
 }

@@ -101,6 +101,22 @@ describe("port-monitor", () => {
     expect(statuses[0].service).toBe("web");
   });
 
+  test("openOnReady flag is included in port status", () => {
+    const sid = `pm-test-${Date.now()}-7`;
+    sessionIds.push(sid);
+
+    startMonitoring(sid, {
+      "5173": { label: "Vite", openOnReady: true },
+      "3000": { label: "API" },
+    });
+
+    const statuses = getPortStatuses(sid);
+    const vite = statuses.find((s) => s.port === 5173);
+    expect(vite!.openOnReady).toBe(true);
+    const api = statuses.find((s) => s.port === 3000);
+    expect(api!.openOnReady).toBeUndefined();
+  });
+
   test("ports without healthCheck are tracked but not checked", () => {
     const sid = `pm-test-${Date.now()}-6`;
     sessionIds.push(sid);

@@ -2,7 +2,7 @@ import type { Hono } from "hono";
 import type { CliLauncher } from "../cli-launcher.js";
 import { loadLaunchConfig, resolveForContext, resolveEnvVars } from "../launch-config.js";
 import { getPortStatuses, checkPort, startMonitoring, stopMonitoring } from "../port-monitor.js";
-import { getServiceStatuses, stopAllServices, startServices } from "../launch-runner.js";
+import { getServiceStatuses, stopAllServices, startServices, restartService, stopService } from "../launch-runner.js";
 
 export function registerLaunchRoutes(api: Hono, launcher: CliLauncher): void {
   // Check if a launch config exists for a given working directory
@@ -95,5 +95,53 @@ export function registerLaunchRoutes(api: Hono, launcher: CliLauncher): void {
       services: serviceNames,
       ports: portKeys,
     });
+  });
+
+  // Restart a specific service
+  api.post("/sessions/:id/services/:name/restart", async (c) => {
+    const sessionId = c.req.param("id");
+    const serviceName = c.req.param("name");
+    const session = launcher.getSession(sessionId);
+    if (!session) {
+      return c.json({ error: "Session not found" }, 404);
+    }
+
+    const config = loadLaunchConfig(session.cwd);
+    if (!config) {
+      return c.json({ error: "No .companion/launch.json found" }, 404);
+    }
+
+    const resolved = resolveForContext(config, {
+      isSandbox: !!session.containerId,
+      isWorktree: false,
+    });
+
+    const sessionEnv = launcher.getSessionEnv(sessionId);
+    const resolvedEnv = resolveEnvVars(config, session.cwd, sessionEnv);
+
+    const result = await restartService(sessionId, serviceName, resolved, {
+      cwd: session.cwd,
+      containerId: session.containerId,
+      env: resolvedEnv.topLevelEnv,
+    });
+
+    if (!result.ok) {
+      return c.json({ error: result.error }, 400);
+    }
+
+    return c.json({ restarted: true, service: serviceName });
+  });
+
+  // Stop a specific service
+  api.post("/sessions/:id/services/:name/stop", (c) => {
+    const sessionId = c.req.param("id");
+    const serviceName = c.req.param("name");
+
+    const stopped = stopService(sessionId, serviceName);
+    if (!stopped) {
+      return c.json({ error: `Service "${serviceName}" not found` }, 404);
+    }
+
+    return c.json({ stopped: true, service: serviceName });
   });
 }

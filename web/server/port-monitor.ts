@@ -19,6 +19,7 @@ export interface PortStatus {
   lastCheck: number; // timestamp ms
   service?: string;  // associated service name
   healthCheckPath?: string; // stored for manual refresh
+  openOnReady?: boolean; // auto-open in browser when healthy
 }
 
 interface MonitorEntry {
@@ -80,6 +81,7 @@ export function startMonitoring(
       lastCheck: 0,
       service: portToService.get(port),
       healthCheckPath: config.healthCheck?.path ?? "/",
+      openOnReady: config.openOnReady,
     };
     entry.ports.set(port, status);
 

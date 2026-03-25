@@ -1,27 +1,43 @@
 // @vitest-environment jsdom
 /**
- * Tests for the EnvironmentPanel component.
+ * Tests for the unified EnvironmentPanel component (split-layout version).
  *
  * Validates:
- * - Empty state (no ports configured) shows setup hint
- * - Port pills render with correct labels and status indicators
- * - Clicking an HTTP port pill opens the iframe preview with the proxy URL
- * - Custom URL input navigates to the correct proxy URL
- * - TCP-only ports do not open preview, they trigger a refresh instead
+ * - Empty state (no services/ports) shows setup hints
+ * - Sandbox-aware empty states
+ * - Services render with name, status dot, and port
+ * - Ports render with labels and port numbers
+ * - Clicking an HTTP port opens the iframe preview (local) or sets pendingBrowserUrl (sandbox)
+ * - TCP-only ports trigger health check refresh
+ * - Custom URL input navigation
+ * - openOnReady auto-navigate
+ * - Reload config button
  * - Accessibility (axe scan)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { useStore } from "../store.js";
-import type { PortStatusInfo } from "../store/environment-slice.js";
+import type { PortStatusInfo, ServiceInfo } from "../store/environment-slice.js";
 
 const mockCheckPort = vi.fn();
+const mockReloadLaunchConfig = vi.fn().mockResolvedValue({ reloaded: true });
+const mockRestartService = vi.fn().mockResolvedValue({ ok: true });
+const mockStopService = vi.fn().mockResolvedValue({ ok: true });
 
 vi.mock("../api.js", () => ({
   api: {
     checkPort: (...args: unknown[]) => mockCheckPort(...args),
+    reloadLaunchConfig: (...args: unknown[]) => mockReloadLaunchConfig(...args),
+    restartService: (...args: unknown[]) => mockRestartService(...args),
+    stopService: (...args: unknown[]) => mockStopService(...args),
   },
+}));
+
+vi.mock("./SessionBrowserPane.js", () => ({
+  SessionBrowserPane: ({ sessionId }: { sessionId: string }) => (
+    <div data-testid="session-browser-pane">SessionBrowserPane:{sessionId}</div>
+  ),
 }));
 
 import { EnvironmentPanel } from "./EnvironmentPanel.js";
@@ -32,56 +48,98 @@ function setPortStatuses(ports: PortStatusInfo[]) {
   useStore.getState().setPortStatuses(SESSION_ID, ports);
 }
 
+function setServiceStatuses(services: ServiceInfo[]) {
+  useStore.getState().setServiceStatuses(SESSION_ID, services);
+}
+
+function setupSandboxSession() {
+  const sessions = new Map(useStore.getState().sessions);
+  sessions.set(SESSION_ID, {
+    session_id: SESSION_ID,
+    is_containerized: true,
+    model: "test", cwd: "/app", tools: [], permissionMode: "default",
+    claude_code_version: "1.0", mcp_servers: [], agents: [], slash_commands: [],
+    skills: [], total_cost_usd: 0, num_turns: 0, context_used_percent: 0,
+    is_compacting: false, git_branch: "main", is_worktree: false, repo_root: "/app",
+    git_ahead: 0, git_behind: 0, total_lines_added: 0, total_lines_removed: 0,
+  });
+  useStore.setState({ sessions });
+}
+
 beforeEach(() => {
   mockCheckPort.mockReset();
-  // Reset store state for each test
+  mockReloadLaunchConfig.mockClear();
+  mockRestartService.mockClear();
+  mockStopService.mockClear();
   useStore.getState().clearEnvironment(SESSION_ID);
+  const sessions = new Map(useStore.getState().sessions);
+  sessions.delete(SESSION_ID);
+  useStore.setState({ sessions });
 });
 
 describe("EnvironmentPanel", () => {
   // ─── Empty state ──────────────────────────────────────────────────────
-  it("shows setup hint when no ports are configured", () => {
+  it("shows setup hint when no services or ports configured (local mode)", () => {
+    // Both the left sidebar and right panel guide users to create launch.json
     render(<EnvironmentPanel sessionId={SESSION_ID} />);
-    expect(screen.getByText(/No ports configured/)).toBeInTheDocument();
-    expect(screen.getByText(".companion/launch.json")).toBeInTheDocument();
-    // Also shows the fallback placeholder in the preview area
-    expect(screen.getByText("Enter a URL or configure ports in .companion/launch.json")).toBeInTheDocument();
+    const mentions = screen.getAllByText(".companion/launch.json");
+    expect(mentions.length).toBeGreaterThanOrEqual(1);
   });
 
-  // ─── Port pills render ───────────────────────────────────────────────
-  it("renders port pills with labels and port numbers", () => {
+  it("shows sandbox-specific empty state when no services configured in sandbox mode", () => {
+    setupSandboxSession();
+    render(<EnvironmentPanel sessionId={SESSION_ID} />);
+    // Left sidebar: sandbox-specific guidance
+    expect(screen.getByText(/Use the browser preview to navigate/)).toBeInTheDocument();
+    // Right panel: sandbox empty browser state
+    expect(screen.getByText("No services configured yet")).toBeInTheDocument();
+  });
+
+  // ─── Port rows render ─────────────────────────────────────────────────
+  it("renders port rows with labels and port numbers", () => {
     setPortStatuses([
       { port: 3000, label: "App", protocol: "http", status: "healthy" },
       { port: 5432, label: "Postgres", protocol: "tcp", status: "unknown" },
     ]);
     render(<EnvironmentPanel sessionId={SESSION_ID} />);
 
-    // Port pills should show labels and port numbers
     expect(screen.getByText("App")).toBeInTheDocument();
     expect(screen.getByText(":3000")).toBeInTheDocument();
     expect(screen.getByText("Postgres")).toBeInTheDocument();
     expect(screen.getByText(":5432")).toBeInTheDocument();
   });
 
-  it("shows 'Click a port above to preview' when ports exist but none selected", () => {
-    setPortStatuses([
-      { port: 3000, label: "App", protocol: "http", status: "healthy" },
+  // ─── Service cards render ─────────────────────────────────────────────
+  it("renders service cards with name and port", () => {
+    setServiceStatuses([
+      { name: "api", status: "ready", port: 3000 },
+      { name: "worker", status: "starting" },
     ]);
     render(<EnvironmentPanel sessionId={SESSION_ID} />);
-    expect(screen.getByText("Click a port above to preview")).toBeInTheDocument();
+
+    expect(screen.getByText("api")).toBeInTheDocument();
+    expect(screen.getByText("worker")).toBeInTheDocument();
   });
 
-  // ─── Port click → iframe ─────────────────────────────────────────────
-  it("opens iframe preview when clicking an HTTP port pill", () => {
+  // ─── Empty browser state text ─────────────────────────────────────────
+  it("shows empty browser message when ports exist but none selected", () => {
+    setPortStatuses([
+      { port: 3000, label: "App", protocol: "http", status: "healthy" },
+    ]);
+    render(<EnvironmentPanel sessionId={SESSION_ID} />);
+    // Right panel should show the empty state
+    expect(screen.getByText("Select a service or port to preview")).toBeInTheDocument();
+  });
+
+  // ─── Port click → iframe (local mode) ─────────────────────────────────
+  it("opens iframe preview when clicking an HTTP port (local mode)", () => {
     setPortStatuses([
       { port: 3000, label: "App", protocol: "http", status: "healthy" },
     ]);
     render(<EnvironmentPanel sessionId={SESSION_ID} />);
 
-    // Click the port pill
     fireEvent.click(screen.getByText("App"));
 
-    // Should render iframe with the correct proxy URL
     const iframe = screen.getByTitle("Environment preview");
     expect(iframe).toBeInTheDocument();
     expect(iframe).toHaveAttribute(
@@ -90,7 +148,7 @@ describe("EnvironmentPanel", () => {
     );
   });
 
-  // ─── TCP port → refresh instead of preview ───────────────────────────
+  // ─── TCP port → refresh instead of preview ────────────────────────────
   it("triggers health check refresh for TCP-only ports instead of opening preview", () => {
     mockCheckPort.mockResolvedValue({ status: "healthy" });
     setPortStatuses([
@@ -98,18 +156,37 @@ describe("EnvironmentPanel", () => {
     ]);
     render(<EnvironmentPanel sessionId={SESSION_ID} />);
 
-    // Click the TCP port pill
     fireEvent.click(screen.getByText("Postgres"));
 
-    // Should trigger a health check, not open an iframe
     expect(mockCheckPort).toHaveBeenCalledWith(SESSION_ID, 5432);
-    // No iframe should exist
+    // No iframe should appear for TCP ports
     expect(screen.queryByTitle("Environment preview")).not.toBeInTheDocument();
   });
 
-  // ─── Custom URL input ────────────────────────────────────────────────
-  it("navigates to custom URL when clicking Go", () => {
+  // ─── Sandbox mode: port click sets pending URL ────────────────────────
+  it("sets pendingBrowserUrl when clicking port in sandbox mode", () => {
+    setupSandboxSession();
+    setPortStatuses([
+      { port: 3000, label: "App", protocol: "http", status: "healthy" },
+    ]);
     render(<EnvironmentPanel sessionId={SESSION_ID} />);
+
+    fireEvent.click(screen.getByText("App"));
+
+    // Should set pendingBrowserUrl for SessionBrowserPane to consume
+    expect(useStore.getState().pendingBrowserUrl.get(SESSION_ID)).toBe("http://localhost:3000");
+    // SessionBrowserPane should be rendered
+    expect(screen.getByTestId("session-browser-pane")).toBeInTheDocument();
+  });
+
+  // ─── Custom URL input (local) ─────────────────────────────────────────
+  it("navigates to custom URL when clicking Go (local mode)", () => {
+    // Click a port first to get the BrowserPreview with URL bar
+    setPortStatuses([
+      { port: 3000, label: "App", protocol: "http", status: "healthy" },
+    ]);
+    render(<EnvironmentPanel sessionId={SESSION_ID} />);
+    fireEvent.click(screen.getByText("App"));
 
     const input = screen.getByPlaceholderText("localhost:3000");
     fireEvent.change(input, { target: { value: "http://localhost:8080/dashboard" } });
@@ -123,7 +200,11 @@ describe("EnvironmentPanel", () => {
   });
 
   it("navigates to custom URL when pressing Enter", () => {
+    setPortStatuses([
+      { port: 3000, label: "App", protocol: "http", status: "healthy" },
+    ]);
     render(<EnvironmentPanel sessionId={SESSION_ID} />);
+    fireEvent.click(screen.getByText("App"));
 
     const input = screen.getByPlaceholderText("localhost:3000");
     fireEvent.change(input, { target: { value: "localhost:4000/api" } });
@@ -137,7 +218,11 @@ describe("EnvironmentPanel", () => {
   });
 
   it("defaults to port 80 when no port is specified in URL", () => {
+    setPortStatuses([
+      { port: 3000, label: "App", protocol: "http", status: "healthy" },
+    ]);
     render(<EnvironmentPanel sessionId={SESSION_ID} />);
+    fireEvent.click(screen.getByText("App"));
 
     const input = screen.getByPlaceholderText("localhost:3000");
     fireEvent.change(input, { target: { value: "http://localhost/path" } });
@@ -150,24 +235,59 @@ describe("EnvironmentPanel", () => {
     );
   });
 
-  it("does not navigate when URL input is empty", () => {
-    render(<EnvironmentPanel sessionId={SESSION_ID} />);
+  // ─── openOnReady auto-navigate ────────────────────────────────────────
+  it("auto-opens port when it transitions to healthy and has openOnReady", () => {
+    setPortStatuses([
+      { port: 5173, label: "Vite", protocol: "http", status: "unhealthy", openOnReady: true },
+    ]);
+    const { rerender } = render(<EnvironmentPanel sessionId={SESSION_ID} />);
 
-    fireEvent.click(screen.getByText("Go"));
+    // No iframe yet — port is unhealthy
+    expect(screen.queryByTitle("Environment preview")).not.toBeInTheDocument();
 
-    // No iframe should appear
+    // Simulate port becoming healthy (local mode → host-proxy iframe)
+    setPortStatuses([
+      { port: 5173, label: "Vite", protocol: "http", status: "healthy", openOnReady: true },
+    ]);
+    rerender(<EnvironmentPanel sessionId={SESSION_ID} />);
+
+    const iframe = screen.getByTitle("Environment preview");
+    expect(iframe).toHaveAttribute("src", `/api/sessions/${SESSION_ID}/browser/host-proxy/5173/`);
+  });
+
+  it("does not auto-open port without openOnReady flag", () => {
+    setPortStatuses([
+      { port: 3000, label: "API", protocol: "http", status: "unhealthy" },
+    ]);
+    const { rerender } = render(<EnvironmentPanel sessionId={SESSION_ID} />);
+
+    setPortStatuses([
+      { port: 3000, label: "API", protocol: "http", status: "healthy" },
+    ]);
+    rerender(<EnvironmentPanel sessionId={SESSION_ID} />);
+
     expect(screen.queryByTitle("Environment preview")).not.toBeInTheDocument();
   });
 
-  // ─── Port pill title tooltip ──────────────────────────────────────────
-  it("shows correct tooltip with status and TCP-only info", () => {
+  // ─── Port tooltip ─────────────────────────────────────────────────────
+  it("shows correct tooltip with status and TCP info", () => {
     setPortStatuses([
       { port: 5432, label: "Postgres", protocol: "tcp", status: "unhealthy", service: "db" },
     ]);
     render(<EnvironmentPanel sessionId={SESSION_ID} />);
 
-    const pill = screen.getByText("Postgres").closest("button");
-    expect(pill).toHaveAttribute("title", "Postgres (:5432) — unhealthy (db) (TCP only)");
+    const portButton = screen.getByText("Postgres").closest("button");
+    expect(portButton).toHaveAttribute("title", "Postgres (:5432) — unhealthy (db) (TCP)");
+  });
+
+  // ─── Reload config ────────────────────────────────────────────────────
+  it("calls reloadLaunchConfig when clicking reload button", () => {
+    render(<EnvironmentPanel sessionId={SESSION_ID} />);
+
+    const reloadButton = screen.getByTitle("Reload .companion/launch.json");
+    fireEvent.click(reloadButton);
+
+    expect(mockReloadLaunchConfig).toHaveBeenCalledWith(SESSION_ID);
   });
 
   // ─── Accessibility ────────────────────────────────────────────────────
@@ -178,10 +298,13 @@ describe("EnvironmentPanel", () => {
     expect(results).toHaveNoViolations();
   });
 
-  it("passes accessibility scan (with ports)", async () => {
+  it("passes accessibility scan (with ports and services)", async () => {
     setPortStatuses([
       { port: 3000, label: "App", protocol: "http", status: "healthy" },
       { port: 5432, label: "Postgres", protocol: "tcp", status: "unknown" },
+    ]);
+    setServiceStatuses([
+      { name: "api", status: "ready", port: 3000 },
     ]);
     const { axe } = await import("vitest-axe");
     const { container } = render(<EnvironmentPanel sessionId={SESSION_ID} />);
@@ -196,7 +319,6 @@ describe("EnvironmentPanel", () => {
     const { axe } = await import("vitest-axe");
     const { container } = render(<EnvironmentPanel sessionId={SESSION_ID} />);
 
-    // Click port to open iframe
     fireEvent.click(screen.getByText("App"));
 
     // Remove iframe before axe — axe-core cannot inspect sandboxed iframes in jsdom

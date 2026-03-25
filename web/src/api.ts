@@ -1345,4 +1345,8 @@ export const api = {
     post<{ restarted: boolean; service: string }>(`/sessions/${encodeURIComponent(sessionId)}/services/${encodeURIComponent(serviceName)}/restart`),
   stopService: (sessionId: string, serviceName: string) =>
     post<{ stopped: boolean; service: string }>(`/sessions/${encodeURIComponent(sessionId)}/services/${encodeURIComponent(serviceName)}/stop`),
+  getServiceLogs: (sessionId: string, serviceName: string, limit = 200) =>
+    get<{ logs: string[] }>(`/sessions/${encodeURIComponent(sessionId)}/services/${encodeURIComponent(serviceName)}/logs?limit=${limit}`),
+  getServices: (sessionId: string) =>
+    get<Array<{ name: string; status: string; pid?: number; port?: number }>>(`/sessions/${encodeURIComponent(sessionId)}/services`),
 };

@@ -668,7 +668,8 @@ export function createRoutes(
   const HOP_BY_HOP = new Set(["connection", "keep-alive", "transfer-encoding", "upgrade", "proxy-connection", "te", "trailer"]);
   api.all("/sessions/:id/browser/host-proxy/:port/*", async (c) => {
     const id = c.req.param("id");
-    const session = launcher.getSession(id);
+    // Check both launcher sessions and ws-bridge sessions (SDK connections)
+    const session = launcher.getSession(id) ?? (wsBridge.getSession(id) ? { cwd: wsBridge.getSession(id)!.state.cwd } : undefined);
     if (!session) return c.json({ error: "Session not found" }, 404);
 
     const portStr = c.req.param("port");
@@ -700,9 +701,20 @@ export function createRoutes(
     const timeout = setTimeout(() => controller.abort(), 15_000);
     try {
       const targetUrl = `http://127.0.0.1:${portNum}/${subPath}${queryString}`;
+
+      // Forward a broader set of request headers to the upstream service
+      const fwdHeaders: Record<string, string> = {
+        "host": `127.0.0.1:${portNum}`,
+        "accept": c.req.header("accept") || "*/*",
+      };
+      for (const h of ["accept-encoding", "accept-language", "cookie", "referer", "user-agent"]) {
+        const v = c.req.header(h);
+        if (v) fwdHeaders[h] = v;
+      }
+
       const upstream = await fetch(targetUrl, {
         method: c.req.method,
-        headers: { "accept": c.req.header("accept") || "*/*" },
+        headers: fwdHeaders,
         body: ["GET", "HEAD"].includes(c.req.method) ? undefined : c.req.raw.body,
         redirect: "follow",
         signal: controller.signal,
@@ -715,6 +727,29 @@ export function createRoutes(
           headers.set(key, value);
         }
       });
+
+      // Inject <base> tag for HTML responses so relative URLs resolve through the proxy
+      const ct = upstream.headers.get("content-type") || "";
+      if (ct.includes("text/html")) {
+        const proxyBase = `/api/sessions/${id}/browser/host-proxy/${portNum}/`;
+        let html = await upstream.text();
+        if (html.includes("<head>")) {
+          html = html.replace("<head>", `<head><base href="${proxyBase}">`);
+        } else if (html.includes("<head ")) {
+          html = html.replace(/<head\s[^>]*>/, (match) => `${match}<base href="${proxyBase}">`);
+        } else if (html.includes("<html>")) {
+          html = html.replace("<html>", `<html><base href="${proxyBase}">`);
+        } else if (html.includes("<html ")) {
+          html = html.replace(/<html\s[^>]*>/, (match) => `${match}<base href="${proxyBase}">`);
+        }
+        headers.delete("content-length");
+        headers.set("content-length", new TextEncoder().encode(html).byteLength.toString());
+        return new Response(html, {
+          status: upstream.status,
+          headers,
+        });
+      }
+
       return new Response(upstream.body, {
         status: upstream.status,
         headers,
@@ -1240,7 +1275,7 @@ export function createRoutes(
   registerFsRoutes(api);
   registerEnvRoutes(api, { webDir: WEB_DIR });
   registerSandboxRoutes(api);
-  registerLaunchRoutes(api, launcher);
+  registerLaunchRoutes(api, launcher, wsBridge);
   registerMcpRoutes(api, wsBridge, launcher);
 
   registerPromptRoutes(api);

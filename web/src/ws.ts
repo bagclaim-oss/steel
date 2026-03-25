@@ -1183,6 +1183,14 @@ function handleParsedMessage(
       break;
     }
 
+    case "service_log": {
+      const { serviceName, line } = data as { type: string; serviceName: string; line: string };
+      if (serviceName && typeof line === "string") {
+        store.appendServiceLog(sessionId, serviceName, line);
+      }
+      break;
+    }
+
     default: {
       console.debug("[ws] Unhandled message type:", (data as { type: string }).type);
       break;

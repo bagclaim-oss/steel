@@ -362,7 +362,8 @@ export type BrowserIncomingMessageBase =
   | { type: "streamlined_text"; text: string }
   | { type: "streamlined_tool_use_summary"; tool_summary: string }
   | { type: "port_status"; ports: Array<{ port: number; label: string; protocol: "http" | "tcp"; status: "unknown" | "healthy" | "unhealthy"; service?: string }> }
-  | { type: "service_status"; services: Array<{ name: string; status: "starting" | "started" | "ready" | "failed" | "stopped"; pid?: number; port?: number }> };
+  | { type: "service_status"; services: Array<{ name: string; status: "starting" | "started" | "ready" | "failed" | "stopped"; pid?: number; port?: number }> }
+  | { type: "service_log"; serviceName: string; line: string };
 
 export type BrowserIncomingMessage = BrowserIncomingMessageBase & { seq?: number };
 

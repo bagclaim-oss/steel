@@ -24,6 +24,8 @@ const mockCheckPort = vi.fn();
 const mockReloadLaunchConfig = vi.fn().mockResolvedValue({ reloaded: true });
 const mockRestartService = vi.fn().mockResolvedValue({ ok: true });
 const mockStopService = vi.fn().mockResolvedValue({ ok: true });
+const mockGetServiceLogs = vi.fn().mockResolvedValue({ logs: [] });
+const mockGetServices = vi.fn().mockResolvedValue([]);
 
 vi.mock("../api.js", () => ({
   api: {
@@ -31,6 +33,8 @@ vi.mock("../api.js", () => ({
     reloadLaunchConfig: (...args: unknown[]) => mockReloadLaunchConfig(...args),
     restartService: (...args: unknown[]) => mockRestartService(...args),
     stopService: (...args: unknown[]) => mockStopService(...args),
+    getServiceLogs: (...args: unknown[]) => mockGetServiceLogs(...args),
+    getServices: (...args: unknown[]) => mockGetServices(...args),
   },
 }));
 
@@ -71,6 +75,8 @@ beforeEach(() => {
   mockReloadLaunchConfig.mockClear();
   mockRestartService.mockClear();
   mockStopService.mockClear();
+  mockGetServiceLogs.mockClear().mockResolvedValue({ logs: [] });
+  mockGetServices.mockClear().mockResolvedValue([]);
   useStore.getState().clearEnvironment(SESSION_ID);
   const sessions = new Map(useStore.getState().sessions);
   sessions.delete(SESSION_ID);

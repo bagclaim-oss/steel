@@ -27,6 +27,11 @@ export interface EnvironmentSlice {
 
   serviceStatuses: Map<string, ServiceInfo[]>;
 
+  /** Service log lines: sessionId -> serviceName -> lines[] */
+  serviceLogs: Map<string, Map<string, string[]>>;
+  appendServiceLog: (sessionId: string, serviceName: string, line: string) => void;
+  getServiceLogs: (sessionId: string, serviceName: string) => string[];
+
   setPortStatuses: (sessionId: string, ports: PortStatusInfo[]) => void;
   setServiceStatuses: (sessionId: string, services: ServiceInfo[]) => void;
   setActivePort: (sessionId: string, port: number | null) => void;
@@ -34,11 +39,34 @@ export interface EnvironmentSlice {
   clearEnvironment: (sessionId: string) => void;
 }
 
-export const createEnvironmentSlice: StateCreator<AppState, [], [], EnvironmentSlice> = (set) => ({
+const MAX_LOG_LINES = 500;
+
+export const createEnvironmentSlice: StateCreator<AppState, [], [], EnvironmentSlice> = (set, get) => ({
   portStatuses: new Map(),
   activePort: new Map(),
   pendingBrowserUrl: new Map(),
   serviceStatuses: new Map(),
+  serviceLogs: new Map(),
+
+  appendServiceLog: (sessionId, serviceName, line) =>
+    set((state) => {
+      const outer = new Map(state.serviceLogs);
+      const inner = new Map(outer.get(sessionId) ?? new Map<string, string[]>());
+      const existing = inner.get(serviceName) ?? [];
+      const updated = [...existing, line];
+      // Keep only the last MAX_LOG_LINES lines
+      if (updated.length > MAX_LOG_LINES) {
+        updated.splice(0, updated.length - MAX_LOG_LINES);
+      }
+      inner.set(serviceName, updated);
+      outer.set(sessionId, inner);
+      return { serviceLogs: outer };
+    }),
+
+  getServiceLogs: (sessionId, serviceName) => {
+    const state = get();
+    return state.serviceLogs.get(sessionId)?.get(serviceName) ?? [];
+  },
 
   setPortStatuses: (sessionId, ports) =>
     set((state) => {
@@ -82,6 +110,8 @@ export const createEnvironmentSlice: StateCreator<AppState, [], [], EnvironmentS
       nextPending.delete(sessionId);
       const nextServices = new Map(state.serviceStatuses);
       nextServices.delete(sessionId);
-      return { portStatuses: nextPorts, activePort: nextActive, pendingBrowserUrl: nextPending, serviceStatuses: nextServices };
+      const nextLogs = new Map(state.serviceLogs);
+      nextLogs.delete(sessionId);
+      return { portStatuses: nextPorts, activePort: nextActive, pendingBrowserUrl: nextPending, serviceStatuses: nextServices, serviceLogs: nextLogs };
     }),
 });

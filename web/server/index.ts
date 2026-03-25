@@ -76,6 +76,9 @@ wsBridge.subscribePortStatus();
 // Subscribe to service status events for broadcasting to browsers
 wsBridge.subscribeServiceStatus();
 
+// Subscribe to service log events for streaming to browsers
+wsBridge.subscribeServiceLogs();
+
 // ── Cloud relay connection (for receiving webhooks behind a firewall) ────────
 // The relay forwards platform webhooks (e.g. GitHub, Slack) to the Companion
 // instance via an outbound WebSocket. Currently no webhook handlers are

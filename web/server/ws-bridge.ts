@@ -111,6 +111,19 @@ export class WsBridge {
     });
   }
 
+  /** Subscribe to service:log events and broadcast to browsers. */
+  subscribeServiceLogs(): void {
+    companionBus.on("service:log", ({ sessionId, serviceName, line }) => {
+      const session = this.sessions.get(sessionId);
+      if (!session) return;
+      this.broadcastToBrowsers(session, {
+        type: "service_log",
+        serviceName,
+        line,
+      } as any);
+    });
+  }
+
   /** Set the Linear agent session ID on a Companion session and persist it. */
   setLinearSessionId(sessionId: string, linearSessionId: string): void {
     const session = this.sessions.get(sessionId);

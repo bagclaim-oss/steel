@@ -10,10 +10,16 @@ const MIN_SIDEBAR = 220;
 const MAX_SIDEBAR = 420;
 const DEFAULT_SIDEBAR = 280;
 
+/** Right panel mode: either viewing service logs or a browser preview. */
+type RightPanelMode =
+  | { kind: "none" }
+  | { kind: "service"; serviceName: string }
+  | { kind: "browser" };
+
 /**
  * Unified Environment panel — vertical split layout.
  * Left: services + ports + config controls.
- * Right: browser preview (SessionBrowserPane for sandbox, host-proxy iframe for local).
+ * Right: service log view or browser preview.
  */
 export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
   const portStatuses = useStore((s) => s.portStatuses.get(sessionId) ?? EMPTY_PORTS);
@@ -23,11 +29,23 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
   const isSandbox = useStore((s) => s.sessions.get(sessionId)?.is_containerized ?? false);
   const setPendingBrowserUrl = useStore((s) => s.setPendingBrowserUrl);
 
+  const setServiceStatuses = useStore((s) => s.setServiceStatuses);
+
   const [iframeUrl, setIframeUrl] = useState<string | null>(null);
-  const [showBrowser, setShowBrowser] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR);
   const [reloading, setReloading] = useState(false);
   const [restartingService, setRestartingService] = useState<string | null>(null);
+  const [panelMode, setPanelMode] = useState<RightPanelMode>({ kind: "none" });
+
+  // Fetch configured services on mount (includes stopped/not-yet-started services from launch.json)
+  useEffect(() => {
+    let cancelled = false;
+    api.getServices(sessionId).then((services) => {
+      if (cancelled || !services || services.length === 0) return;
+      setServiceStatuses(sessionId, services as ServiceInfo[]);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [sessionId, setServiceStatuses]);
 
   // Build proxy URL for a given port
   const proxyUrlForPort = useCallback(
@@ -42,15 +60,20 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
       if (isSandbox) {
         setActivePort(sessionId, port);
         setPendingBrowserUrl(sessionId, `http://localhost:${port}`);
-        setShowBrowser(true);
+        setPanelMode({ kind: "browser" });
       } else {
         setActivePort(sessionId, port);
         setIframeUrl(proxyUrlForPort(port));
-        setShowBrowser(true);
+        setPanelMode({ kind: "browser" });
       }
     },
     [sessionId, isSandbox, setActivePort, setPendingBrowserUrl, proxyUrlForPort],
   );
+
+  // Select a service for log viewing
+  const selectService = useCallback((serviceName: string) => {
+    setPanelMode({ kind: "service", serviceName });
+  }, []);
 
   // Manual health check
   const refreshPort = useCallback(
@@ -122,10 +145,11 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
   const hasServices = serviceStatuses.length > 0;
   const hasPorts = portStatuses.length > 0;
   const hasContent = hasServices || hasPorts;
+  const showBrowser = panelMode.kind === "browser";
 
   return (
     <div className="flex h-full bg-cc-bg">
-      {/* ── Left sidebar ── */}
+      {/* -- Left sidebar -- */}
       <div
         className="shrink-0 flex flex-col border-r border-cc-border overflow-hidden"
         style={{ width: sidebarWidth }}
@@ -162,7 +186,8 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
                     key={svc.name}
                     service={svc}
                     isRestarting={restartingService === svc.name}
-                    onClickPort={svc.port ? () => openPort(svc.port!) : undefined}
+                    isSelected={panelMode.kind === "service" && panelMode.serviceName === svc.name}
+                    onClick={() => selectService(svc.name)}
                     onRestart={() => handleRestart(svc.name)}
                     onStop={() => handleStop(svc.name)}
                   />
@@ -182,7 +207,7 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
                   <PortRow
                     key={ps.port}
                     portStatus={ps}
-                    isActive={activePort === ps.port}
+                    isActive={activePort === ps.port && showBrowser}
                     onClick={() => ps.protocol === "http" ? openPort(ps.port) : refreshPort(ps.port)}
                   />
                 ))}
@@ -204,7 +229,7 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
         </div>
       </div>
 
-      {/* ── Resize handle ── */}
+      {/* -- Resize handle -- */}
       <div
         className="w-0 relative shrink-0 cursor-col-resize group z-10"
         onMouseDown={handleMouseDown}
@@ -212,9 +237,18 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
         <div className="absolute inset-y-0 -left-[2px] w-[4px] group-hover:bg-cc-primary/30 transition-colors" />
       </div>
 
-      {/* ── Right panel: browser preview ── */}
+      {/* -- Right panel -- */}
       <div className="flex-1 min-w-0 flex flex-col">
-        {showBrowser && isSandbox ? (
+        {panelMode.kind === "service" ? (
+          <ServiceLogView
+            sessionId={sessionId}
+            serviceName={panelMode.serviceName}
+            service={serviceStatuses.find((s) => s.name === panelMode.serviceName)}
+            isRestarting={restartingService === panelMode.serviceName}
+            onRestart={() => handleRestart(panelMode.serviceName)}
+            onStop={() => handleStop(panelMode.serviceName)}
+          />
+        ) : showBrowser && isSandbox ? (
           <SessionBrowserPane sessionId={sessionId} />
         ) : showBrowser && iframeUrl ? (
           <BrowserPreview
@@ -231,7 +265,139 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
   );
 }
 
-// ── Service Card ──────────────────────────────────────────────────────────────
+// -- Service Log View --------------------------------------------------------
+
+function ServiceLogView({
+  sessionId,
+  serviceName,
+  service,
+  isRestarting,
+  onRestart,
+  onStop,
+}: {
+  sessionId: string;
+  serviceName: string;
+  service?: ServiceInfo;
+  isRestarting: boolean;
+  onRestart: () => void;
+  onStop: () => void;
+}) {
+  const logLines = useStore((s) => s.serviceLogs.get(sessionId)?.get(serviceName) ?? []);
+  const appendServiceLog = useStore((s) => s.appendServiceLog);
+  const logContainerRef = useRef<HTMLPreElement>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [historicalLoaded, setHistoricalLoaded] = useState(false);
+
+  // Fetch historical logs on mount / service change
+  useEffect(() => {
+    setHistoricalLoaded(false);
+    let cancelled = false;
+    api.getServiceLogs(sessionId, serviceName).then((res) => {
+      if (cancelled) return;
+      // Prepend historical logs that aren't already in the store
+      if (res.logs && res.logs.length > 0) {
+        for (const line of res.logs) {
+          appendServiceLog(sessionId, serviceName, line);
+        }
+      }
+      setHistoricalLoaded(true);
+    }).catch(() => {
+      if (!cancelled) setHistoricalLoaded(true);
+    });
+    return () => { cancelled = true; };
+  }, [sessionId, serviceName, appendServiceLog]);
+
+  // Auto-scroll to bottom when new logs arrive
+  useEffect(() => {
+    if (autoScroll && logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logLines, autoScroll]);
+
+  // Detect if user scrolled away from bottom
+  const handleScroll = useCallback(() => {
+    const el = logContainerRef.current;
+    if (!el) return;
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    setAutoScroll(isAtBottom);
+  }, []);
+
+  const status = service?.status ?? "stopped";
+  const isRunning = status === "ready" || status === "started" || status === "starting";
+  const statusColor = STATUS_COLORS[status] ?? "bg-cc-muted/40";
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header with service info and action buttons */}
+      <div className="shrink-0 px-3 py-2 border-b border-cc-border flex items-center gap-2">
+        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${statusColor}`} />
+        <span className="font-medium text-sm text-cc-fg truncate">{serviceName}</span>
+        {service?.port && (
+          <span className="text-[11px] text-cc-muted tabular-nums">:{service.port}</span>
+        )}
+        <span className="text-[10px] text-cc-muted uppercase tracking-wider">{status}</span>
+
+        <div className="ml-auto flex items-center gap-1.5">
+          {isRunning && (
+            <button
+              onClick={onStop}
+              title={`Stop ${serviceName}`}
+              className="px-2 py-1 text-[11px] font-medium rounded bg-cc-hover text-cc-muted hover:text-cc-error hover:bg-red-500/10 transition-colors cursor-pointer"
+            >
+              Stop
+            </button>
+          )}
+          <button
+            onClick={onRestart}
+            disabled={isRestarting}
+            title={`Restart ${serviceName}`}
+            className="px-2 py-1 text-[11px] font-medium rounded bg-cc-hover text-cc-muted hover:text-cc-primary hover:bg-cc-primary/10 transition-colors disabled:opacity-40 cursor-pointer flex items-center gap-1"
+          >
+            <svg className={`w-3 h-3 ${isRestarting ? "animate-spin" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M13.5 8a5.5 5.5 0 0 1-10.39 2.5M2.5 8a5.5 5.5 0 0 1 10.39-2.5" />
+              <path d="M13.5 3v3h-3M2.5 13v-3h3" />
+            </svg>
+            Restart
+          </button>
+        </div>
+      </div>
+
+      {/* Log output area */}
+      <pre
+        ref={logContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 min-h-0 overflow-auto px-3 py-2 bg-[#1a1a1a] font-mono text-[11px] leading-[1.6] text-[#d4d4d4] whitespace-pre-wrap break-all"
+      >
+        {!historicalLoaded && logLines.length === 0 && (
+          <span className="text-cc-muted italic">Loading logs...</span>
+        )}
+        {historicalLoaded && logLines.length === 0 && (
+          <span className="text-cc-muted italic">No log output yet.</span>
+        )}
+        {logLines.map((line, i) => (
+          <div key={i}>{line}</div>
+        ))}
+      </pre>
+
+      {/* Scroll-to-bottom indicator when not auto-scrolling */}
+      {!autoScroll && (
+        <button
+          onClick={() => {
+            setAutoScroll(true);
+            if (logContainerRef.current) {
+              logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+            }
+          }}
+          className="absolute bottom-4 right-4 px-2 py-1 text-[10px] rounded bg-cc-primary/90 text-white hover:bg-cc-primary transition-colors cursor-pointer shadow-lg"
+        >
+          Scroll to bottom
+        </button>
+      )}
+    </div>
+  );
+}
+
+// -- Service Card ------------------------------------------------------------
 
 const STATUS_COLORS: Record<string, string> = {
   ready: "bg-emerald-400",
@@ -244,13 +410,15 @@ const STATUS_COLORS: Record<string, string> = {
 function ServiceCard({
   service,
   isRestarting,
-  onClickPort,
+  isSelected,
+  onClick,
   onRestart,
   onStop,
 }: {
   service: ServiceInfo;
   isRestarting: boolean;
-  onClickPort?: () => void;
+  isSelected: boolean;
+  onClick: () => void;
   onRestart: () => void;
   onStop: () => void;
 }) {
@@ -258,17 +426,17 @@ function ServiceCard({
 
   return (
     <div
-      className={`group flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${
-        onClickPort ? "cursor-pointer hover:bg-cc-hover" : ""
+      className={`group flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors cursor-pointer ${
+        isSelected ? "bg-cc-primary/10 text-cc-primary" : "hover:bg-cc-hover"
       }`}
-      onClick={onClickPort}
+      onClick={onClick}
     >
       {/* Status indicator */}
       <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_COLORS[service.status] ?? "bg-cc-muted/40"}`} />
 
       {/* Name + port */}
       <div className="flex-1 min-w-0">
-        <span className="font-medium text-cc-fg truncate block">{service.name}</span>
+        <span className={`font-medium truncate block ${isSelected ? "text-cc-primary" : "text-cc-fg"}`}>{service.name}</span>
       </div>
       {service.port && (
         <span className="text-[10px] text-cc-muted tabular-nums shrink-0">:{service.port}</span>
@@ -303,7 +471,7 @@ function ServiceCard({
   );
 }
 
-// ── Port Row ──────────────────────────────────────────────────────────────────
+// -- Port Row ----------------------------------------------------------------
 
 const PORT_STATUS_COLORS: Record<string, string> = {
   healthy: "bg-emerald-400",
@@ -340,7 +508,7 @@ function PortRow({
   );
 }
 
-// ── Browser Preview (local/host mode) ─────────────────────────────────────────
+// -- Browser Preview (local/host mode) ---------------------------------------
 
 function BrowserPreview({
   sessionId,
@@ -353,6 +521,8 @@ function BrowserPreview({
   onUrlChange: (url: string) => void;
   proxyUrlForPort: (port: number, path?: string) => string;
 }) {
+  // sessionId used for future per-session URL history; suppress lint
+  void sessionId;
   const [navUrl, setNavUrl] = useState("");
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -418,7 +588,7 @@ function BrowserPreview({
   );
 }
 
-// ── Empty Browser State ───────────────────────────────────────────────────────
+// -- Empty Browser State -----------------------------------------------------
 
 function EmptyBrowserState({ isSandbox, hasPorts }: { isSandbox: boolean; hasPorts: boolean }) {
   return (

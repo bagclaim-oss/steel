@@ -4648,7 +4648,8 @@ describe("GET /api/sessions/:id/browser/host-proxy/:port/*", () => {
 
     expect(res.status).toBe(200);
     const body = await res.text();
-    expect(body).toBe("<html>App</html>");
+    // HTML responses get a <base> tag injected for proper relative URL resolution through the proxy
+    expect(body).toBe('<html><base href="/api/sessions/s1/browser/host-proxy/3000/">App</html>');
     // fetch should target 127.0.0.1 with the specified port and sub-path
     expect(fetchSpy).toHaveBeenCalledWith(
       "http://127.0.0.1:3000/index.html",

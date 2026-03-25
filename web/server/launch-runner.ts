@@ -22,6 +22,8 @@ export interface ServiceHandle {
   process: ChildProcess | null;
   /** Subscribe to stdout/stderr lines. Returns unsubscribe function. */
   onLine(cb: (line: string) => void): () => void;
+  /** Return buffered log history (up to the ring buffer capacity). */
+  getHistory(limit?: number): string[];
   kill(): void;
 }
 
@@ -183,6 +185,12 @@ async function runInContainer(
  */
 class LineEmitter {
   private listeners = new Set<(line: string) => void>();
+  private readonly buffer: string[] = [];
+  private readonly maxBuffer: number;
+
+  constructor(maxBuffer = 500) {
+    this.maxBuffer = maxBuffer;
+  }
 
   subscribe(cb: (line: string) => void): () => void {
     this.listeners.add(cb);
@@ -190,6 +198,12 @@ class LineEmitter {
   }
 
   emit(line: string): void {
+    // Ring buffer: push and trim from the front when over capacity
+    this.buffer.push(line);
+    if (this.buffer.length > this.maxBuffer) {
+      this.buffer.splice(0, this.buffer.length - this.maxBuffer);
+    }
+
     for (const cb of this.listeners) {
       try {
         cb(line);
@@ -197,6 +211,14 @@ class LineEmitter {
         // don't let subscriber errors kill the pipe
       }
     }
+  }
+
+  /** Return the last N buffered lines (or all if no limit). */
+  getHistory(limit?: number): string[] {
+    if (limit === undefined || limit >= this.buffer.length) {
+      return [...this.buffer];
+    }
+    return this.buffer.slice(-limit);
   }
 }
 
@@ -331,6 +353,11 @@ function spawnService(
     emitter.subscribe((line) => opts.onOutput!(name, line));
   }
 
+  // Broadcast log lines via companionBus for WebSocket push
+  emitter.subscribe((line) => {
+    companionBus.emit("service:log", { sessionId: opts.sessionId, serviceName: name, line });
+  });
+
   // Merge env: top-level opts.env + per-service svc.env
   const mergedEnv = { ...(opts.env ?? {}), ...(svc.env ?? {}) };
   const hasEnv = Object.keys(mergedEnv).length > 0;
@@ -365,6 +392,7 @@ function spawnService(
     status: "starting",
     process: proc,
     onLine: (cb) => emitter.subscribe(cb),
+    getHistory: (limit) => emitter.getHistory(limit),
     kill() {
       try {
         proc.kill();
@@ -522,6 +550,15 @@ export function reassociateServices(oldSessionId: string, newSessionId: string):
   sessionServices.delete(oldSessionId);
   sessionServices.set(newSessionId, handles);
   log.info("launch-runner", ` Re-associated ${handles.length} service(s): ${oldSessionId} → ${newSessionId}`);
+}
+
+/** Return buffered log lines for a specific service. */
+export function getServiceLogs(sessionId: string, serviceName: string, limit?: number): string[] {
+  const handles = sessionServices.get(sessionId);
+  if (!handles) return [];
+  const handle = handles.find((h) => h.name === serviceName);
+  if (!handle) return [];
+  return handle.getHistory(limit);
 }
 
 /** Stop all services across all sessions (for server shutdown). */

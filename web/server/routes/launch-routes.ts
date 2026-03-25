@@ -1,10 +1,32 @@
 import type { Hono } from "hono";
 import type { CliLauncher } from "../cli-launcher.js";
+import type { WsBridge } from "../ws-bridge.js";
 import { loadLaunchConfig, resolveForContext, resolveEnvVars } from "../launch-config.js";
 import { getPortStatuses, checkPort, startMonitoring, stopMonitoring } from "../port-monitor.js";
-import { getServiceStatuses, stopAllServices, startServices, restartService, stopService } from "../launch-runner.js";
+import { getServiceStatuses, stopAllServices, startServices, restartService, stopService, getServiceLogs } from "../launch-runner.js";
 
-export function registerLaunchRoutes(api: Hono, launcher: CliLauncher): void {
+/** Resolve a session's cwd — checks launcher first, then ws-bridge for SDK sessions. */
+function resolveSessionCwd(
+  sessionId: string,
+  launcher: CliLauncher,
+  wsBridge?: WsBridge,
+): { cwd: string; containerId?: string } | null {
+  // Try launcher sessions first (sessions spawned by the companion)
+  const launched = launcher.getSession(sessionId);
+  if (launched) {
+    return { cwd: launched.cwd, containerId: launched.containerId };
+  }
+  // Fallback: SDK sessions connected via WebSocket
+  if (wsBridge) {
+    const session = wsBridge.getSession(sessionId);
+    if (session?.state?.cwd) {
+      return { cwd: session.state.cwd };
+    }
+  }
+  return null;
+}
+
+export function registerLaunchRoutes(api: Hono, launcher: CliLauncher, wsBridge?: WsBridge): void {
   // Check if a launch config exists for a given working directory
   api.get("/launch-config", (c) => {
     const cwd = c.req.query("cwd");
@@ -38,18 +60,49 @@ export function registerLaunchRoutes(api: Hono, launcher: CliLauncher): void {
     return c.json({ port, status });
   });
 
-  // Get service statuses for a session
+  // Get service statuses for a session (running services + configured but not started)
   api.get("/sessions/:id/services", (c) => {
     const sessionId = c.req.param("id");
-    const statuses = getServiceStatuses(sessionId);
-    return c.json(statuses);
+    const running = getServiceStatuses(sessionId);
+
+    // Also include configured services from launch.json that aren't running yet
+    const session = resolveSessionCwd(sessionId, launcher, wsBridge);
+    if (session) {
+      const config = loadLaunchConfig(session.cwd);
+      if (config) {
+        const resolved = resolveForContext(config, {
+          isSandbox: !!session.containerId,
+          isWorktree: false,
+        });
+        const runningNames = new Set(running.map((s) => s.name));
+        for (const name of Object.keys(resolved.services)) {
+          if (!runningNames.has(name)) {
+            running.push({
+              name,
+              status: "stopped" as const,
+            });
+          }
+        }
+      }
+    }
+
+    return c.json(running);
+  });
+
+  // Get buffered log lines for a specific service
+  api.get("/sessions/:id/services/:name/logs", (c) => {
+    const id = c.req.param("id");
+    const name = c.req.param("name");
+    const limit = parseInt(c.req.query("limit") || "200", 10);
+    const logs = getServiceLogs(id, name, limit);
+    return c.json({ logs });
   });
 
   // Reload .companion/launch.json — stops existing services/monitoring,
   // re-reads config, starts services and port monitoring fresh.
   api.post("/sessions/:id/launch-config/reload", async (c) => {
     const sessionId = c.req.param("id");
-    const session = launcher.getSession(sessionId);
+    const session = resolveSessionCwd(sessionId, launcher, wsBridge);
     if (!session) {
       return c.json({ error: "Session not found" }, 404);
     }
@@ -101,7 +154,7 @@ export function registerLaunchRoutes(api: Hono, launcher: CliLauncher): void {
   api.post("/sessions/:id/services/:name/restart", async (c) => {
     const sessionId = c.req.param("id");
     const serviceName = c.req.param("name");
-    const session = launcher.getSession(sessionId);
+    const session = resolveSessionCwd(sessionId, launcher, wsBridge);
     if (!session) {
       return c.json({ error: "Session not found" }, 404);
     }

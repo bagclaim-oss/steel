@@ -71,6 +71,9 @@ export interface CompanionEventMap {
 
   // ── Service monitoring ──────────────────────────────────────────────
 
+  /** A single log line from a service process (emitted by launch-runner). */
+  "service:log": { sessionId: string; serviceName: string; line: string };
+
   /** Service status changed (emitted by launch-runner). */
   "service:status": {
     sessionId: string;

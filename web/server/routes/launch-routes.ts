@@ -1,29 +1,64 @@
+import { homedir } from "node:os";
+import { resolve } from "node:path";
 import type { Hono } from "hono";
 import type { CliLauncher } from "../cli-launcher.js";
 import type { WsBridge } from "../ws-bridge.js";
 import { loadLaunchConfig, resolveForContext, resolveEnvVars } from "../launch-config.js";
 import { getPortStatuses, checkPort, startMonitoring, stopMonitoring } from "../port-monitor.js";
 import { getServiceStatuses, stopAllServices, startServices, restartService, stopService, getServiceLogs } from "../launch-runner.js";
+import * as gitUtils from "../git-utils.js";
+
+function guardPath(rawPath: string, allowedBases: string[]): string | null {
+  const abs = resolve(rawPath);
+  for (const base of allowedBases) {
+    if (abs === base || abs.startsWith(base + "/")) return abs;
+  }
+  return null;
+}
 
 /** Resolve a session's cwd — checks launcher first, then ws-bridge for SDK sessions. */
 function resolveSessionCwd(
   sessionId: string,
   launcher: CliLauncher,
   wsBridge?: WsBridge,
-): { cwd: string; containerId?: string } | null {
+): { cwd: string; containerId?: string; repoRoot?: string; isWorktree: boolean } | null {
   // Try launcher sessions first (sessions spawned by the companion)
   const launched = launcher.getSession(sessionId);
   if (launched) {
-    return { cwd: launched.cwd, containerId: launched.containerId };
+    const repoInfo = gitUtils.getRepoInfo(launched.cwd);
+    return {
+      cwd: launched.cwd,
+      containerId: launched.containerId,
+      repoRoot: repoInfo?.repoRoot,
+      isWorktree: repoInfo?.isWorktree ?? false,
+    };
   }
   // Fallback: SDK sessions connected via WebSocket
   if (wsBridge) {
     const session = wsBridge.getSession(sessionId);
     if (session?.state?.cwd) {
-      return { cwd: session.state.cwd };
+      return {
+        cwd: session.state.cwd,
+        repoRoot: session.state.repo_root || undefined,
+        isWorktree: session.state.is_worktree,
+      };
     }
   }
   return null;
+}
+
+function resolveLaunchConfigForSession(
+  session: { cwd: string; repoRoot?: string; isWorktree: boolean },
+) {
+  const config = loadLaunchConfig(session.cwd, session.repoRoot);
+  if (!config) return null;
+  return {
+    config,
+    resolved: resolveForContext(config, {
+      isSandbox: false,
+      isWorktree: session.isWorktree,
+    }),
+  };
 }
 
 export function registerLaunchRoutes(api: Hono, launcher: CliLauncher, wsBridge?: WsBridge): void {
@@ -34,7 +69,13 @@ export function registerLaunchRoutes(api: Hono, launcher: CliLauncher, wsBridge?
       return c.json({ error: "cwd query parameter is required" }, 400);
     }
 
-    const config = loadLaunchConfig(cwd);
+    const guardedCwd = guardPath(cwd, [process.cwd(), homedir()]);
+    if (!guardedCwd) {
+      return c.json({ error: "cwd must be inside the workspace or home directory" }, 403);
+    }
+
+    const repoInfo = gitUtils.getRepoInfo(guardedCwd);
+    const config = loadLaunchConfig(guardedCwd, repoInfo?.repoRoot);
     return c.json({
       exists: config !== null,
       config: config ?? undefined,
@@ -68,14 +109,10 @@ export function registerLaunchRoutes(api: Hono, launcher: CliLauncher, wsBridge?
     // Also include configured services from launch.json that aren't running yet
     const session = resolveSessionCwd(sessionId, launcher, wsBridge);
     if (session) {
-      const config = loadLaunchConfig(session.cwd);
-      if (config) {
-        const resolved = resolveForContext(config, {
-          isSandbox: !!session.containerId,
-          isWorktree: false,
-        });
+      const launch = resolveLaunchConfigForSession(session);
+      if (launch) {
         const runningNames = new Set(running.map((s) => s.name));
-        for (const name of Object.keys(resolved.services)) {
+        for (const name of Object.keys(launch.resolved.services)) {
           if (!runningNames.has(name)) {
             running.push({
               name,
@@ -108,7 +145,7 @@ export function registerLaunchRoutes(api: Hono, launcher: CliLauncher, wsBridge?
     }
 
     // Validate config exists before tearing down running services
-    const config = loadLaunchConfig(session.cwd);
+    const config = loadLaunchConfig(session.cwd, session.repoRoot);
     if (!config) {
       return c.json({ reloaded: false, error: "No .companion/launch.json found" });
     }
@@ -119,7 +156,7 @@ export function registerLaunchRoutes(api: Hono, launcher: CliLauncher, wsBridge?
 
     const resolved = resolveForContext(config, {
       isSandbox: !!session.containerId,
-      isWorktree: false,
+      isWorktree: session.isWorktree,
     });
 
     // Resolve env vars (session env → envFile → process.env)
@@ -159,14 +196,14 @@ export function registerLaunchRoutes(api: Hono, launcher: CliLauncher, wsBridge?
       return c.json({ error: "Session not found" }, 404);
     }
 
-    const config = loadLaunchConfig(session.cwd);
+    const config = loadLaunchConfig(session.cwd, session.repoRoot);
     if (!config) {
       return c.json({ error: "No .companion/launch.json found" }, 404);
     }
 
     const resolved = resolveForContext(config, {
       isSandbox: !!session.containerId,
-      isWorktree: false,
+      isWorktree: session.isWorktree,
     });
 
     const sessionEnv = launcher.getSessionEnv(sessionId);
@@ -175,7 +212,7 @@ export function registerLaunchRoutes(api: Hono, launcher: CliLauncher, wsBridge?
     const result = await restartService(sessionId, serviceName, resolved, {
       cwd: session.cwd,
       containerId: session.containerId,
-      env: resolvedEnv.topLevelEnv,
+      env: resolvedEnv.serviceEnvs[serviceName] ?? resolvedEnv.topLevelEnv,
     });
 
     if (!result.ok) {

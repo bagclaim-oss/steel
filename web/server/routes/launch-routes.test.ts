@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Hono } from "hono";
 import { registerLaunchRoutes } from "./launch-routes.js";
 
@@ -22,9 +22,14 @@ vi.mock("../launch-runner.js", () => ({
   startServices: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
+vi.mock("../git-utils.js", () => ({
+  getRepoInfo: vi.fn(() => null),
+}));
+
 import { loadLaunchConfig, resolveForContext } from "../launch-config.js";
 import { getPortStatuses, checkPort, startMonitoring, stopMonitoring } from "../port-monitor.js";
 import { getServiceStatuses, stopAllServices, startServices } from "../launch-runner.js";
+import { getRepoInfo } from "../git-utils.js";
 
 const mockLoadLaunchConfig = vi.mocked(loadLaunchConfig);
 const mockResolveForContext = vi.mocked(resolveForContext);
@@ -35,6 +40,7 @@ const mockStopAllServices = vi.mocked(stopAllServices);
 const mockStartServices = vi.mocked(startServices);
 const mockStartMonitoring = vi.mocked(startMonitoring);
 const mockStopMonitoring = vi.mocked(stopMonitoring);
+const mockGetRepoInfo = vi.mocked(getRepoInfo);
 
 // Mock launcher that returns session info by ID
 const mockLauncher = {
@@ -44,6 +50,8 @@ const mockLauncher = {
 
 describe("Launch Routes", () => {
   let app: Hono;
+  const originalCwd = process.cwd();
+  const originalHome = process.env.HOME;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -53,8 +61,18 @@ describe("Launch Routes", () => {
     mockGetServiceStatuses.mockReturnValue([]);
     mockStartServices.mockResolvedValue({ ok: true } as any);
     mockLauncher.getSession.mockReturnValue(null);
+    mockGetRepoInfo.mockReturnValue(null);
     app = new Hono();
     registerLaunchRoutes(app, mockLauncher);
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+    if (originalHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = originalHome;
+    }
   });
 
   // ── GET /launch-config ────────────────────────────────────────────────────
@@ -82,6 +100,14 @@ describe("Launch Routes", () => {
     const body = await res.json();
     expect(body.exists).toBe(true);
     expect(body.config.version).toBe("1");
+  });
+
+  it("GET /launch-config rejects cwd outside workspace and home", async () => {
+    process.env.HOME = "/home/test-user";
+    const res = await app.request("/launch-config?cwd=/etc");
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toContain("workspace or home");
   });
 
   // ── GET /sessions/:id/ports ───────────────────────────────────────────────
@@ -126,6 +152,44 @@ describe("Launch Routes", () => {
     expect(body).toHaveLength(1);
     expect(body[0].name).toBe("api");
     expect(mockGetServiceStatuses).toHaveBeenCalledWith("test-123");
+  });
+
+  it("GET /sessions/:id/services resolves launch config with repoRoot and worktree context", async () => {
+    mockGetServiceStatuses.mockReturnValue([{ name: "api", status: "ready", pid: 1234 }] as any);
+    mockLauncher.getSession.mockReturnValue({ cwd: "/repo/worktrees/feature", containerId: null });
+    mockGetRepoInfo.mockReturnValue({
+      repoRoot: "/repo",
+      repoName: "repo",
+      currentBranch: "feature",
+      defaultBranch: "main",
+      isWorktree: true,
+    } as any);
+    mockLoadLaunchConfig.mockReturnValue({
+      version: "1",
+      services: { api: { command: "node api.js" }, web: { command: "node web.js" } },
+    } as any);
+    mockResolveForContext.mockReturnValue({
+      setup: [],
+      services: {
+        api: { name: "api", command: "node api.js", env: {}, dependsOn: {}, readyTimeout: 60 },
+        web: { name: "web", command: "node web.js", env: {}, dependsOn: {}, readyTimeout: 60 },
+      },
+      ports: {},
+    } as any);
+
+    const res = await app.request("/sessions/test-123/services");
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual([
+      { name: "api", status: "ready", pid: 1234 },
+      { name: "web", status: "stopped" },
+    ]);
+    expect(mockLoadLaunchConfig).toHaveBeenCalledWith("/repo/worktrees/feature", "/repo");
+    expect(mockResolveForContext).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ isWorktree: true, isSandbox: false }),
+    );
   });
 
   // ── POST /sessions/:id/launch-config/reload ─────────────────────────────
@@ -178,5 +242,35 @@ describe("Launch Routes", () => {
     expect(mockStopMonitoring).toHaveBeenCalledWith("sess-2");
     expect(mockStartServices).toHaveBeenCalled();
     expect(mockStartMonitoring).toHaveBeenCalledWith("sess-2", { "3000": { label: "API", protocol: "http" } });
+  });
+
+  it("POST reload passes worktree context and repo root to launch config resolution", async () => {
+    mockLauncher.getSession.mockReturnValue({ cwd: "/repo/worktrees/feature", containerId: null });
+    mockGetRepoInfo.mockReturnValue({
+      repoRoot: "/repo",
+      repoName: "repo",
+      currentBranch: "feature",
+      defaultBranch: "main",
+      isWorktree: true,
+    } as any);
+    mockLoadLaunchConfig.mockReturnValue({
+      version: "1",
+      services: {},
+      ports: {},
+    } as any);
+    mockResolveForContext.mockReturnValue({
+      setup: [],
+      services: {},
+      ports: {},
+    } as any);
+
+    const res = await app.request("/sessions/sess-3/launch-config/reload", { method: "POST" });
+
+    expect(res.status).toBe(200);
+    expect(mockLoadLaunchConfig).toHaveBeenCalledWith("/repo/worktrees/feature", "/repo");
+    expect(mockResolveForContext).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ isWorktree: true }),
+    );
   });
 });

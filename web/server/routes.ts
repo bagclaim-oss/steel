@@ -707,7 +707,7 @@ export function createRoutes(
         "host": `127.0.0.1:${portNum}`,
         "accept": c.req.header("accept") || "*/*",
       };
-      for (const h of ["accept-encoding", "accept-language", "cookie", "referer", "user-agent"]) {
+      for (const h of ["accept-encoding", "accept-language", "user-agent"]) {
         const v = c.req.header(h);
         if (v) fwdHeaders[h] = v;
       }

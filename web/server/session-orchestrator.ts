@@ -240,10 +240,12 @@ export class SessionOrchestrator {
     if (!info || info.archived) return;
 
     // Build the MCP HTTP URL. For containerized sessions, the agent runs inside
-    // a Docker container and needs to reach the host via host.docker.internal.
-    // For local sessions, localhost is fine.
+    // a Docker container and needs to reach the host via the same configurable
+    // alias used by containerized SDK launches.
     const isContainerized = !!info.containerId;
-    const host = isContainerized ? "host.docker.internal" : "127.0.0.1";
+    const host = isContainerized
+      ? (process.env.COMPANION_CONTAINER_SDK_HOST || "host.docker.internal").trim() || "host.docker.internal"
+      : "127.0.0.1";
     let url = `http://${host}:${this.port}/api/mcp?sessionId=${sessionId}`;
 
     // For non-localhost requests, include the auth token in the URL so the

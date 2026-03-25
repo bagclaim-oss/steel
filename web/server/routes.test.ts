@@ -4678,6 +4678,37 @@ describe("GET /api/sessions/:id/browser/host-proxy/:port/*", () => {
     fetchSpy.mockRestore();
   });
 
+  it("does not forward cookies or referer to upstream localhost services", async () => {
+    launcher.getSession.mockReturnValue({
+      sessionId: "s1",
+      state: "running",
+      cwd: "/repo",
+    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("ok", { status: 200 }),
+    );
+
+    const res = await app.request("/api/sessions/s1/browser/host-proxy/3000/index.html", {
+      headers: {
+        cookie: "companion_auth=secret-token",
+        referer: "http://localhost:3457",
+        "user-agent": "vitest",
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "http://127.0.0.1:3000/index.html",
+      expect.objectContaining({
+        headers: expect.not.objectContaining({
+          cookie: expect.anything(),
+          referer: expect.anything(),
+        }),
+      }),
+    );
+    fetchSpy.mockRestore();
+  });
+
   // Error message should be generic to avoid leaking internal network info
   it("returns generic 502 when upstream is unreachable", async () => {
     launcher.getSession.mockReturnValue({

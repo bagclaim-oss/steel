@@ -16,6 +16,7 @@ export type ServiceStatus = "starting" | "started" | "ready" | "failed" | "stopp
 
 export interface ServiceHandle {
   name: string;
+  sessionId: string;
   pid: number | undefined;
   port: number | undefined;
   status: ServiceStatus;
@@ -46,6 +47,8 @@ export interface StartServicesOpts {
   onOutput?: (serviceName: string, line: string) => void;
   /** Resolved top-level env vars to merge into all services */
   env?: Record<string, string>;
+  /** Optional per-service env overrides after top-level env */
+  perServiceEnv?: Record<string, Record<string, string>>;
 }
 
 // ── Module state ────────────────────────────────────────────────────────────
@@ -57,6 +60,13 @@ function emitServiceStatus(sessionId: string): void {
     sessionId,
     services: getServiceStatuses(sessionId),
   });
+}
+
+function serviceEnvFor(
+  opts: StartServicesOpts | Omit<StartServicesOpts, "sessionId">,
+  serviceName: string,
+): Record<string, string> {
+  return (opts.perServiceEnv?.[serviceName] ?? opts.env ?? {});
 }
 
 // ── Setup Scripts ───────────────────────────────────────────────────────────
@@ -159,18 +169,11 @@ async function runInContainer(
   containerId: string,
   opts: { timeout: number; onOutput?: (line: string) => void; env?: Record<string, string> },
 ): Promise<{ exitCode: number; output: string }> {
-  // Build env flags for docker exec if env vars are provided
-  const envFlags: string[] = [];
-  if (opts.env) {
-    for (const [k, v] of Object.entries(opts.env)) {
-      envFlags.push("-e", `${k}=${v}`);
-    }
-  }
-  // Use execInContainerAsync with env flags prepended to the command args
-  // Since execInContainerAsync wraps "docker exec <containerId> ...cmd",
-  // we need to inject -e flags before the actual command.
-  // Pass them by building a custom command array.
-  const cmdWithEnv = [...envFlags, "sh", "-lc", command];
+  const envPrefix = Object.entries(opts.env ?? {})
+    .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+    .join(" ");
+  const wrappedCommand = envPrefix ? `env ${envPrefix} sh -lc ${JSON.stringify(command)}` : command;
+  const cmdWithEnv = ["sh", "-lc", wrappedCommand];
   return containerManager.execInContainerAsync(containerId, cmdWithEnv, {
     timeout: opts.timeout,
     onOutput: opts.onOutput,
@@ -260,6 +263,7 @@ export async function startServices(
   const waves = buildStartupOrder(services);
   const handles: ServiceHandle[] = [];
   sessionServices.set(opts.sessionId, handles);
+  const startupErrors: string[] = [];
   const readyPromises = new Map<string, Promise<void>>();
   const readyResolvers = new Map<string, () => void>();
   const startedPromises = new Map<string, Promise<void>>();
@@ -301,7 +305,7 @@ export async function startServices(
 
         // Mark as started immediately (process is spawned)
         handle.status = "started";
-        emitServiceStatus(opts.sessionId);
+        emitServiceStatus(handle.sessionId);
         startedResolvers.get(name)?.();
         opts.onProgress?.(name, "started");
 
@@ -310,7 +314,7 @@ export async function startServices(
           const matched = await waitForReady(handle, svc);
           if (matched) {
             handle.status = "ready";
-            emitServiceStatus(opts.sessionId);
+            emitServiceStatus(handle.sessionId);
             opts.onProgress?.(name, "ready", `Matched: ${svc.readyPattern}`);
           } else {
             opts.onProgress?.(name, "started", `readyPattern timeout after ${svc.readyTimeout}s`);
@@ -318,7 +322,7 @@ export async function startServices(
           }
         } else {
           handle.status = "ready";
-          emitServiceStatus(opts.sessionId);
+          emitServiceStatus(handle.sessionId);
           opts.onProgress?.(name, "ready");
         }
 
@@ -326,6 +330,7 @@ export async function startServices(
         readyResolvers.get(name)?.();
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
+        startupErrors.push(`Service "${name}" failed to start: ${msg}`);
         log.error("launch-runner", ` Service "${name}" failed to start: ${msg}`);
         opts.onProgress?.(name, "failed", msg);
         emitServiceStatus(opts.sessionId);
@@ -338,6 +343,10 @@ export async function startServices(
     await Promise.all(wavePromises);
   }
 
+  if (startupErrors.length > 0) {
+    return { ok: false, error: startupErrors.join("\n") };
+  }
+
   return { ok: true };
 }
 
@@ -348,18 +357,8 @@ function spawnService(
 ): ServiceHandle {
   const emitter = new LineEmitter();
 
-  // Forward lines to the caller's onOutput
-  if (opts.onOutput) {
-    emitter.subscribe((line) => opts.onOutput!(name, line));
-  }
-
-  // Broadcast log lines via companionBus for WebSocket push
-  emitter.subscribe((line) => {
-    companionBus.emit("service:log", { sessionId: opts.sessionId, serviceName: name, line });
-  });
-
-  // Merge env: top-level opts.env + per-service svc.env
-  const mergedEnv = { ...(opts.env ?? {}), ...(svc.env ?? {}) };
+  // Merge env: resolved per-service env (already includes top-level env) + svc.env as final fallback
+  const mergedEnv = { ...serviceEnvFor(opts, name), ...(svc.env ?? {}) };
   const hasEnv = Object.keys(mergedEnv).length > 0;
 
   let cmd: string[];
@@ -382,11 +381,9 @@ function spawnService(
     env: opts.containerId ? undefined : { ...process.env, ...mergedEnv },
   });
 
-  pipeNodeStreamToEmitter(proc.stdout, emitter);
-  pipeNodeStreamToEmitter(proc.stderr, emitter);
-
   const handle: ServiceHandle = {
     name,
+    sessionId: opts.sessionId,
     pid: proc.pid,
     port: undefined,
     status: "starting",
@@ -403,11 +400,25 @@ function spawnService(
     },
   };
 
+  // Forward lines to the caller's onOutput
+  if (opts.onOutput) {
+    emitter.subscribe((line) => opts.onOutput!(name, line));
+  }
+
+  // Broadcast log lines via companionBus for WebSocket push
+  emitter.subscribe((line) => {
+    companionBus.emit("service:log", { sessionId: handle.sessionId, serviceName: name, line });
+  });
+
+  pipeNodeStreamToEmitter(proc.stdout, emitter);
+  pipeNodeStreamToEmitter(proc.stderr, emitter);
+
   // Monitor process exit
   proc.on("close", (code) => {
     if (handle.status !== "stopped") {
       handle.status = "failed";
       log.warn("launch-runner", ` Service "${name}" exited with code ${code}`);
+      emitServiceStatus(handle.sessionId);
     }
   });
 
@@ -501,22 +512,34 @@ export async function restartService(
 
   // Respawn
   try {
-    const handle = spawnService(serviceName, svc, { ...opts, sessionId });
+    const handle = spawnService(serviceName, svc, {
+      ...opts,
+      sessionId,
+      env: serviceEnvFor(opts, serviceName),
+    });
+    handles[idx] = handle;
     handle.status = "started";
     emitServiceStatus(sessionId);
 
     if (svc.readyPattern) {
       const matched = await waitForReady(handle, svc);
-      handle.status = matched ? "ready" : "started";
+      if (matched) {
+        if (handle.status !== "failed") {
+          handle.status = "ready";
+        }
+      } else if (handle.status !== "failed") {
+        handle.status = "started";
+      }
     } else {
-      handle.status = "ready";
+      if (handle.status !== "failed") {
+        handle.status = "ready";
+      }
     }
 
     emitServiceStatus(sessionId);
-
-    // Replace in handles array
-    handles[idx] = handle;
-    return { ok: true };
+    return handle.status === "failed"
+      ? { ok: false, error: `Service "${serviceName}" failed to restart` }
+      : { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -547,6 +570,9 @@ export function getServiceStatuses(
 export function reassociateServices(oldSessionId: string, newSessionId: string): void {
   const handles = sessionServices.get(oldSessionId);
   if (!handles) return;
+  for (const handle of handles) {
+    handle.sessionId = newSessionId;
+  }
   sessionServices.delete(oldSessionId);
   sessionServices.set(newSessionId, handles);
   log.info("launch-runner", ` Re-associated ${handles.length} service(s): ${oldSessionId} → ${newSessionId}`);

@@ -1,16 +1,24 @@
-import { describe, test, expect, afterEach } from "vitest";
+import { describe, test, expect, afterEach, beforeEach, vi } from "vitest";
 import {
   startMonitoring,
   stopMonitoring,
   getPortStatuses,
   stopAllMonitors,
   checkPort,
+  reassociateMonitoring,
 } from "./port-monitor.js";
 
 describe("port-monitor", () => {
   const sessionIds: string[] = [];
+  const emitSpy = vi.fn();
+
+  beforeEach(() => {
+    emitSpy.mockReset();
+    companionBus.on("port:status", emitSpy);
+  });
 
   afterEach(() => {
+    companionBus.off("port:status", emitSpy);
     for (const id of sessionIds) {
       stopMonitoring(id);
     }
@@ -130,5 +138,37 @@ describe("port-monitor", () => {
     expect(statuses).toHaveLength(1);
     expect(statuses[0].status).toBe("unknown");
     expect(statuses[0].lastCheck).toBe(0);
+  });
+
+  test("reassociateMonitoring retargets future emissions to the new session ID", async () => {
+    const oldId = `pm-test-${Date.now()}-old`;
+    const newId = `pm-test-${Date.now()}-new`;
+    sessionIds.push(newId);
+
+    startMonitoring(oldId, {
+      "18080": { label: "App", healthCheck: { path: "/", interval: 1 } },
+    });
+
+    reassociateMonitoring(oldId, newId);
+    stopMonitoring(oldId);
+
+    await checkPort(newId, 18080);
+
+    expect(emitSpy).toHaveBeenCalled();
+    expect(emitSpy.mock.calls.some(([payload]) => payload.sessionId === newId)).toBe(true);
+    expect(emitSpy.mock.calls.every(([payload]) => payload.sessionId !== oldId)).toBe(true);
+  });
+
+  test("sanitizes invalid healthCheck interval values", () => {
+    const sid = `pm-test-${Date.now()}-interval`;
+    sessionIds.push(sid);
+
+    startMonitoring(sid, {
+      "3001": { label: "Bad", healthCheck: { path: "/", interval: 0 } },
+      "3002": { label: "Negative", healthCheck: { path: "/", interval: -10 } },
+    });
+
+    const statuses = getPortStatuses(sid);
+    expect(statuses.map((status) => status.port)).toEqual([3001, 3002]);
   });
 });

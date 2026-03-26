@@ -4649,12 +4649,37 @@ describe("GET /api/sessions/:id/browser/host-proxy/:port/*", () => {
     expect(res.status).toBe(200);
     const body = await res.text();
     // HTML responses get a <base> tag injected for proper relative URL resolution through the proxy
-    expect(body).toBe('<html><base href="/api/sessions/s1/browser/host-proxy/3000/">App</html>');
+    expect(body).toContain('<base href="/api/sessions/s1/browser/host-proxy/3000/">');
     // fetch should target 127.0.0.1 with the specified port and sub-path
     expect(fetchSpy).toHaveBeenCalledWith(
       "http://127.0.0.1:3000/index.html",
       expect.objectContaining({ redirect: "follow" }),
     );
+    fetchSpy.mockRestore();
+  });
+
+  it("injects base tag before Vite client script in HTML responses", async () => {
+    launcher.getSession.mockReturnValue({
+      sessionId: "s1",
+      state: "running",
+      cwd: "/repo",
+    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        `<!DOCTYPE html><html lang="en"><head><script type="module" src="/@vite/client"></script></head><body><div id="root"></div></body></html>`,
+        {
+          status: 200,
+          headers: { "Content-Type": "text/html" },
+        },
+      ),
+    );
+
+    const res = await app.request("/api/sessions/s1/browser/host-proxy/5174/");
+
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain('<base href="/api/sessions/s1/browser/host-proxy/5174/">');
+    expect(body.indexOf("<base")).toBeLessThan(body.indexOf("/@vite/client"));
     fetchSpy.mockRestore();
   });
 

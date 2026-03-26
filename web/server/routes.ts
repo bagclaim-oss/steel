@@ -733,14 +733,21 @@ export function createRoutes(
       if (ct.includes("text/html")) {
         const proxyBase = `/api/sessions/${id}/browser/host-proxy/${portNum}/`;
         let html = await upstream.text();
-        if (html.includes("<head>")) {
-          html = html.replace("<head>", `<head><base href="${proxyBase}">`);
-        } else if (html.includes("<head ")) {
-          html = html.replace(/<head\s[^>]*>/, (match) => `${match}<base href="${proxyBase}">`);
-        } else if (html.includes("<html>")) {
-          html = html.replace("<html>", `<html><base href="${proxyBase}">`);
-        } else if (html.includes("<html ")) {
-          html = html.replace(/<html\s[^>]*>/, (match) => `${match}<base href="${proxyBase}">`);
+        const baseTag = `<base href="${proxyBase}">`;
+        if (!/<base\s/i.test(html)) {
+          if (html.includes("<head>")) {
+            html = html.replace("<head>", `<head>${baseTag}`);
+          } else if (html.includes("<head ")) {
+            html = html.replace(/<head\s[^>]*>/i, (match) => `${match}${baseTag}`);
+          } else if (html.includes("<html>")) {
+            html = html.replace("<html>", `<html><head>${baseTag}</head>`);
+          } else if (html.includes("<html ")) {
+            html = html.replace(/<html\s[^>]*>/i, (match) => `${match}<head>${baseTag}</head>`);
+          } else if (/<!doctype html>/i.test(html)) {
+            html = html.replace(/<!doctype html>/i, (match) => `${match}<head>${baseTag}</head>`);
+          } else {
+            html = `${baseTag}${html}`;
+          }
         }
         headers.delete("content-length");
         headers.set("content-length", new TextEncoder().encode(html).byteLength.toString());

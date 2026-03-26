@@ -164,6 +164,21 @@ describe("EnvironmentPanel", () => {
     );
   });
 
+  it("renders HTML preview responses correctly through the host proxy URL", () => {
+    setPortStatuses([
+      { port: 5174, label: "Vite Dev Server", protocol: "http", status: "healthy" },
+    ]);
+    render(<EnvironmentPanel sessionId={SESSION_ID} />);
+
+    fireEvent.click(screen.getByText("Vite Dev Server"));
+
+    const iframe = screen.getByTitle("Environment preview");
+    expect(iframe).toHaveAttribute(
+      "src",
+      `/api/sessions/${SESSION_ID}/browser/host-proxy/5174/`,
+    );
+  });
+
   // ─── TCP port → refresh instead of preview ────────────────────────────
   it("triggers health check refresh for TCP-only ports instead of opening preview", () => {
     mockCheckPort.mockResolvedValue({ status: "healthy" });

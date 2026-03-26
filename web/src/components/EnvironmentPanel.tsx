@@ -577,10 +577,16 @@ function BrowserPreview({
   // sessionId used for future per-session URL history; suppress lint
   void sessionId;
   const [navUrl, setNavUrl] = useState("");
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    setPreviewError(null);
+  }, [iframeUrl]);
 
   const handleNavigate = useCallback(() => {
     if (!navUrl.trim()) return;
+    setPreviewError(null);
     const url = navUrl.startsWith("http") ? navUrl : `http://${navUrl}`;
     try {
       const parsed = new URL(url);
@@ -592,9 +598,28 @@ function BrowserPreview({
     }
   }, [navUrl, onUrlChange, proxyUrlForPort]);
 
-  const handleReload = useCallback(() => {
-    if (iframeRef.current) iframeRef.current.src = iframeUrl;
+  const detectEmbeddedChromeError = useCallback(() => {
+    if (!iframeUrl.includes("/browser/host-proxy/")) {
+      return false;
+    }
+
+    setPreviewError("Preview request failed — the localhost app is not reachable from the Environment preview right now.");
+    return true;
   }, [iframeUrl]);
+
+  const handleReload = useCallback(() => {
+    setPreviewError(null);
+    if (iframeRef.current) {
+      iframeRef.current.src = iframeUrl;
+    }
+    setTimeout(() => {
+      detectEmbeddedChromeError();
+    }, 0);
+  }, [detectEmbeddedChromeError, iframeUrl]);
+
+  const handleIframeLoad = useCallback(() => {
+    detectEmbeddedChromeError();
+  }, [detectEmbeddedChromeError]);
 
   return (
     <div className="flex flex-col h-full">
@@ -605,6 +630,7 @@ function BrowserPreview({
           onClick={handleReload}
           className="flex items-center justify-center w-6 h-6 rounded text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
           title="Reload"
+          aria-label="Reload preview status"
         >
           <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
             <path d="M13.65 2.35a1 1 0 0 0-1.3 0L11 3.7A5.99 5.99 0 0 0 2 8a1 1 0 1 0 2 0 4 4 0 0 1 6.29-3.29L8.65 6.35a1 1 0 0 0 .7 1.7H13a1 1 0 0 0 1-1V3.4a1 1 0 0 0-.35-.7z M14 8a1 1 0 1 0-2 0 4 4 0 0 1-6.29 3.29l1.64-1.64a1 1 0 0 0-.7-1.7H3.05a1 1 0 0 0-1 1v3.65a1 1 0 0 0 1.7.7L5 11.7A5.99 5.99 0 0 0 14 8z" />
@@ -627,14 +653,24 @@ function BrowserPreview({
         </button>
       </div>
 
+      {previewError && (
+        <div className="shrink-0 px-3 py-2 text-xs text-amber-300 bg-amber-500/10 border-b border-amber-500/20">
+          <div>{previewError}</div>
+          <div className="mt-1 text-cc-muted">
+            Vérifie que le serveur local répond bien et réessaie la preview.
+          </div>
+        </div>
+      )}
+
       {/* iframe */}
       <div className="flex-1 min-h-0">
         <iframe
           ref={iframeRef}
           src={iframeUrl}
           className="w-full h-full border-0"
-          sandbox="allow-scripts allow-forms allow-popups"
+          sandbox="allow-scripts allow-forms allow-popups allow-same-origin"
           title="Environment preview"
+          onLoad={handleIframeLoad}
         />
       </div>
     </div>

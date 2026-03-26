@@ -6,6 +6,7 @@ import type { WsBridge } from "../ws-bridge.js";
 import { loadLaunchConfig, resolveForContext, resolveEnvVars } from "../launch-config.js";
 import { getPortStatuses, checkPort, startMonitoring, stopMonitoring } from "../port-monitor.js";
 import { getServiceStatuses, stopAllServices, startServices, restartService, stopService, getServiceLogs } from "../launch-runner.js";
+import { companionBus } from "../event-bus.js";
 import * as gitUtils from "../git-utils.js";
 
 function guardPath(rawPath: string, allowedBases: string[]): string | null {
@@ -62,6 +63,29 @@ function resolveLaunchConfigForSession(
 }
 
 export function registerLaunchRoutes(api: Hono, launcher: CliLauncher, wsBridge?: WsBridge): void {
+  const portStatusCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const serviceStatusCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  companionBus.on("port:status", ({ sessionId, ports }) => {
+    if (ports.length > 0 || portStatusCleanupTimers.has(sessionId)) return;
+    const existing = portStatusCleanupTimers.get(sessionId);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      portStatusCleanupTimers.delete(sessionId);
+    }, 2_000);
+    portStatusCleanupTimers.set(sessionId, timer);
+  });
+
+  companionBus.on("service:status", ({ sessionId, services }) => {
+    if (services.length > 0 || serviceStatusCleanupTimers.has(sessionId)) return;
+    const existing = serviceStatusCleanupTimers.get(sessionId);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      serviceStatusCleanupTimers.delete(sessionId);
+    }, 2_000);
+    serviceStatusCleanupTimers.set(sessionId, timer);
+  });
+
   // Check if a launch config exists for a given working directory
   api.get("/launch-config", (c) => {
     const cwd = c.req.query("cwd");
@@ -85,6 +109,12 @@ export function registerLaunchRoutes(api: Hono, launcher: CliLauncher, wsBridge?
   // Get port health statuses for a session
   api.get("/sessions/:id/ports", (c) => {
     const sessionId = c.req.param("id");
+    const pendingCleanup = portStatusCleanupTimers.get(sessionId);
+    if (pendingCleanup) {
+      portStatusCleanupTimers.delete(sessionId);
+      clearTimeout(pendingCleanup);
+      return c.json([]);
+    }
     const statuses = getPortStatuses(sessionId);
     return c.json(statuses);
   });
@@ -104,6 +134,12 @@ export function registerLaunchRoutes(api: Hono, launcher: CliLauncher, wsBridge?
   // Get service statuses for a session (running services + configured but not started)
   api.get("/sessions/:id/services", (c) => {
     const sessionId = c.req.param("id");
+    const pendingCleanup = serviceStatusCleanupTimers.get(sessionId);
+    if (pendingCleanup) {
+      serviceStatusCleanupTimers.delete(sessionId);
+      clearTimeout(pendingCleanup);
+      return c.json([]);
+    }
     const running = getServiceStatuses(sessionId);
 
     // Also include configured services from launch.json that aren't running yet

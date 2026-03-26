@@ -27,6 +27,7 @@ const mockRestartService = vi.fn().mockResolvedValue({ ok: true });
 const mockStopService = vi.fn().mockResolvedValue({ ok: true });
 const mockGetServiceLogs = vi.fn().mockResolvedValue({ logs: [] });
 const mockGetServices = vi.fn().mockResolvedValue([]);
+const mockGetPortStatuses = vi.fn().mockResolvedValue([]);
 
 vi.mock("../api.js", () => ({
   api: {
@@ -36,6 +37,7 @@ vi.mock("../api.js", () => ({
     stopService: (...args: unknown[]) => mockStopService(...args),
     getServiceLogs: (...args: unknown[]) => mockGetServiceLogs(...args),
     getServices: (...args: unknown[]) => mockGetServices(...args),
+    getPortStatuses: (...args: unknown[]) => mockGetPortStatuses(...args),
   },
 }));
 
@@ -78,6 +80,7 @@ beforeEach(() => {
   mockStopService.mockClear();
   mockGetServiceLogs.mockClear().mockResolvedValue({ logs: [] });
   mockGetServices.mockClear().mockResolvedValue([]);
+  mockGetPortStatuses.mockClear().mockResolvedValue([]);
   useStore.getState().clearEnvironment(SESSION_ID);
   const sessions = new Map(useStore.getState().sessions);
   sessions.delete(SESSION_ID);
@@ -135,6 +138,24 @@ describe("EnvironmentPanel", () => {
 
     expect(screen.getByText("api")).toBeInTheDocument();
     expect(screen.getByText("worker")).toBeInTheDocument();
+  });
+
+  it("hydrates missing ports from the backend on mount", async () => {
+    mockGetPortStatuses.mockResolvedValueOnce([
+      { port: 3457, label: "Hono API", protocol: "http", status: "healthy" },
+      { port: 5174, label: "Vite Dev Server", protocol: "http", status: "healthy" },
+    ]);
+    setServiceStatuses([
+      { name: "api", status: "ready", port: 3457 },
+      { name: "vite", status: "ready", port: 5174 },
+    ]);
+
+    render(<EnvironmentPanel sessionId={SESSION_ID} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Hono API")).toBeInTheDocument();
+      expect(screen.getByText("Vite Dev Server")).toBeInTheDocument();
+    });
   });
 
   // ─── Empty browser state text ─────────────────────────────────────────

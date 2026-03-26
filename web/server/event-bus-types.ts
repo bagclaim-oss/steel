@@ -6,6 +6,7 @@ import type { CodexAdapter } from "./codex-adapter.js";
 import type { SessionPhase } from "./session-state-machine.js";
 import type { PortStatus } from "./port-monitor.js";
 import type { ServiceStatus } from "./launch-runner.js";
+import type { LaunchPortConfig } from "./launch-config.js";
 
 export interface CompanionEventMap {
   // ── Session lifecycle ──────────────────────────────────────────────
@@ -68,6 +69,12 @@ export interface CompanionEventMap {
 
   /** Port health status changed (emitted by port-monitor). */
   "port:status": { sessionId: string; ports: PortStatus[] };
+
+  /** Launch config ports resolved for a session before monitoring begins. */
+  "session:launch-ports-resolved": {
+    sessionId: string;
+    ports: Record<string, LaunchPortConfig>;
+  };
 
   // ── Service monitoring ──────────────────────────────────────────────
 

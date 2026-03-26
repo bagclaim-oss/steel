@@ -41,9 +41,17 @@ export function EnvironmentPanel({ sessionId }: { sessionId: string }) {
   // Fetch configured services on mount (includes stopped/not-yet-started services from launch.json)
   useEffect(() => {
     let cancelled = false;
-    api.getServices(sessionId).then((services) => {
-      if (cancelled || !services || services.length === 0) return;
-      setServiceStatuses(sessionId, services as ServiceInfo[]);
+    Promise.all([
+      api.getServices(sessionId).catch(() => null),
+      api.getPortStatuses(sessionId).catch(() => null),
+    ]).then(([services, ports]) => {
+      if (cancelled) return;
+      if (services && services.length > 0) {
+        setServiceStatuses(sessionId, services as ServiceInfo[]);
+      }
+      if (ports && ports.length > 0) {
+        useStore.getState().setPortStatuses(sessionId, ports as PortStatusInfo[]);
+      }
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [sessionId, setServiceStatuses]);
@@ -340,18 +348,25 @@ function ServiceLogView({
   const logContainerRef = useRef<HTMLPreElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [historicalLoaded, setHistoricalLoaded] = useState(false);
+  const hydratedRef = useRef(false);
 
   // Fetch historical logs on mount / service change
   useEffect(() => {
     setHistoricalLoaded(false);
+    if (hydratedRef.current) {
+      setHistoricalLoaded(true);
+      return;
+    }
     let cancelled = false;
     api.getServiceLogs(sessionId, serviceName).then((res) => {
       if (cancelled) return;
       if (res.logs && (initialLogCount === 0 || res.logs.length > initialLogCount)) {
         setServiceLogs(sessionId, serviceName, res.logs);
       }
+      hydratedRef.current = true;
       setHistoricalLoaded(true);
     }).catch(() => {
+      hydratedRef.current = true;
       if (!cancelled) setHistoricalLoaded(true);
     });
     return () => { cancelled = true; };

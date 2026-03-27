@@ -91,7 +91,7 @@ describe("GeminiLiveClient (SDK)", () => {
     const cbs = createCallbacks();
     const client = new GeminiLiveClient("test-api-key", cbs, {
       systemInstruction: "Test instruction",
-      tools: [{ name: "test_tool", description: "A test tool", parameters: { type: "OBJECT" as const, properties: {} } }],
+      tools: [{ name: "test_tool", description: "A test tool" }],
       voiceName: "Zephyr",
     });
 

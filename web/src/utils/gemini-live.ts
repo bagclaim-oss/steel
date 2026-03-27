@@ -136,10 +136,13 @@ export class GeminiLiveClient {
   /** Send a base64-encoded PCM 16kHz audio chunk. */
   sendAudio(base64Pcm: string): void {
     if (!this.session) return;
-    const bytes = Uint8Array.from(atob(base64Pcm), (c) => c.charCodeAt(0));
-    const blob = new Blob([bytes], { type: "audio/pcm;rate=16000" });
-    // The SDK's Blob_2 type is structurally compatible with the browser Blob
-    this.session.sendRealtimeInput({ audio: blob as unknown as Parameters<Session["sendRealtimeInput"]>[0]["audio"] });
+    // The SDK's Blob type expects { data: base64string, mimeType: string }
+    this.session.sendRealtimeInput({
+      audio: {
+        data: base64Pcm,
+        mimeType: "audio/pcm;rate=16000",
+      },
+    });
   }
 
   /** Send a tool/function call response back to Gemini. */

@@ -1,16 +1,19 @@
 /**
  * Voice tool declarations and executor for Gemini Voice Control.
  *
- * Defines the 10 function declarations that Gemini can call, and implements
- * each tool using the existing Companion REST API and WebSocket client.
+ * Tools dispatch visual actions to the UI (typing animations, button clicks)
+ * instead of calling APIs directly. This makes the interaction visible to
+ * the user — they see Gemini "typing" into the Composer, "clicking" Allow, etc.
+ *
+ * Read-only tools (list_sessions, get_session_status) still read from the store
+ * directly since they don't modify anything.
  */
 
 import { Type, type FunctionDeclaration } from "@google/genai";
-import { api, createSessionStream } from "../api.js";
-import { sendToSession, createClientMessageId, connectSession, waitForConnection } from "../ws.js";
+import { api } from "../api.js";
 import { useStore } from "../store.js";
 import { navigateToSession } from "./routing.js";
-import { generateUniqueSessionName } from "./names.js";
+import type { VoiceAction } from "../store/voice-slice.js";
 
 // ─── System Instruction ──────────────────────────────────────────────────────
 
@@ -40,7 +43,7 @@ Rules:
 export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
   {
     name: "create_session",
-    description: "Create a new AI coding session and optionally send an initial prompt",
+    description: "Create a new AI coding session and send an initial prompt. The prompt will be visually typed into the home page input.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -56,7 +59,7 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
   },
   {
     name: "send_message",
-    description: "Send a text message or prompt to an active session",
+    description: "Send a text message to an active session. The message will be visually typed into the chat composer.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -68,7 +71,7 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
   },
   {
     name: "approve_permission",
-    description: "Approve a pending tool permission request in a session",
+    description: "Approve a pending tool permission request. The Allow button will be visually clicked.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -80,7 +83,7 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
   },
   {
     name: "deny_permission",
-    description: "Deny a pending tool permission request in a session",
+    description: "Deny a pending tool permission request. The Deny button will be visually clicked.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -92,7 +95,7 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
   },
   {
     name: "approve_all_permissions",
-    description: "Approve all pending permission requests for a session at once",
+    description: "Approve all pending permission requests for a session at once. Each Allow button will be visually clicked.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -103,7 +106,7 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
   },
   {
     name: "navigate_page",
-    description: "Navigate the Companion UI to a specific page",
+    description: "Navigate the Companion UI to a specific page.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -118,7 +121,7 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
   },
   {
     name: "switch_session",
-    description: "Switch to viewing a specific session by name or ID",
+    description: "Switch to viewing a specific session by name or ID.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -134,7 +137,7 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
   },
   {
     name: "interrupt_session",
-    description: "Stop/interrupt the current AI generation in a session",
+    description: "Stop/interrupt the current AI generation in a session. The stop button will be visually clicked.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -156,11 +159,34 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
   },
 ];
 
+// ─── Visual Action Dispatcher ────────────────────────────────────────────────
+
+const ACTION_TIMEOUT_MS = 30_000;
+
+/**
+ * Dispatch a visual action to the UI and wait for it to complete.
+ * The component that handles the action calls `completeVoiceAction(result)`.
+ */
+function dispatchVoiceAction(action: VoiceAction): Promise<unknown> {
+  return new Promise((resolve) => {
+    const store = useStore.getState();
+    store.dispatchVoiceAction(action, resolve);
+
+    // Safety timeout — don't block Gemini forever if a component doesn't handle the action
+    setTimeout(() => {
+      if (useStore.getState().voicePendingAction === action) {
+        useStore.getState().completeVoiceAction({ error: "Action timed out" });
+      }
+    }, ACTION_TIMEOUT_MS);
+  });
+}
+
 // ─── Tool Executor ───────────────────────────────────────────────────────────
 
 /**
- * Execute a voice tool call from Gemini and return the result.
- * Each tool maps to existing Companion APIs.
+ * Execute a voice tool call from Gemini.
+ * Visual tools dispatch actions to UI components.
+ * Read-only tools query the store directly.
  */
 export async function executeVoiceTool(
   name: string,
@@ -172,19 +198,19 @@ export async function executeVoiceTool(
     case "send_message":
       return executeSendMessage(args);
     case "approve_permission":
-      return executePermissionResponse(args, "allow");
+      return dispatchVoiceAction({ type: "click_allow", sessionId: args.session_id as string, requestId: args.request_id as string });
     case "deny_permission":
-      return executePermissionResponse(args, "deny");
+      return dispatchVoiceAction({ type: "click_deny", sessionId: args.session_id as string, requestId: args.request_id as string });
     case "approve_all_permissions":
-      return executeApproveAll(args);
+      return dispatchVoiceAction({ type: "click_allow_all", sessionId: args.session_id as string });
     case "navigate_page":
-      return executeNavigatePage(args);
+      return dispatchVoiceAction({ type: "navigate", page: args.page as string });
     case "switch_session":
       return executeSwitchSession(args);
     case "list_sessions":
       return executeListSessions();
     case "interrupt_session":
-      return executeInterruptSession(args);
+      return dispatchVoiceAction({ type: "click_interrupt", sessionId: args.session_id as string });
     case "get_session_status":
       return executeGetSessionStatus(args);
     default:
@@ -192,168 +218,32 @@ export async function executeVoiceTool(
   }
 }
 
-// ─── Individual Tool Implementations ─────────────────────────────────────────
+// ─── Tool Implementations ────────────────────────────────────────────────────
 
 async function executeCreateSession(args: Record<string, unknown>): Promise<unknown> {
   const prompt = (args.prompt as string) || "";
-  const cwd = (args.cwd as string) || undefined;
-  const backend = (args.backend as "claude" | "codex") || "claude";
-  const model = (args.model as string) || undefined;
-  const sandboxEnabled = (args.sandbox_enabled as boolean) || false;
-  const permissionMode = (args.permission_mode as string) || undefined;
+  if (!prompt.trim()) return { error: "prompt is required" };
 
-  try {
-    const result = await createSessionStream(
-      {
-        cwd,
-        backend,
-        model,
-        permissionMode,
-        sandboxEnabled: sandboxEnabled || undefined,
-      },
-      (progress) => {
-        useStore.getState().addCreationProgress(progress);
-      },
-    );
+  // Navigate to home first so the typing animation is visible
+  window.location.hash = "#/";
+  // Small delay to let the home page render
+  await new Promise((r) => setTimeout(r, 300));
 
-    const sessionId = result.sessionId;
-
-    // Seed SDK session metadata
-    const store = useStore.getState();
-    const existingSdkSessions = store.sdkSessions.filter((sdk) => sdk.sessionId !== sessionId);
-    store.setSdkSessions([
-      ...existingSdkSessions,
-      {
-        sessionId,
-        state: result.state as "starting" | "connected" | "running" | "exited",
-        cwd: result.cwd,
-        createdAt: Date.now(),
-        backendType: (result.backendType as "claude" | "codex" | undefined) || backend,
-        model,
-        permissionMode,
-      },
-    ]);
-
-    // Assign a session name
-    const existingNames = new Set(store.sessionNames.values());
-    const sessionName = generateUniqueSessionName(existingNames);
-    store.setSessionName(sessionId, sessionName);
-
-    // Navigate to the new session
-    navigateToSession(sessionId, true);
-    connectSession(sessionId);
-
-    // Send the initial prompt if provided
-    if (prompt.trim()) {
-      await waitForConnection(sessionId);
-      const clientMsgId = createClientMessageId();
-      sendToSession(sessionId, {
-        type: "user_message",
-        content: prompt,
-        session_id: sessionId,
-        client_msg_id: clientMsgId,
-      });
-      store.appendMessage(sessionId, {
-        id: clientMsgId,
-        role: "user",
-        content: prompt,
-        timestamp: Date.now(),
-      });
-    }
-
-    // Clear creation progress
-    store.clearCreation();
-
-    return { success: true, session_id: sessionId, name: sessionName };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    useStore.getState().clearCreation();
-    return { error: msg };
-  }
+  // Dispatch typing animation to HomePage
+  return dispatchVoiceAction({ type: "type_and_send", target: "home", text: prompt });
 }
 
-function executeSendMessage(args: Record<string, unknown>): unknown {
+async function executeSendMessage(args: Record<string, unknown>): Promise<unknown> {
   const sessionId = args.session_id as string;
   const content = args.content as string;
-  if (!sessionId || !content) {
-    return { error: "session_id and content are required" };
-  }
+  if (!sessionId || !content) return { error: "session_id and content are required" };
 
-  const clientMsgId = createClientMessageId();
-  sendToSession(sessionId, {
-    type: "user_message",
-    content,
-    session_id: sessionId,
-    client_msg_id: clientMsgId,
-  });
+  // Navigate to the session first so the Composer is visible
+  navigateToSession(sessionId);
+  await new Promise((r) => setTimeout(r, 300));
 
-  useStore.getState().appendMessage(sessionId, {
-    id: clientMsgId,
-    role: "user",
-    content,
-    timestamp: Date.now(),
-  });
-
-  return { success: true };
-}
-
-function executePermissionResponse(
-  args: Record<string, unknown>,
-  behavior: "allow" | "deny",
-): unknown {
-  const sessionId = args.session_id as string;
-  const requestId = args.request_id as string;
-  if (!sessionId || !requestId) {
-    return { error: "session_id and request_id are required" };
-  }
-
-  sendToSession(sessionId, {
-    type: "permission_response",
-    request_id: requestId,
-    behavior,
-  });
-
-  useStore.getState().removePermission(sessionId, requestId);
-  return { success: true, action: behavior };
-}
-
-function executeApproveAll(args: Record<string, unknown>): unknown {
-  const sessionId = args.session_id as string;
-  if (!sessionId) return { error: "session_id is required" };
-
-  const store = useStore.getState();
-  const perms = store.pendingPermissions.get(sessionId);
-  let approvedCount = 0;
-
-  if (perms && perms.size > 0) {
-    for (const [requestId] of perms) {
-      sendToSession(sessionId, {
-        type: "permission_response",
-        request_id: requestId,
-        behavior: "allow",
-      });
-      approvedCount++;
-    }
-    // Clear all permissions from the store
-    for (const [requestId] of perms) {
-      store.removePermission(sessionId, requestId);
-    }
-  }
-
-  return { success: true, approved_count: approvedCount };
-}
-
-function executeNavigatePage(args: Record<string, unknown>): unknown {
-  const page = args.page as string;
-  if (!page) return { error: "page is required" };
-
-  const validPages = ["home", "settings", "sandboxes", "environments", "prompts", "integrations", "agents", "runs", "scheduled", "terminal"];
-  if (!validPages.includes(page)) {
-    return { error: `Invalid page. Valid pages: ${validPages.join(", ")}` };
-  }
-
-  window.location.hash = page === "home" ? "#/" : `#/${page}`;
-  return { success: true, navigated_to: page };
+  // Dispatch typing animation to Composer
+  return dispatchVoiceAction({ type: "type_and_send", target: "composer", text: content, sessionId });
 }
 
 function executeSwitchSession(args: Record<string, unknown>): unknown {
@@ -372,14 +262,12 @@ function executeSwitchSession(args: Record<string, unknown>): unknown {
     }
   }
 
-  // Also check sdkSessions to verify it exists
+  // Verify it exists
   const exists = store.sdkSessions.some((s) => s.sessionId === sessionId && !s.archived);
-  if (!exists) {
-    return { error: `Session not found: ${nameOrId}` };
-  }
+  if (!exists) return { error: `Session not found: ${nameOrId}` };
 
-  navigateToSession(sessionId);
-  return { success: true, session_id: sessionId, name: store.sessionNames.get(sessionId) || sessionId };
+  // Dispatch visual switch
+  return dispatchVoiceAction({ type: "switch_session", sessionId });
 }
 
 async function executeListSessions(): Promise<unknown> {
@@ -397,19 +285,10 @@ async function executeListSessions(): Promise<unknown> {
         cwd: s.cwd,
         model: s.model,
       }));
-
     return { sessions: activeSessions, count: activeSessions.length };
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
-}
-
-function executeInterruptSession(args: Record<string, unknown>): unknown {
-  const sessionId = args.session_id as string;
-  if (!sessionId) return { error: "session_id is required" };
-
-  sendToSession(sessionId, { type: "interrupt" });
-  return { success: true };
 }
 
 function executeGetSessionStatus(args: Record<string, unknown>): unknown {
@@ -422,9 +301,7 @@ function executeGetSessionStatus(args: Record<string, unknown>): unknown {
   const status = store.sessionStatus.get(sessionId);
   const name = store.sessionNames.get(sessionId);
 
-  if (!session) {
-    return { error: `Session not found: ${sessionId}` };
-  }
+  if (!session) return { error: `Session not found: ${sessionId}` };
 
   return {
     session_id: sessionId,

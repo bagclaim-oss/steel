@@ -175,6 +175,28 @@ export class GeminiLiveClient {
     }
   }
 
+  /** Send text as conversational context to Gemini. */
+  sendTextContext(text: string): void {
+    if (!this.session || !this._connected) return;
+    try {
+      this.session.sendClientContent({ turns: [text], turnComplete: true });
+    } catch (e) {
+      console.warn("[gemini-live] sendTextContext failed:", e instanceof Error ? e.message : e);
+    }
+  }
+
+  /** Send an image (base64) as visual context to Gemini. */
+  sendImageContext(base64: string, mimeType: string): void {
+    if (!this.session || !this._connected) return;
+    try {
+      this.session.sendRealtimeInput({
+        media: { data: base64, mimeType },
+      });
+    } catch (e) {
+      console.warn("[gemini-live] sendImageContext failed:", e instanceof Error ? e.message : e);
+    }
+  }
+
   /** Disconnect and clean up. */
   disconnect(): void {
     this._connected = false;

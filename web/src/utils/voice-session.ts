@@ -141,6 +141,22 @@ export function isVoiceSessionActive(): boolean {
   return useStore.getState().voiceActive;
 }
 
+/**
+ * Send text context to the active Gemini voice session.
+ * The text is injected into the conversation so Gemini can reference it.
+ */
+export function sendVoiceContext(text: string): void {
+  client?.sendTextContext(text);
+}
+
+/**
+ * Send an image (base64) as visual context to the active Gemini voice session.
+ * Gemini can see and discuss the image alongside the audio conversation.
+ */
+export function sendVoiceImage(base64: string, mimeType: string): void {
+  client?.sendImageContext(base64, mimeType);
+}
+
 // ─── Internal cleanup ────────────────────────────────────────────────────────
 
 function cleanup(): void {

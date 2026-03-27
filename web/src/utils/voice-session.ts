@@ -123,8 +123,8 @@ export async function startVoiceSession(): Promise<void> {
     client?.sendAudio(base64Pcm);
   };
 
-  // 5. Connect to Gemini
-  client.connect();
+  // 5. Connect to Gemini (async — SDK handles WS setup)
+  await client.connect();
 }
 
 /**

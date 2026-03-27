@@ -1,11 +1,20 @@
 /**
- * Browser-side WebSocket client for the Gemini 2.5 Flash Live API.
+ * Browser-side client for the Gemini Live API using the @google/genai SDK.
  *
- * Connects directly to wss://generativelanguage.googleapis.com, sends
- * microphone audio as realtimeInput, and receives audio + text + tool calls.
+ * Uses `ai.live.connect()` with `gemini-3.1-flash-live-preview` for real-time
+ * bidirectional audio + function calling. The SDK handles WebSocket management,
+ * message serialization, and reconnection internally.
  *
- * Protocol reference: https://ai.google.dev/api/live
+ * Reference: https://ai.google.dev/gemini-api/docs/live
  */
+
+import {
+  GoogleGenAI,
+  Modality,
+  type LiveServerMessage,
+  type Session,
+  type FunctionDeclaration,
+} from "@google/genai";
 
 export interface GeminiToolCall {
   id: string;
@@ -16,8 +25,8 @@ export interface GeminiToolCall {
 export interface GeminiLiveCallbacks {
   /** Called when the Gemini session is set up and ready for audio. */
   onReady: () => void;
-  /** Called with base64-encoded PCM 24kHz audio from Gemini. */
-  onAudio: (base64Pcm: string) => void;
+  /** Called with base64-encoded audio data from Gemini. */
+  onAudio: (base64Data: string) => void;
   /** Called with text content from Gemini (transcript or response). */
   onText: (text: string) => void;
   /** Called when Gemini requests a tool/function call. */
@@ -31,37 +40,36 @@ export interface GeminiLiveCallbacks {
 }
 
 export interface GeminiLiveConfig {
-  /** The Gemini model to use. */
+  /** The Gemini model to use. Defaults to gemini-3.1-flash-live-preview. */
   model?: string;
   /** System instruction for the Gemini session. */
   systemInstruction?: string;
   /** Function declarations for tool calling. */
-  tools?: Record<string, unknown>[];
+  tools?: FunctionDeclaration[];
   /** Voice name for speech output. */
   voiceName?: string;
 }
 
-const DEFAULT_MODEL = "models/gemini-2.5-flash-preview-native-audio-dialog";
+const DEFAULT_MODEL = "models/gemini-3.1-flash-live-preview";
 const DEFAULT_VOICE = "Kore";
-const GEMINI_WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
 
 /**
- * WebSocket client for the Gemini Live API.
+ * Client for the Gemini Live API using the official @google/genai SDK.
  *
  * Usage:
  * ```ts
  * const client = new GeminiLiveClient("API_KEY", callbacks, config);
- * client.connect();
+ * await client.connect();
  * // Send audio chunks from microphone:
  * client.sendAudio(base64PcmChunk);
  * // When Gemini calls a tool, execute it and respond:
- * client.sendToolResponse(toolCallId, result);
+ * client.sendToolResponse(toolCallId, toolCallName, result);
  * // Disconnect:
  * client.disconnect();
  * ```
  */
 export class GeminiLiveClient {
-  private ws: WebSocket | null = null;
+  private session: Session | null = null;
   private _connected = false;
   private apiKey: string;
   private callbacks: GeminiLiveCallbacks;
@@ -77,126 +85,95 @@ export class GeminiLiveClient {
     return this._connected;
   }
 
-  /** Open the WebSocket and send the setup message. */
-  connect(): void {
-    if (this.ws) return;
+  /** Connect to Gemini Live API using the SDK. */
+  async connect(): Promise<void> {
+    if (this.session) return;
 
-    const url = `${GEMINI_WS_BASE}?key=${encodeURIComponent(this.apiKey)}`;
-    this.ws = new WebSocket(url);
+    const ai = new GoogleGenAI({ apiKey: this.apiKey });
+    const model = this.config.model || DEFAULT_MODEL;
+    const voiceName = this.config.voiceName || DEFAULT_VOICE;
 
-    this.ws.onopen = () => {
-      this.sendSetup();
-    };
-
-    this.ws.onmessage = (event) => {
-      this.handleMessage(event);
-    };
-
-    this.ws.onerror = () => {
-      this.callbacks.onError("WebSocket connection error");
-    };
-
-    this.ws.onclose = () => {
+    try {
+      this.session = await ai.live.connect({
+        model,
+        config: {
+          responseModalities: [Modality.AUDIO, Modality.TEXT],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName },
+            },
+          },
+          systemInstruction: this.config.systemInstruction || undefined,
+          tools: this.config.tools && this.config.tools.length > 0
+            ? [{ functionDeclarations: this.config.tools }]
+            : undefined,
+        },
+        callbacks: {
+          onopen: () => {
+            this._connected = true;
+            this.callbacks.onReady();
+          },
+          onmessage: (message: LiveServerMessage) => {
+            this.handleMessage(message);
+          },
+          onerror: (e: ErrorEvent) => {
+            this.callbacks.onError(e.message || "Gemini connection error");
+          },
+          onclose: () => {
+            this._connected = false;
+            this.session = null;
+            this.callbacks.onDisconnect();
+          },
+        },
+      });
+    } catch (e) {
       this._connected = false;
-      this.ws = null;
-      this.callbacks.onDisconnect();
-    };
+      this.session = null;
+      this.callbacks.onError(e instanceof Error ? e.message : "Failed to connect to Gemini");
+    }
   }
 
   /** Send a base64-encoded PCM 16kHz audio chunk. */
   sendAudio(base64Pcm: string): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    this.ws.send(JSON.stringify({
-      realtimeInput: {
-        mediaChunks: [{
-          mimeType: "audio/pcm;rate=16000",
-          data: base64Pcm,
-        }],
-      },
-    }));
+    if (!this.session) return;
+    const bytes = Uint8Array.from(atob(base64Pcm), (c) => c.charCodeAt(0));
+    const blob = new Blob([bytes], { type: "audio/pcm;rate=16000" });
+    // The SDK's Blob_2 type is structurally compatible with the browser Blob
+    this.session.sendRealtimeInput({ audio: blob as unknown as Parameters<Session["sendRealtimeInput"]>[0]["audio"] });
   }
 
   /** Send a tool/function call response back to Gemini. */
   sendToolResponse(id: string, name: string, result: unknown): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    this.ws.send(JSON.stringify({
-      toolResponse: {
-        functionResponses: [{
-          id,
-          name,
-          response: { result: result ?? { success: true } },
-        }],
-      },
-    }));
+    if (!this.session) return;
+    this.session.sendToolResponse({
+      functionResponses: [{
+        id,
+        name,
+        response: (result ?? { success: true }) as Record<string, unknown>,
+      }],
+    });
   }
 
   /** Disconnect and clean up. */
   disconnect(): void {
     this._connected = false;
-    if (this.ws) {
-      try { this.ws.close(); } catch { /* ignore */ }
-      this.ws = null;
+    if (this.session) {
+      try { this.session.close(); } catch { /* ignore */ }
+      this.session = null;
     }
   }
 
   // ── Private ────────────────────────────────────────────────────────────────
 
-  private sendSetup(): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-
-    const model = this.config.model || DEFAULT_MODEL;
-    const voiceName = this.config.voiceName || DEFAULT_VOICE;
-
-    const setup: Record<string, unknown> = {
-      model,
-      generationConfig: {
-        responseModalities: ["AUDIO", "TEXT"],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName },
-          },
-        },
-      },
-    };
-
-    if (this.config.systemInstruction) {
-      setup.systemInstruction = {
-        parts: [{ text: this.config.systemInstruction }],
-      };
-    }
-
-    if (this.config.tools && this.config.tools.length > 0) {
-      setup.tools = [{ functionDeclarations: this.config.tools }];
-    }
-
-    this.ws.send(JSON.stringify({ setup }));
-  }
-
-  private handleMessage(event: MessageEvent): void {
-    let data: Record<string, unknown>;
-    try {
-      data = JSON.parse(typeof event.data === "string" ? event.data : "{}");
-    } catch {
-      console.warn("[gemini-live] Failed to parse message:", String(event.data).substring(0, 120));
-      return;
-    }
-
-    // Setup complete — session is ready
-    if (data.setupComplete !== undefined) {
-      this._connected = true;
-      this.callbacks.onReady();
-      return;
-    }
-
+  private handleMessage(message: LiveServerMessage): void {
     // Tool calls from the model
-    if (data.toolCall) {
-      const toolCall = data.toolCall as { functionCalls?: Array<{ id: string; name: string; args: Record<string, unknown> }> };
-      if (toolCall.functionCalls) {
-        for (const fc of toolCall.functionCalls) {
+    if (message.toolCall?.functionCalls) {
+      for (const fc of message.toolCall.functionCalls) {
+        if (fc.id && fc.name) {
           this.callbacks.onToolCall({
             id: fc.id,
             name: fc.name,
-            args: fc.args || {},
+            args: (fc.args as Record<string, unknown>) || {},
           });
         }
       }
@@ -204,33 +181,22 @@ export class GeminiLiveClient {
     }
 
     // Tool call cancellation (barge-in interrupted a pending call)
-    if (data.toolCallCancellation) {
+    if (message.toolCallCancellation) {
       this.callbacks.onInterrupted();
       return;
     }
 
     // Server content (model response: audio + text)
-    if (data.serverContent) {
-      const serverContent = data.serverContent as {
-        interrupted?: boolean;
-        modelTurn?: {
-          parts?: Array<{
-            text?: string;
-            inlineData?: { mimeType: string; data: string };
-          }>;
-        };
-        turnComplete?: boolean;
-      };
-
+    if (message.serverContent) {
       // Barge-in: model output was interrupted by user speech
-      if (serverContent.interrupted) {
+      if (message.serverContent.interrupted) {
         this.callbacks.onInterrupted();
         return;
       }
 
       // Extract audio and text from model turn parts
-      if (serverContent.modelTurn?.parts) {
-        for (const part of serverContent.modelTurn.parts) {
+      if (message.serverContent.modelTurn?.parts) {
+        for (const part of message.serverContent.modelTurn.parts) {
           if (part.inlineData?.data) {
             this.callbacks.onAudio(part.inlineData.data);
           }
@@ -239,14 +205,6 @@ export class GeminiLiveClient {
           }
         }
       }
-
-      return;
-    }
-
-    // Handle error messages from the API
-    if (data.error) {
-      const error = data.error as { message?: string; code?: number };
-      this.callbacks.onError(error.message || `Gemini error (code ${error.code})`);
     }
   }
 }

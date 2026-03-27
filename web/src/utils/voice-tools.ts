@@ -5,6 +5,7 @@
  * each tool using the existing Companion REST API and WebSocket client.
  */
 
+import { Type, type FunctionDeclaration } from "@google/genai";
 import { api, createSessionStream } from "../api.js";
 import { sendToSession, createClientMessageId, connectSession, waitForConnection } from "../ws.js";
 import { useStore } from "../store.js";
@@ -36,19 +37,19 @@ Rules:
 
 // ─── Tool Declarations (Gemini function declaration format) ──────────────────
 
-export const TOOL_DECLARATIONS = [
+export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
   {
     name: "create_session",
     description: "Create a new AI coding session and optionally send an initial prompt",
     parameters: {
-      type: "OBJECT",
+      type: Type.OBJECT,
       properties: {
-        prompt: { type: "STRING", description: "Initial prompt/task to send to the AI" },
-        cwd: { type: "STRING", description: "Project directory path (working directory)" },
-        backend: { type: "STRING", description: "AI backend: 'claude' or 'codex'", enum: ["claude", "codex"] },
-        model: { type: "STRING", description: "Model name (e.g. 'claude-sonnet-4-6', 'o4-mini')" },
-        sandbox_enabled: { type: "BOOLEAN", description: "Run in a Docker sandbox" },
-        permission_mode: { type: "STRING", description: "Permission mode: 'default', 'acceptEdits', 'bypassPermissions', 'plan'" },
+        prompt: { type: Type.STRING, description: "Initial prompt/task to send to the AI" },
+        cwd: { type: Type.STRING, description: "Project directory path (working directory)" },
+        backend: { type: Type.STRING, description: "AI backend: 'claude' or 'codex'", enum: ["claude", "codex"] },
+        model: { type: Type.STRING, description: "Model name (e.g. 'claude-sonnet-4-6', 'o4-mini')" },
+        sandbox_enabled: { type: Type.BOOLEAN, description: "Run in a Docker sandbox" },
+        permission_mode: { type: Type.STRING, description: "Permission mode: 'default', 'acceptEdits', 'bypassPermissions', 'plan'" },
       },
       required: ["prompt"],
     },
@@ -57,10 +58,10 @@ export const TOOL_DECLARATIONS = [
     name: "send_message",
     description: "Send a text message or prompt to an active session",
     parameters: {
-      type: "OBJECT",
+      type: Type.OBJECT,
       properties: {
-        session_id: { type: "STRING", description: "Session ID to send the message to. Use list_sessions to find available sessions." },
-        content: { type: "STRING", description: "Message content to send" },
+        session_id: { type: Type.STRING, description: "Session ID to send the message to. Use list_sessions to find available sessions." },
+        content: { type: Type.STRING, description: "Message content to send" },
       },
       required: ["session_id", "content"],
     },
@@ -69,10 +70,10 @@ export const TOOL_DECLARATIONS = [
     name: "approve_permission",
     description: "Approve a pending tool permission request in a session",
     parameters: {
-      type: "OBJECT",
+      type: Type.OBJECT,
       properties: {
-        session_id: { type: "STRING", description: "Session ID" },
-        request_id: { type: "STRING", description: "Permission request ID to approve" },
+        session_id: { type: Type.STRING, description: "Session ID" },
+        request_id: { type: Type.STRING, description: "Permission request ID to approve" },
       },
       required: ["session_id", "request_id"],
     },
@@ -81,10 +82,10 @@ export const TOOL_DECLARATIONS = [
     name: "deny_permission",
     description: "Deny a pending tool permission request in a session",
     parameters: {
-      type: "OBJECT",
+      type: Type.OBJECT,
       properties: {
-        session_id: { type: "STRING", description: "Session ID" },
-        request_id: { type: "STRING", description: "Permission request ID to deny" },
+        session_id: { type: Type.STRING, description: "Session ID" },
+        request_id: { type: Type.STRING, description: "Permission request ID to deny" },
       },
       required: ["session_id", "request_id"],
     },
@@ -93,9 +94,9 @@ export const TOOL_DECLARATIONS = [
     name: "approve_all_permissions",
     description: "Approve all pending permission requests for a session at once",
     parameters: {
-      type: "OBJECT",
+      type: Type.OBJECT,
       properties: {
-        session_id: { type: "STRING", description: "Session ID" },
+        session_id: { type: Type.STRING, description: "Session ID" },
       },
       required: ["session_id"],
     },
@@ -104,10 +105,10 @@ export const TOOL_DECLARATIONS = [
     name: "navigate_page",
     description: "Navigate the Companion UI to a specific page",
     parameters: {
-      type: "OBJECT",
+      type: Type.OBJECT,
       properties: {
         page: {
-          type: "STRING",
+          type: Type.STRING,
           description: "Page to navigate to",
           enum: ["home", "settings", "sandboxes", "environments", "prompts", "integrations", "agents", "runs", "scheduled", "terminal"],
         },
@@ -119,9 +120,9 @@ export const TOOL_DECLARATIONS = [
     name: "switch_session",
     description: "Switch to viewing a specific session by name or ID",
     parameters: {
-      type: "OBJECT",
+      type: Type.OBJECT,
       properties: {
-        session_name_or_id: { type: "STRING", description: "Session name or session ID to switch to" },
+        session_name_or_id: { type: Type.STRING, description: "Session name or session ID to switch to" },
       },
       required: ["session_name_or_id"],
     },
@@ -129,15 +130,15 @@ export const TOOL_DECLARATIONS = [
   {
     name: "list_sessions",
     description: "List all active (non-archived) sessions with their name, status, backend, and project folder",
-    parameters: { type: "OBJECT", properties: {} },
+    parameters: { type: Type.OBJECT, properties: {} },
   },
   {
     name: "interrupt_session",
     description: "Stop/interrupt the current AI generation in a session",
     parameters: {
-      type: "OBJECT",
+      type: Type.OBJECT,
       properties: {
-        session_id: { type: "STRING", description: "Session ID to interrupt" },
+        session_id: { type: Type.STRING, description: "Session ID to interrupt" },
       },
       required: ["session_id"],
     },
@@ -146,9 +147,9 @@ export const TOOL_DECLARATIONS = [
     name: "get_session_status",
     description: "Get detailed status of a session including model, cost, turns, and pending permissions",
     parameters: {
-      type: "OBJECT",
+      type: Type.OBJECT,
       properties: {
-        session_id: { type: "STRING", description: "Session ID" },
+        session_id: { type: Type.STRING, description: "Session ID" },
       },
       required: ["session_id"],
     },

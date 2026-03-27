@@ -171,6 +171,176 @@ describe("voice-tools", () => {
     }));
   });
 
+  // ── create_session ──────────────────────────────────────────────────────
+
+  it("create_session creates session, navigates, and sends prompt", async () => {
+    const { executeVoiceTool } = await import("./voice-tools.js");
+    const { createSessionStream } = await import("../api.js");
+    const { connectSession, waitForConnection, sendToSession } = await import("../ws.js");
+
+    const result = await executeVoiceTool("create_session", {
+      prompt: "Fix the login bug",
+      cwd: "/home/user/project",
+      backend: "claude",
+    }) as { success: boolean; session_id: string };
+
+    expect(result.success).toBe(true);
+    expect(result.session_id).toBe("new-session");
+    expect(createSessionStream).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: "/home/user/project", backend: "claude" }),
+      expect.any(Function),
+    );
+    expect(connectSession).toHaveBeenCalledWith("new-session");
+    expect(waitForConnection).toHaveBeenCalledWith("new-session");
+    expect(sendToSession).toHaveBeenCalledWith("new-session", expect.objectContaining({
+      type: "user_message",
+      content: "Fix the login bug",
+    }));
+  });
+
+  it("create_session returns error on failure", async () => {
+    const { executeVoiceTool } = await import("./voice-tools.js");
+    const { createSessionStream } = await import("../api.js");
+    vi.mocked(createSessionStream).mockRejectedValueOnce(new Error("CLI not found"));
+
+    const result = await executeVoiceTool("create_session", {
+      prompt: "Hello",
+    }) as { error: string };
+
+    expect(result.error).toBe("CLI not found");
+  });
+
+  it("create_session works without prompt", async () => {
+    const { executeVoiceTool } = await import("./voice-tools.js");
+    const { sendToSession } = await import("../ws.js");
+    vi.mocked(sendToSession).mockClear();
+
+    const result = await executeVoiceTool("create_session", {
+      prompt: "",
+      cwd: "/tmp",
+    }) as { success: boolean };
+
+    expect(result.success).toBe(true);
+    // Should not send a user_message when prompt is empty
+    // (sendToSession might be called for connectSession internals, check for user_message type)
+    const userMsgCalls = vi.mocked(sendToSession).mock.calls.filter(
+      (c) => (c[1] as { type: string }).type === "user_message",
+    );
+    expect(userMsgCalls).toHaveLength(0);
+  });
+
+  // ── get_session_status ─────────────────────────────────────────────────
+
+  it("get_session_status returns session info", async () => {
+    const { executeVoiceTool } = await import("./voice-tools.js");
+
+    // Set up a session in the store
+    const store = useStore.getState();
+    store.addSession({
+      session_id: "test-session",
+      model: "claude-sonnet-4-6",
+      cwd: "/home/user/project",
+      permissionMode: "acceptEdits",
+      total_cost_usd: 0.05,
+      num_turns: 3,
+      context_used_percent: 42,
+      git_branch: "main",
+      tools: [],
+      claude_code_version: "1.0",
+      mcp_servers: [],
+      agents: [],
+      slash_commands: [],
+      skills: [],
+      is_compacting: false,
+      is_worktree: false,
+      is_containerized: false,
+      repo_root: "/home/user/project",
+      git_ahead: 0,
+      git_behind: 0,
+      total_lines_added: 10,
+      total_lines_removed: 5,
+    });
+    store.setSessionName("test-session", "My Session");
+    store.setSessionStatus("test-session", "running");
+
+    const result = await executeVoiceTool("get_session_status", {
+      session_id: "test-session",
+    }) as { model: string; cwd: string; status: string; name: string; cost_usd: number; pending_permissions: unknown[] };
+
+    expect(result.name).toBe("My Session");
+    expect(result.model).toBe("claude-sonnet-4-6");
+    expect(result.cwd).toBe("/home/user/project");
+    expect(result.status).toBe("running");
+    expect(result.cost_usd).toBe(0.05);
+    expect(result.pending_permissions).toEqual([]);
+  });
+
+  it("get_session_status returns error for unknown session", async () => {
+    const { executeVoiceTool } = await import("./voice-tools.js");
+
+    const result = await executeVoiceTool("get_session_status", {
+      session_id: "nonexistent",
+    }) as { error: string };
+
+    expect(result.error).toContain("not found");
+  });
+
+  // ── approve_all_permissions ────────────────────────────────────────────
+
+  it("approve_all_permissions approves all pending permissions", async () => {
+    const { executeVoiceTool } = await import("./voice-tools.js");
+    const { sendToSession } = await import("../ws.js");
+    vi.mocked(sendToSession).mockClear();
+
+    // Set up pending permissions in the store
+    const store = useStore.getState();
+    store.addPermission("s1", {
+      request_id: "req-1",
+      tool_name: "Write",
+      input: {},
+      tool_use_id: "tu-1",
+      timestamp: Date.now(),
+    });
+    store.addPermission("s1", {
+      request_id: "req-2",
+      tool_name: "Bash",
+      input: {},
+      tool_use_id: "tu-2",
+      timestamp: Date.now(),
+    });
+
+    const result = await executeVoiceTool("approve_all_permissions", {
+      session_id: "s1",
+    }) as { success: boolean; approved_count: number };
+
+    expect(result.success).toBe(true);
+    expect(result.approved_count).toBe(2);
+    expect(sendToSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("approve_all_permissions returns 0 when no permissions pending", async () => {
+    const { executeVoiceTool } = await import("./voice-tools.js");
+
+    const result = await executeVoiceTool("approve_all_permissions", {
+      session_id: "no-perms-session",
+    }) as { success: boolean; approved_count: number };
+
+    expect(result.success).toBe(true);
+    expect(result.approved_count).toBe(0);
+  });
+
+  // ── send_message edge cases ────────────────────────────────────────────
+
+  it("send_message returns error when session_id missing", async () => {
+    const { executeVoiceTool } = await import("./voice-tools.js");
+
+    const result = await executeVoiceTool("send_message", {
+      content: "Hello",
+    }) as { error: string };
+
+    expect(result.error).toContain("required");
+  });
+
   // ── unknown tool ───────────────────────────────────────────────────────
 
   it("returns error for unknown tool name", async () => {

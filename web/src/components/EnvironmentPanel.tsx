@@ -614,12 +614,23 @@ function BrowserPreview({
   }, [navUrl, onUrlChange, proxyUrlForPort]);
 
   const detectEmbeddedChromeError = useCallback(() => {
-    if (!iframeUrl.includes("/browser/host-proxy/")) {
-      return false;
-    }
+    if (!iframeUrl.includes("/browser/host-proxy/")) return false;
 
-    setPreviewError("Preview request failed — the localhost app is not reachable from the Environment preview right now.");
-    return true;
+    try {
+      const doc = iframeRef.current?.contentDocument;
+      const title = doc?.title?.trim();
+      const bodyText = doc?.body?.textContent ?? "";
+      if (
+        title === "localhost" &&
+        /ERR_CONNECTION_REFUSED|Ce site est inaccessible|n'autorise pas la connexion/i.test(bodyText)
+      ) {
+        setPreviewError("Preview request failed — the localhost app is not reachable from the Environment preview right now.");
+        return true;
+      }
+    } catch {
+      // Cross-origin access should not block the preview.
+    }
+    return false;
   }, [iframeUrl]);
 
   const handleReload = useCallback(() => {
@@ -627,9 +638,6 @@ function BrowserPreview({
     if (iframeRef.current) {
       iframeRef.current.src = iframeUrl;
     }
-    setTimeout(() => {
-      detectEmbeddedChromeError();
-    }, 0);
   }, [detectEmbeddedChromeError, iframeUrl]);
 
   const handleIframeLoad = useCallback(() => {

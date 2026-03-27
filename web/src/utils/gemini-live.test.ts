@@ -96,15 +96,14 @@ describe("GeminiLiveClient (SDK)", () => {
     });
 
     await client.connect();
-    // Wait for onopen setTimeout
-    await new Promise((r) => setTimeout(r, 10));
 
     expect(capturedConfig.model).toBe("models/gemini-3.1-flash-live-preview");
     expect(capturedConfig.config).toBeDefined();
     const config = capturedConfig.config as Record<string, unknown>;
-    expect(config.responseModalities).toEqual(["AUDIO", "TEXT"]);
+    expect(config.responseModalities).toEqual(["AUDIO"]);
     expect(config.systemInstruction).toBe("Test instruction");
     expect(config.tools).toBeDefined();
+    // onReady fires after connect() resolves
     expect(cbs.calls.onReady).toHaveLength(1);
     expect(client.connected).toBe(true);
   });
@@ -123,9 +122,9 @@ describe("GeminiLiveClient (SDK)", () => {
     await client.connect();
     await client.connect(); // second call should be no-op
 
-    // GoogleGenAI.live.connect should only be called once
-    // (the mock tracks capturedConfig which gets overwritten, but we check session isn't replaced)
-    expect(client.connected).toBe(false); // onopen hasn't fired yet in this sync test
+    // onReady should only have been called once (from first connect)
+    expect(cbs.calls.onReady).toHaveLength(1);
+    expect(client.connected).toBe(true);
   });
 
   // ── sendAudio() ────────────────────────────────────────────────────────
@@ -134,7 +133,6 @@ describe("GeminiLiveClient (SDK)", () => {
     const cbs = createCallbacks();
     const client = new GeminiLiveClient("key", cbs);
     await client.connect();
-    await new Promise((r) => setTimeout(r, 10));
 
     client.sendAudio("AQID"); // base64 for bytes [1, 2, 3]
 
@@ -157,7 +155,6 @@ describe("GeminiLiveClient (SDK)", () => {
     const cbs = createCallbacks();
     const client = new GeminiLiveClient("key", cbs);
     await client.connect();
-    await new Promise((r) => setTimeout(r, 10));
 
     client.sendToolResponse("call-1", "test_tool", { result: "ok" });
 
@@ -174,7 +171,6 @@ describe("GeminiLiveClient (SDK)", () => {
     const cbs = createCallbacks();
     const client = new GeminiLiveClient("key", cbs);
     await client.connect();
-    await new Promise((r) => setTimeout(r, 10));
 
     client.sendToolResponse("call-1", "test_tool", null);
 
@@ -200,7 +196,6 @@ describe("GeminiLiveClient (SDK)", () => {
     const cbs = createCallbacks();
     const client = new GeminiLiveClient("key", cbs);
     await client.connect();
-    await new Promise((r) => setTimeout(r, 10));
 
     client.disconnect();
 
@@ -221,7 +216,6 @@ describe("GeminiLiveClient (SDK)", () => {
     const cbs = createCallbacks();
     const client = new GeminiLiveClient("key", cbs);
     await client.connect();
-    await new Promise((r) => setTimeout(r, 10));
 
     capturedCallbacks.onmessage?.({
       serverContent: {
@@ -238,7 +232,6 @@ describe("GeminiLiveClient (SDK)", () => {
     const cbs = createCallbacks();
     const client = new GeminiLiveClient("key", cbs);
     await client.connect();
-    await new Promise((r) => setTimeout(r, 10));
 
     capturedCallbacks.onmessage?.({
       serverContent: {
@@ -255,7 +248,6 @@ describe("GeminiLiveClient (SDK)", () => {
     const cbs = createCallbacks();
     const client = new GeminiLiveClient("key", cbs);
     await client.connect();
-    await new Promise((r) => setTimeout(r, 10));
 
     capturedCallbacks.onmessage?.({
       serverContent: { interrupted: true },
@@ -268,7 +260,6 @@ describe("GeminiLiveClient (SDK)", () => {
     const cbs = createCallbacks();
     const client = new GeminiLiveClient("key", cbs);
     await client.connect();
-    await new Promise((r) => setTimeout(r, 10));
 
     capturedCallbacks.onmessage?.({
       toolCall: {
@@ -288,7 +279,6 @@ describe("GeminiLiveClient (SDK)", () => {
     const cbs = createCallbacks();
     const client = new GeminiLiveClient("key", cbs);
     await client.connect();
-    await new Promise((r) => setTimeout(r, 10));
 
     capturedCallbacks.onmessage?.({
       toolCallCancellation: { ids: ["fc-1"] },
@@ -303,7 +293,6 @@ describe("GeminiLiveClient (SDK)", () => {
     const cbs = createCallbacks();
     const client = new GeminiLiveClient("key", cbs);
     await client.connect();
-    await new Promise((r) => setTimeout(r, 10));
 
     capturedCallbacks.onerror?.({ message: "Connection lost" });
 
@@ -314,7 +303,6 @@ describe("GeminiLiveClient (SDK)", () => {
     const cbs = createCallbacks();
     const client = new GeminiLiveClient("key", cbs);
     await client.connect();
-    await new Promise((r) => setTimeout(r, 10));
 
     capturedCallbacks.onclose?.();
 

@@ -84,6 +84,9 @@ export const useStore = create<AppState>((...args) => ({
       // Environment
       portStatuses: new Map(),
       activePort: new Map(),
+      pendingBrowserUrl: new Map(),
+      serviceStatuses: new Map(),
+      serviceLogs: new Map(),
     });
   },
 }));

@@ -7,7 +7,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect } from "node:net";
 import { loadLaunchConfig, validateConfig, resolveForContext, buildStartupOrder, resolveEnvVars } from "./launch-config.js";
@@ -129,6 +129,25 @@ export interface McpHandlerDeps {
   launcher: CliLauncher;
 }
 
+interface ResolvedSessionContext {
+  cwd: string | null;
+  repoRoot?: string;
+  isWorktree: boolean;
+  isSandbox: boolean;
+  sessionId: string | null;
+}
+
+function resolveExecutionContext(
+  sessionContext: ResolvedSessionContext,
+  args: Record<string, unknown>,
+) {
+  const override = (args.context as { isSandbox?: boolean; isWorktree?: boolean } | undefined) ?? {};
+  return {
+    isSandbox: override.isSandbox ?? sessionContext.isSandbox,
+    isWorktree: override.isWorktree ?? sessionContext.isWorktree,
+  };
+}
+
 /**
  * Handle an MCP JSON-RPC request and return a JSON-RPC response.
  */
@@ -193,8 +212,8 @@ async function handleToolCall(
     };
   }
 
-  // Resolve cwd from tool args or session
-  const cwd = resolveCwd(args, sessionId, deps);
+  // Resolve cwd/session context from tool args or session
+  const sessionContext = resolveSessionContext(args, sessionId, deps);
 
   try {
     switch (toolName) {
@@ -202,16 +221,16 @@ async function handleToolCall(
         return { jsonrpc: "2.0", id, result: toolResult(buildLaunchSchemaResponse()) };
 
       case "validate_launch_config":
-        return { jsonrpc: "2.0", id, result: toolResult(await toolValidate(cwd)) };
+        return { jsonrpc: "2.0", id, result: toolResult(await toolValidate(sessionContext)) };
 
       case "test_launch_config":
-        return { jsonrpc: "2.0", id, result: toolResult(await toolTest(cwd, args)) };
+        return { jsonrpc: "2.0", id, result: toolResult(await toolTest(sessionContext, args)) };
 
       case "reload_launch_config":
-        return { jsonrpc: "2.0", id, result: toolResult(await toolReload(cwd, sessionId, deps)) };
+        return { jsonrpc: "2.0", id, result: toolResult(await toolReload(sessionContext, deps)) };
 
       case "get_session_environment_status":
-        return { jsonrpc: "2.0", id, result: toolResult(toolEnvironmentStatus(args, sessionId)) };
+        return { jsonrpc: "2.0", id, result: toolResult(toolEnvironmentStatus(args, sessionContext.sessionId)) };
 
       default:
         return {
@@ -236,23 +255,65 @@ function toolResult(data: unknown, isError = false) {
   };
 }
 
-function resolveCwd(
+function resolveSessionContext(
   args: Record<string, unknown>,
   sessionId: string | null,
   deps: McpHandlerDeps,
-): string | null {
-  if (typeof args.cwd === "string" && args.cwd) return args.cwd;
-  if (!sessionId) return null;
+): ResolvedSessionContext {
+  if (typeof args.cwd === "string" && args.cwd) {
+    return {
+      cwd: resolve(args.cwd),
+      isSandbox: false,
+      isWorktree: false,
+      sessionId,
+    };
+  }
+
+  if (!sessionId) {
+    return {
+      cwd: null,
+      isSandbox: false,
+      isWorktree: false,
+      sessionId,
+    };
+  }
 
   // Try ws-bridge session state first
   const bridgeSession = deps.wsBridge.getSession(sessionId);
-  if (bridgeSession?.state?.cwd) return bridgeSession.state.cwd;
+  if (bridgeSession?.state?.cwd) {
+    return {
+      cwd: bridgeSession.state.cwd,
+      repoRoot: bridgeSession.state.repo_root || undefined,
+      isWorktree: bridgeSession.state.is_worktree,
+      isSandbox: bridgeSession.state.is_containerized,
+      sessionId,
+    };
+  }
 
   // Fall back to launcher session info
   const launcherSession = deps.launcher.getSession(sessionId);
-  if (launcherSession?.cwd) return launcherSession.cwd;
+  if (launcherSession?.cwd) {
+    return {
+      cwd: launcherSession.cwd,
+      isSandbox: !!launcherSession.containerId,
+      isWorktree: false,
+      sessionId,
+    };
+  }
 
-  return null;
+  return {
+    cwd: null,
+    isSandbox: false,
+    isWorktree: false,
+    sessionId,
+  };
+}
+
+function loadConfigForContext(
+  ctx: ResolvedSessionContext,
+): LaunchConfig | null {
+  if (!ctx.cwd) return null;
+  return loadLaunchConfig(ctx.cwd, ctx.repoRoot);
 }
 
 // ── Tool: validate_launch_config ───────────────────────────────────────────
@@ -272,12 +333,12 @@ function buildConfigSummary(config: LaunchConfig) {
   };
 }
 
-async function toolValidate(cwd: string | null) {
-  if (!cwd) {
+async function toolValidate(ctx: ResolvedSessionContext) {
+  if (!ctx.cwd) {
     return { valid: false, errors: ["No working directory available. Provide 'cwd' argument."], config_summary: null };
   }
 
-  const config = loadLaunchConfig(cwd);
+  const config = loadConfigForContext(ctx);
   if (!config) {
     return { valid: false, errors: ["No .companion/launch.json found or file is invalid."], config_summary: null };
   }
@@ -292,12 +353,12 @@ async function toolValidate(cwd: string | null) {
 
 // ── Tool: test_launch_config ───────────────────────────────────────────────
 
-async function toolTest(cwd: string | null, args: Record<string, unknown>) {
-  if (!cwd) {
+async function toolTest(sessionContext: ResolvedSessionContext, args: Record<string, unknown>) {
+  if (!sessionContext.cwd) {
     return { valid: false, errors: ["No working directory available. Provide 'cwd' argument."] };
   }
 
-  const config = loadLaunchConfig(cwd);
+  const config = loadConfigForContext(sessionContext);
   if (!config) {
     return { valid: false, errors: ["No .companion/launch.json found or file is invalid."] };
   }
@@ -307,10 +368,10 @@ async function toolTest(cwd: string | null, args: Record<string, unknown>) {
     return { valid: false, errors: validation.errors, config_summary: buildConfigSummary(config) };
   }
 
-  const ctx = (args.context as { isSandbox?: boolean; isWorktree?: boolean } | undefined) ?? {};
+  const executionContext = resolveExecutionContext(sessionContext, args);
   const resolved = resolveForContext(config, {
-    isSandbox: ctx.isSandbox ?? false,
-    isWorktree: ctx.isWorktree ?? false,
+    isSandbox: executionContext.isSandbox,
+    isWorktree: executionContext.isWorktree,
   });
 
   const configSummary = buildConfigSummary(config);
@@ -336,7 +397,7 @@ async function toolTest(cwd: string | null, args: Record<string, unknown>) {
     // Run setup scripts
     if (resolved.setup.length > 0) {
       const setupResult = await runSetupScripts(resolved.setup, {
-        cwd,
+        cwd: sessionContext.cwd,
         timeout: 30_000,
       });
       setupResults.push({
@@ -349,7 +410,7 @@ async function toolTest(cwd: string | null, args: Record<string, unknown>) {
     // Start services
     if (Object.keys(resolved.services).length > 0) {
       await startServices(resolved, {
-        cwd,
+        cwd: sessionContext.cwd,
         sessionId: testSessionId,
         onProgress: (name, status, detail) => {
           const existing = serviceResults.find((s) => s.name === name);
@@ -401,23 +462,23 @@ async function toolTest(cwd: string | null, args: Record<string, unknown>) {
 // ── Reload ────────────────────────────────────────────────────────────────
 
 async function toolReload(
-  cwd: string | null,
-  sessionId: string | null,
+  sessionContext: ResolvedSessionContext,
   deps: McpHandlerDeps,
 ): Promise<unknown> {
+  const sessionId = sessionContext.sessionId;
   if (!sessionId) {
     return { error: "No session ID available. Cannot reload without a session context." };
   }
 
   // Get session info for container context
   const launcherSession = deps.launcher.getSession(sessionId);
-  const effectiveCwd = cwd ?? launcherSession?.cwd ?? null;
+  const effectiveCwd = sessionContext.cwd ?? launcherSession?.cwd ?? null;
   if (!effectiveCwd) {
     return { error: "No working directory available for this session." };
   }
 
   // Validate config exists before tearing down running services
-  const config = loadLaunchConfig(effectiveCwd);
+  const config = loadLaunchConfig(effectiveCwd, sessionContext.repoRoot);
   if (!config) {
     return { reloaded: false, error: "No .companion/launch.json found at " + effectiveCwd };
   }
@@ -427,8 +488,8 @@ async function toolReload(
   stopMonitoring(sessionId);
 
   const resolved = resolveForContext(config, {
-    isSandbox: !!launcherSession?.containerId,
-    isWorktree: false,
+    isSandbox: sessionContext.isSandbox || !!launcherSession?.containerId,
+    isWorktree: sessionContext.isWorktree,
   });
 
   // Resolve env vars (session env → envFile → process.env)

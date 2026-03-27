@@ -408,7 +408,9 @@ describe("MCP Server — handleMcpRequest", () => {
 
     const depsWithSession = makeDeps({
       wsBridge: {
-        getSession: vi.fn().mockReturnValue({ state: { cwd: "/ws/project" } }),
+        getSession: vi.fn().mockReturnValue({
+          state: { cwd: "/ws/project", repo_root: "/repo", is_worktree: true, is_containerized: false },
+        }),
       } as unknown as McpHandlerDeps["wsBridge"],
     });
 
@@ -417,8 +419,8 @@ describe("MCP Server — handleMcpRequest", () => {
       "session-1",
       depsWithSession,
     );
-    // Should have tried to load config from /ws/project
-    expect(mockLoadLaunchConfig).toHaveBeenCalledWith("/ws/project");
+    // Should use repo-root fallback for worktree sessions
+    expect(mockLoadLaunchConfig).toHaveBeenCalledWith("/ws/project", "/repo");
   });
 
   it("resolves cwd from launcher session as fallback", async () => {
@@ -439,7 +441,34 @@ describe("MCP Server — handleMcpRequest", () => {
       "session-2",
       depsWithLauncher,
     );
-    expect(mockLoadLaunchConfig).toHaveBeenCalledWith("/launcher/project");
+    expect(mockLoadLaunchConfig).toHaveBeenCalledWith("/launcher/project", undefined);
+  });
+
+  it("reload_launch_config uses worktree repo root fallback from wsBridge state", async () => {
+    const config = { version: "1", services: {}, ports: {} };
+    mockLoadLaunchConfig.mockReturnValue(config);
+    mockResolveForContext.mockReturnValue({ setup: [], services: {}, ports: {} });
+
+    const depsWithWorktree = makeDeps({
+      wsBridge: {
+        getSession: vi.fn().mockReturnValue({
+          state: {
+            cwd: "/repo/worktrees/feature",
+            repo_root: "/repo",
+            is_worktree: true,
+            is_containerized: false,
+          },
+        }),
+      } as unknown as McpHandlerDeps["wsBridge"],
+    });
+
+    await handleMcpRequest(
+      rpc("tools/call", { name: "reload_launch_config", arguments: {} }),
+      "session-worktree",
+      depsWithWorktree,
+    );
+
+    expect(mockLoadLaunchConfig).toHaveBeenCalledWith("/repo/worktrees/feature", "/repo");
   });
 
   // ── reload_launch_config ─────────────────────────────────────────────────

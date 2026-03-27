@@ -1186,7 +1186,10 @@ function handleParsedMessage(
     case "service_log": {
       const { serviceName, line } = data as { type: string; serviceName: string; line: string };
       if (serviceName && typeof line === "string") {
-        store.appendServiceLog(sessionId, serviceName, line);
+        const existingLogs = store.getServiceLogs(sessionId, serviceName);
+        if (existingLogs.length === 0 || existingLogs[existingLogs.length - 1] !== line) {
+          store.appendServiceLog(sessionId, serviceName, line);
+        }
       }
       break;
     }

@@ -2106,3 +2106,31 @@ describe("reloadLaunchConfig", () => {
     expect(result).toEqual(responseData);
   });
 });
+
+describe("environment API helpers", () => {
+  it("getServiceLogs sends GET with encoded service name and limit", async () => {
+    const responseData = { logs: ["line 1", "line 2"] };
+    mockFetch.mockResolvedValueOnce(mockResponse(responseData));
+
+    const result = await api.getServiceLogs("sess-1", "vite dev", 150);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/sessions/sess-1/services/vite%20dev/logs?limit=150",
+      expect.anything(),
+    );
+    expect(result).toEqual(responseData);
+  });
+
+  it("getServices sends GET to the services endpoint", async () => {
+    const responseData = [{ name: "api", status: "ready", port: 3000 }];
+    mockFetch.mockResolvedValueOnce(mockResponse(responseData));
+
+    const result = await api.getServices("sess-2");
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/sessions/sess-2/services",
+      expect.anything(),
+    );
+    expect(result).toEqual(responseData);
+  });
+});

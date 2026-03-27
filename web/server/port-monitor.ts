@@ -23,6 +23,7 @@ export interface PortStatus {
 }
 
 interface MonitorEntry {
+  sessionId: string;
   ports: Map<number, PortStatus>;
   timers: Map<number, ReturnType<typeof setInterval>>;
   hostname: string;
@@ -55,6 +56,7 @@ export function startMonitoring(
 
   const hostname = opts?.hostname ?? "127.0.0.1";
   const entry: MonitorEntry = {
+    sessionId,
     ports: new Map(),
     timers: new Map(),
     hostname,
@@ -71,7 +73,7 @@ export function startMonitoring(
   for (const [portStr, config] of Object.entries(portConfigs)) {
     const port = Number(portStr);
     const protocol = config.protocol ?? "http";
-    const interval = (config.healthCheck?.interval ?? 10) * 1000;
+    const interval = sanitizeIntervalMs(config.healthCheck?.interval);
 
     const status: PortStatus = {
       port,
@@ -88,8 +90,8 @@ export function startMonitoring(
     // Only run health checks if healthCheck config is provided (or TCP)
     if (config.healthCheck || protocol === "tcp") {
       const checkFn = protocol === "http"
-        ? () => checkHttp(sessionId, entry, port, hostname, config.healthCheck?.path ?? "/")
-        : () => checkTcp(sessionId, entry, port, hostname);
+        ? () => checkHttp(entry, port, hostname, config.healthCheck?.path ?? "/")
+        : () => checkTcp(entry, port, hostname);
 
       // Run first check immediately
       checkFn();
@@ -135,9 +137,9 @@ export async function checkPort(
   if (!status) return "unknown";
 
   if (status.protocol === "tcp") {
-    await checkTcp(sessionId, entry, port, entry.hostname);
+    await checkTcp(entry, port, entry.hostname);
   } else {
-    await checkHttp(sessionId, entry, port, entry.hostname, status.healthCheckPath ?? "/");
+    await checkHttp(entry, port, entry.hostname, status.healthCheckPath ?? "/");
   }
 
   return entry.ports.get(port)?.status ?? "unknown";
@@ -150,10 +152,11 @@ export async function checkPort(
 export function reassociateMonitoring(oldSessionId: string, newSessionId: string): void {
   const entry = monitors.get(oldSessionId);
   if (!entry) return;
+  entry.sessionId = newSessionId;
   monitors.delete(oldSessionId);
   monitors.set(newSessionId, entry);
   // Emit current status under the new session ID so browsers pick it up
-  emitStatusChange(newSessionId, entry);
+  emitStatusChange(entry);
   log.info("port-monitor", ` Re-associated monitoring: ${oldSessionId} → ${newSessionId}`);
 }
 
@@ -167,7 +170,6 @@ export function stopAllMonitors(): void {
 // ── Health Check Implementations ────────────────────────────────────────────
 
 async function checkHttp(
-  sessionId: string,
   entry: MonitorEntry,
   port: number,
   hostname: string,
@@ -196,12 +198,11 @@ async function checkHttp(
   status.lastCheck = Date.now();
 
   if (status.status !== prevStatus) {
-    emitStatusChange(sessionId, entry);
+    emitStatusChange(entry);
   }
 }
 
 async function checkTcp(
-  sessionId: string,
   entry: MonitorEntry,
   port: number,
   hostname: string,
@@ -231,11 +232,21 @@ async function checkTcp(
   status.lastCheck = Date.now();
 
   if (status.status !== prevStatus) {
-    emitStatusChange(sessionId, entry);
+    emitStatusChange(entry);
   }
 }
 
-function emitStatusChange(sessionId: string, entry: MonitorEntry): void {
+function emitStatusChange(entry: MonitorEntry): void {
   const ports = Array.from(entry.ports.values());
-  companionBus.emit("port:status", { sessionId, ports });
+  companionBus.emit("port:status", { sessionId: entry.sessionId, ports });
+}
+
+function sanitizeIntervalMs(intervalSeconds: number | undefined): number {
+  if (!Number.isFinite(intervalSeconds) || intervalSeconds === undefined) {
+    return 10_000;
+  }
+
+  const roundedSeconds = Math.floor(intervalSeconds);
+  const clampedSeconds = Math.min(Math.max(roundedSeconds, 1), 300);
+  return clampedSeconds * 1000;
 }

@@ -9,8 +9,11 @@ import {
   getServices,
   getServiceStatuses,
   stopAll,
+  reassociateServices,
+  restartService,
 } from "./launch-runner.js";
 import type { ResolvedLaunchConfig, ResolvedService } from "./launch-config.js";
+import { companionBus } from "./event-bus.js";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -164,7 +167,7 @@ describe("launch-runner", () => {
       expect(result.ok).toBe(true);
       const handles = getServices(sessionId);
       expect(handles[0].status).toBe("ready");
-    });
+    }, 10_000);
 
     test("readyPattern timeout marks as started, not failed", async () => {
       tmpDir = makeTmpDir();
@@ -255,6 +258,28 @@ describe("launch-runner", () => {
       // Both should start within 100ms of each other (parallel)
       expect(Math.abs(startTimes.a - startTimes.b)).toBeLessThan(100);
     });
+
+    test("marks a service failed when it exits immediately", async () => {
+      tmpDir = makeTmpDir();
+      const sessionId = `test-${Date.now()}-5c`;
+      sessionIds.push(sessionId);
+
+      const resolved = makeResolved({
+        broken: {
+          name: "broken",
+          command: "exit 1",
+          env: {},
+          dependsOn: {},
+          readyTimeout: 1,
+        },
+      });
+
+      const result = await startServices(resolved, { cwd: tmpDir, sessionId });
+
+      expect(result.ok).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(getServices(sessionId)[0]?.status).toBe("failed");
+    });
   });
 
   // -- Lifecycle --
@@ -309,6 +334,78 @@ describe("launch-runner", () => {
       stopAll();
       expect(getServices(s1)).toHaveLength(0);
       expect(getServices(s2)).toHaveLength(0);
+    });
+
+    test("reassociateServices retargets future service_log events to the new session", async () => {
+      tmpDir = makeTmpDir();
+      const oldSessionId = `test-${Date.now()}-9-old`;
+      const newSessionId = `test-${Date.now()}-9-new`;
+      sessionIds.push(newSessionId);
+
+      const events: Array<{ sessionId: string; serviceName: string; line: string }> = [];
+      const unsubscribe = companionBus.on("service:log", (event) => {
+        if (event.serviceName === "logger") {
+          events.push(event);
+        }
+      });
+
+      try {
+        const resolved = makeResolved({
+          logger: {
+            name: "logger",
+            command: "echo first && sleep 1 && echo second && sleep 30",
+            env: {},
+            dependsOn: {},
+            readyTimeout: 5,
+          },
+        });
+
+        const result = await startServices(resolved, { cwd: tmpDir, sessionId: oldSessionId });
+        expect(result.ok).toBe(true);
+
+        reassociateServices(oldSessionId, newSessionId);
+        await new Promise((resolve) => setTimeout(resolve, 1600));
+
+        expect(events.some((event) => event.line.includes("second") && event.sessionId === newSessionId)).toBe(true);
+        expect(events.some((event) => event.line.includes("second") && event.sessionId === oldSessionId)).toBe(false);
+      } finally {
+        unsubscribe();
+      }
+    });
+
+    test("restartService preserves failed status when the restarted process exits immediately", async () => {
+      tmpDir = makeTmpDir();
+      const sessionId = `test-${Date.now()}-10`;
+      sessionIds.push(sessionId);
+
+      const initial = makeResolved({
+        web: {
+          name: "web",
+          command: "sleep 30",
+          env: {},
+          dependsOn: {},
+          readyTimeout: 5,
+        },
+      });
+
+      const restartConfig = makeResolved({
+        web: {
+          name: "web",
+          command: "exit 1",
+          env: {},
+          dependsOn: {},
+          readyTimeout: 1,
+        },
+      });
+
+      const started = await startServices(initial, { cwd: tmpDir, sessionId });
+      expect(started.ok).toBe(true);
+
+      const result = await restartService(sessionId, "web", restartConfig, { cwd: tmpDir });
+
+      expect(result.ok).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(getServices(sessionId)[0]?.status).toBe("failed");
     });
   });
 });

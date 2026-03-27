@@ -5,6 +5,7 @@
  * Validates:
  * - Empty state (no services/ports) shows setup hints
  * - Sandbox-aware empty states
+ * - Sandbox browser preview CTA when no ports are configured
  * - Services render with name, status dot, and port
  * - Ports render with labels and port numbers
  * - Clicking an HTTP port opens the iframe preview (local) or sets pendingBrowserUrl (sandbox)
@@ -15,7 +16,7 @@
  * - Accessibility (axe scan)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { useStore } from "../store.js";
 import type { PortStatusInfo, ServiceInfo } from "../store/environment-slice.js";
@@ -26,6 +27,7 @@ const mockRestartService = vi.fn().mockResolvedValue({ ok: true });
 const mockStopService = vi.fn().mockResolvedValue({ ok: true });
 const mockGetServiceLogs = vi.fn().mockResolvedValue({ logs: [] });
 const mockGetServices = vi.fn().mockResolvedValue([]);
+const mockGetPortStatuses = vi.fn().mockResolvedValue([]);
 
 vi.mock("../api.js", () => ({
   api: {
@@ -35,6 +37,7 @@ vi.mock("../api.js", () => ({
     stopService: (...args: unknown[]) => mockStopService(...args),
     getServiceLogs: (...args: unknown[]) => mockGetServiceLogs(...args),
     getServices: (...args: unknown[]) => mockGetServices(...args),
+    getPortStatuses: (...args: unknown[]) => mockGetPortStatuses(...args),
   },
 }));
 
@@ -77,6 +80,7 @@ beforeEach(() => {
   mockStopService.mockClear();
   mockGetServiceLogs.mockClear().mockResolvedValue({ logs: [] });
   mockGetServices.mockClear().mockResolvedValue([]);
+  mockGetPortStatuses.mockClear().mockResolvedValue([]);
   useStore.getState().clearEnvironment(SESSION_ID);
   const sessions = new Map(useStore.getState().sessions);
   sessions.delete(SESSION_ID);
@@ -95,10 +99,19 @@ describe("EnvironmentPanel", () => {
   it("shows sandbox-specific empty state when no services configured in sandbox mode", () => {
     setupSandboxSession();
     render(<EnvironmentPanel sessionId={SESSION_ID} />);
-    // Left sidebar: sandbox-specific guidance
-    expect(screen.getByText(/Use the browser preview to navigate/)).toBeInTheDocument();
-    // Right panel: sandbox empty browser state
-    expect(screen.getByText("No services configured yet")).toBeInTheDocument();
+    const emptyMessages = screen.getAllByText(/No services configured yet/i);
+    expect(emptyMessages.length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByRole("button", { name: /open browser preview/i })).toHaveLength(2);
+  });
+
+  it("opens sandbox browser preview from empty-state CTA", () => {
+    setupSandboxSession();
+    render(<EnvironmentPanel sessionId={SESSION_ID} />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: /open browser preview/i })[0]);
+
+    expect(useStore.getState().pendingBrowserUrl.get(SESSION_ID)).toBe("http://localhost:3000");
+    expect(screen.getByTestId("session-browser-pane")).toBeInTheDocument();
   });
 
   // ─── Port rows render ─────────────────────────────────────────────────
@@ -127,6 +140,24 @@ describe("EnvironmentPanel", () => {
     expect(screen.getByText("worker")).toBeInTheDocument();
   });
 
+  it("hydrates missing ports from the backend on mount", async () => {
+    mockGetPortStatuses.mockResolvedValueOnce([
+      { port: 3457, label: "Hono API", protocol: "http", status: "healthy" },
+      { port: 5174, label: "Vite Dev Server", protocol: "http", status: "healthy" },
+    ]);
+    setServiceStatuses([
+      { name: "api", status: "ready", port: 3457 },
+      { name: "vite", status: "ready", port: 5174 },
+    ]);
+
+    render(<EnvironmentPanel sessionId={SESSION_ID} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Hono API")).toBeInTheDocument();
+      expect(screen.getByText("Vite Dev Server")).toBeInTheDocument();
+    });
+  });
+
   // ─── Empty browser state text ─────────────────────────────────────────
   it("shows empty browser message when ports exist but none selected", () => {
     setPortStatuses([
@@ -151,6 +182,21 @@ describe("EnvironmentPanel", () => {
     expect(iframe).toHaveAttribute(
       "src",
       `/api/sessions/${SESSION_ID}/browser/host-proxy/3000/`,
+    );
+  });
+
+  it("renders HTML preview responses correctly through the host proxy URL", () => {
+    setPortStatuses([
+      { port: 5174, label: "Vite Dev Server", protocol: "http", status: "healthy" },
+    ]);
+    render(<EnvironmentPanel sessionId={SESSION_ID} />);
+
+    fireEvent.click(screen.getByText("Vite Dev Server"));
+
+    const iframe = screen.getByTitle("Environment preview");
+    expect(iframe).toHaveAttribute(
+      "src",
+      `/api/sessions/${SESSION_ID}/browser/host-proxy/5174/`,
     );
   });
 
@@ -294,6 +340,45 @@ describe("EnvironmentPanel", () => {
     fireEvent.click(reloadButton);
 
     expect(mockReloadLaunchConfig).toHaveBeenCalledWith(SESSION_ID);
+  });
+
+  it("hydrates service logs without duplicating them on repeated mounts", async () => {
+    mockGetServiceLogs.mockResolvedValue({ logs: ["first", "second"] });
+
+    useStore.getState().setServiceLogs(SESSION_ID, "api", ["first", "second"]);
+    render(<EnvironmentPanel sessionId={SESSION_ID} />);
+
+    await waitFor(() => {
+      expect(useStore.getState().serviceLogs.get(SESSION_ID)?.get("api")).toEqual(["first", "second"]);
+    });
+    expect(mockGetServiceLogs).not.toHaveBeenCalled();
+  });
+
+  it("keeps service restart loading state isolated per service", async () => {
+    let resolveApi!: () => void;
+    mockRestartService.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveApi = () => resolve({ ok: true });
+        }),
+    );
+
+    setServiceStatuses([
+      { name: "api", status: "ready", port: 3000 },
+      { name: "worker", status: "ready" },
+    ]);
+    render(<EnvironmentPanel sessionId={SESSION_ID} />);
+
+    const restartButtons = screen.getAllByTitle(/restart /i);
+    fireEvent.click(restartButtons[0]);
+
+    expect(restartButtons[0]).toBeDisabled();
+    expect(restartButtons[1]).not.toBeDisabled();
+
+    resolveApi();
+    await waitFor(() => {
+      expect(restartButtons[0]).not.toBeDisabled();
+    });
   });
 
   // ─── Accessibility ────────────────────────────────────────────────────

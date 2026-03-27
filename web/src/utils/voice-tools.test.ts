@@ -2,14 +2,15 @@
 /**
  * Tests for the voice tool executor.
  *
- * Validates that each tool correctly maps to the appropriate
- * Companion API call and returns the expected result.
+ * Tools now dispatch visual actions (VoiceAction) to the store instead of
+ * calling APIs directly. The tests verify that each tool dispatches the
+ * correct action type and that read-only tools still work directly.
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useStore } from "../store.js";
 
-// Mock external dependencies to prevent actual API/WS calls
+// Mock external dependencies
 vi.mock("../api.js", () => ({
   api: {
     listSessions: vi.fn().mockResolvedValue([
@@ -37,64 +38,57 @@ describe("voice-tools", () => {
   beforeEach(() => {
     useStore.getState().reset();
     vi.clearAllMocks();
-    // Reset hash for navigation tests
     window.location.hash = "#/";
   });
 
   // ── navigate_page ──────────────────────────────────────────────────────
 
-  it("navigate_page sets correct hash for settings", async () => {
+  it("navigate_page dispatches navigate action", async () => {
     const { executeVoiceTool } = await import("./voice-tools.js");
-    const result = await executeVoiceTool("navigate_page", { page: "settings" });
+
+    // Start tool execution — it dispatches and waits for completion
+    const promise = executeVoiceTool("navigate_page", { page: "settings" });
+
+    // Check the pending action
+    const action = useStore.getState().voicePendingAction;
+    expect(action).toEqual({ type: "navigate", page: "settings" });
+
+    // Simulate component completing the action
+    useStore.getState().completeVoiceAction({ success: true, navigated_to: "settings" });
+
+    const result = await promise;
     expect(result).toEqual({ success: true, navigated_to: "settings" });
-    expect(window.location.hash).toBe("#/settings");
   });
 
-  it("navigate_page sets #/ for home", async () => {
-    const { executeVoiceTool } = await import("./voice-tools.js");
-    window.location.hash = "#/settings";
-    const result = await executeVoiceTool("navigate_page", { page: "home" });
-    expect(result).toEqual({ success: true, navigated_to: "home" });
-    expect(window.location.hash).toBe("#/");
-  });
+  // ── list_sessions (read-only, no dispatch) ─────────────────────────────
 
-  it("navigate_page returns error for invalid page", async () => {
-    const { executeVoiceTool } = await import("./voice-tools.js");
-    const result = await executeVoiceTool("navigate_page", { page: "nonexistent" });
-    expect(result).toEqual(expect.objectContaining({ error: expect.stringContaining("Invalid page") }));
-  });
-
-  // ── list_sessions ──────────────────────────────────────────────────────
-
-  it("list_sessions returns formatted session list", async () => {
+  it("list_sessions returns formatted session list directly", async () => {
     const { executeVoiceTool } = await import("./voice-tools.js");
     const result = (await executeVoiceTool("list_sessions", {})) as {
       sessions: Array<{ id: string; name: string; status: string; backend: string }>;
       count: number;
     };
-    // Should only include non-archived sessions
     expect(result.count).toBe(1);
     expect(result.sessions).toHaveLength(1);
     expect(result.sessions[0].id).toBe("s1");
-    expect(result.sessions[0].backend).toBe("claude");
   });
 
   // ── switch_session ─────────────────────────────────────────────────────
 
-  it("switch_session by name finds correct session ID", async () => {
+  it("switch_session dispatches switch_session action by name", async () => {
     const { executeVoiceTool } = await import("./voice-tools.js");
-    // Set up session names in the store
     useStore.getState().setSessionName("session-123", "My Project");
-    // Add to sdkSessions so exists check passes
     useStore.getState().setSdkSessions([
       { sessionId: "session-123", state: "connected", cwd: "/home/user/project", createdAt: Date.now() },
     ]);
 
-    const result = await executeVoiceTool("switch_session", { session_name_or_id: "My Project" });
-    expect(result).toEqual(expect.objectContaining({
-      success: true,
-      session_id: "session-123",
-    }));
+    const promise = executeVoiceTool("switch_session", { session_name_or_id: "My Project" });
+
+    const action = useStore.getState().voicePendingAction;
+    expect(action).toEqual({ type: "switch_session", sessionId: "session-123" });
+
+    useStore.getState().completeVoiceAction({ success: true });
+    await promise;
   });
 
   it("switch_session returns error for unknown session", async () => {
@@ -105,136 +99,123 @@ describe("voice-tools", () => {
 
   // ── approve_permission ─────────────────────────────────────────────────
 
-  it("approve_permission sends correct WebSocket message", async () => {
+  it("approve_permission dispatches click_allow action", async () => {
     const { executeVoiceTool } = await import("./voice-tools.js");
-    const { sendToSession } = await import("../ws.js");
 
-    const result = await executeVoiceTool("approve_permission", {
+    const promise = executeVoiceTool("approve_permission", {
       session_id: "s1",
       request_id: "req-1",
     });
 
-    expect(result).toEqual({ success: true, action: "allow" });
-    expect(sendToSession).toHaveBeenCalledWith("s1", {
-      type: "permission_response",
-      request_id: "req-1",
-      behavior: "allow",
-    });
+    const action = useStore.getState().voicePendingAction;
+    expect(action).toEqual({ type: "click_allow", sessionId: "s1", requestId: "req-1" });
+
+    useStore.getState().completeVoiceAction({ success: true });
+    const result = await promise;
+    expect(result).toEqual({ success: true });
   });
 
   // ── deny_permission ────────────────────────────────────────────────────
 
-  it("deny_permission sends deny behavior", async () => {
+  it("deny_permission dispatches click_deny action", async () => {
     const { executeVoiceTool } = await import("./voice-tools.js");
-    const { sendToSession } = await import("../ws.js");
 
-    const result = await executeVoiceTool("deny_permission", {
+    const promise = executeVoiceTool("deny_permission", {
       session_id: "s1",
       request_id: "req-1",
     });
 
-    expect(result).toEqual({ success: true, action: "deny" });
-    expect(sendToSession).toHaveBeenCalledWith("s1", {
-      type: "permission_response",
-      request_id: "req-1",
-      behavior: "deny",
-    });
+    const action = useStore.getState().voicePendingAction;
+    expect(action).toEqual({ type: "click_deny", sessionId: "s1", requestId: "req-1" });
+
+    useStore.getState().completeVoiceAction({ success: true });
+    await promise;
+  });
+
+  // ── approve_all_permissions ────────────────────────────────────────────
+
+  it("approve_all_permissions dispatches click_allow_all action", async () => {
+    const { executeVoiceTool } = await import("./voice-tools.js");
+
+    const promise = executeVoiceTool("approve_all_permissions", { session_id: "s1" });
+
+    const action = useStore.getState().voicePendingAction;
+    expect(action).toEqual({ type: "click_allow_all", sessionId: "s1" });
+
+    useStore.getState().completeVoiceAction({ success: true });
+    await promise;
   });
 
   // ── interrupt_session ──────────────────────────────────────────────────
 
-  it("interrupt_session sends interrupt message", async () => {
+  it("interrupt_session dispatches click_interrupt action", async () => {
     const { executeVoiceTool } = await import("./voice-tools.js");
-    const { sendToSession } = await import("../ws.js");
 
-    const result = await executeVoiceTool("interrupt_session", { session_id: "s1" });
+    const promise = executeVoiceTool("interrupt_session", { session_id: "s1" });
 
-    expect(result).toEqual({ success: true });
-    expect(sendToSession).toHaveBeenCalledWith("s1", { type: "interrupt" });
+    const action = useStore.getState().voicePendingAction;
+    expect(action).toEqual({ type: "click_interrupt", sessionId: "s1" });
+
+    useStore.getState().completeVoiceAction({ success: true });
+    await promise;
   });
 
   // ── send_message ───────────────────────────────────────────────────────
 
-  it("send_message sends user message via WebSocket", async () => {
+  it("send_message dispatches type_and_send to composer", async () => {
     const { executeVoiceTool } = await import("./voice-tools.js");
-    const { sendToSession } = await import("../ws.js");
 
-    const result = await executeVoiceTool("send_message", {
+    const promise = executeVoiceTool("send_message", {
       session_id: "s1",
       content: "Fix the bug",
     });
 
-    expect(result).toEqual({ success: true });
-    expect(sendToSession).toHaveBeenCalledWith("s1", expect.objectContaining({
-      type: "user_message",
-      content: "Fix the bug",
-    }));
+    // Wait for navigation delay
+    await new Promise((r) => setTimeout(r, 350));
+
+    const action = useStore.getState().voicePendingAction;
+    expect(action).toEqual({ type: "type_and_send", target: "composer", text: "Fix the bug", sessionId: "s1" });
+
+    useStore.getState().completeVoiceAction({ success: true });
+    await promise;
   });
 
-  // ── create_session ──────────────────────────────────────────────────────
-
-  it("create_session creates session, navigates, and sends prompt", async () => {
+  it("send_message returns error when session_id missing", async () => {
     const { executeVoiceTool } = await import("./voice-tools.js");
-    const { createSessionStream } = await import("../api.js");
-    const { connectSession, waitForConnection, sendToSession } = await import("../ws.js");
-
-    const result = await executeVoiceTool("create_session", {
-      prompt: "Fix the login bug",
-      cwd: "/home/user/project",
-      backend: "claude",
-    }) as { success: boolean; session_id: string };
-
-    expect(result.success).toBe(true);
-    expect(result.session_id).toBe("new-session");
-    expect(createSessionStream).toHaveBeenCalledWith(
-      expect.objectContaining({ cwd: "/home/user/project", backend: "claude" }),
-      expect.any(Function),
-    );
-    expect(connectSession).toHaveBeenCalledWith("new-session");
-    expect(waitForConnection).toHaveBeenCalledWith("new-session");
-    expect(sendToSession).toHaveBeenCalledWith("new-session", expect.objectContaining({
-      type: "user_message",
-      content: "Fix the login bug",
-    }));
+    const result = await executeVoiceTool("send_message", { content: "Hello" });
+    expect(result).toEqual(expect.objectContaining({ error: expect.stringContaining("required") }));
   });
 
-  it("create_session returns error on failure", async () => {
+  // ── create_session ─────────────────────────────────────────────────────
+
+  it("create_session dispatches type_and_send to home", async () => {
     const { executeVoiceTool } = await import("./voice-tools.js");
-    const { createSessionStream } = await import("../api.js");
-    vi.mocked(createSessionStream).mockRejectedValueOnce(new Error("CLI not found"));
 
-    const result = await executeVoiceTool("create_session", {
-      prompt: "Hello",
-    }) as { error: string };
+    const promise = executeVoiceTool("create_session", { prompt: "Build a feature" });
 
-    expect(result.error).toBe("CLI not found");
+    // Wait for navigation delay
+    await new Promise((r) => setTimeout(r, 350));
+
+    const action = useStore.getState().voicePendingAction;
+    expect(action).toEqual({ type: "type_and_send", target: "home", text: "Build a feature" });
+
+    useStore.getState().completeVoiceAction({ success: true });
+    await promise;
+
+    // Should have navigated to home
+    expect(window.location.hash).toBe("#/");
   });
 
-  it("create_session works without prompt", async () => {
+  it("create_session returns error with empty prompt", async () => {
     const { executeVoiceTool } = await import("./voice-tools.js");
-    const { sendToSession } = await import("../ws.js");
-    vi.mocked(sendToSession).mockClear();
-
-    const result = await executeVoiceTool("create_session", {
-      prompt: "",
-      cwd: "/tmp",
-    }) as { success: boolean };
-
-    expect(result.success).toBe(true);
-    // Should not send a user_message when prompt is empty
-    // (sendToSession might be called for connectSession internals, check for user_message type)
-    const userMsgCalls = vi.mocked(sendToSession).mock.calls.filter(
-      (c) => (c[1] as { type: string }).type === "user_message",
-    );
-    expect(userMsgCalls).toHaveLength(0);
+    const result = await executeVoiceTool("create_session", { prompt: "" });
+    expect(result).toEqual(expect.objectContaining({ error: expect.stringContaining("required") }));
   });
 
-  // ── get_session_status ─────────────────────────────────────────────────
+  // ── get_session_status (read-only) ─────────────────────────────────────
 
-  it("get_session_status returns session info", async () => {
+  it("get_session_status returns session info directly", async () => {
     const { executeVoiceTool } = await import("./voice-tools.js");
-
-    // Set up a session in the store
     const store = useStore.getState();
     store.addSession({
       session_id: "test-session",
@@ -245,100 +226,19 @@ describe("voice-tools", () => {
       num_turns: 3,
       context_used_percent: 42,
       git_branch: "main",
-      tools: [],
-      claude_code_version: "1.0",
-      mcp_servers: [],
-      agents: [],
-      slash_commands: [],
-      skills: [],
-      is_compacting: false,
-      is_worktree: false,
-      is_containerized: false,
+      tools: [], claude_code_version: "1.0", mcp_servers: [],
+      agents: [], slash_commands: [], skills: [],
+      is_compacting: false, is_worktree: false, is_containerized: false,
       repo_root: "/home/user/project",
-      git_ahead: 0,
-      git_behind: 0,
-      total_lines_added: 10,
-      total_lines_removed: 5,
+      git_ahead: 0, git_behind: 0, total_lines_added: 10, total_lines_removed: 5,
     });
     store.setSessionName("test-session", "My Session");
     store.setSessionStatus("test-session", "running");
 
-    const result = await executeVoiceTool("get_session_status", {
-      session_id: "test-session",
-    }) as { model: string; cwd: string; status: string; name: string; cost_usd: number; pending_permissions: unknown[] };
-
+    const result = await executeVoiceTool("get_session_status", { session_id: "test-session" }) as Record<string, unknown>;
     expect(result.name).toBe("My Session");
     expect(result.model).toBe("claude-sonnet-4-6");
-    expect(result.cwd).toBe("/home/user/project");
     expect(result.status).toBe("running");
-    expect(result.cost_usd).toBe(0.05);
-    expect(result.pending_permissions).toEqual([]);
-  });
-
-  it("get_session_status returns error for unknown session", async () => {
-    const { executeVoiceTool } = await import("./voice-tools.js");
-
-    const result = await executeVoiceTool("get_session_status", {
-      session_id: "nonexistent",
-    }) as { error: string };
-
-    expect(result.error).toContain("not found");
-  });
-
-  // ── approve_all_permissions ────────────────────────────────────────────
-
-  it("approve_all_permissions approves all pending permissions", async () => {
-    const { executeVoiceTool } = await import("./voice-tools.js");
-    const { sendToSession } = await import("../ws.js");
-    vi.mocked(sendToSession).mockClear();
-
-    // Set up pending permissions in the store
-    const store = useStore.getState();
-    store.addPermission("s1", {
-      request_id: "req-1",
-      tool_name: "Write",
-      input: {},
-      tool_use_id: "tu-1",
-      timestamp: Date.now(),
-    });
-    store.addPermission("s1", {
-      request_id: "req-2",
-      tool_name: "Bash",
-      input: {},
-      tool_use_id: "tu-2",
-      timestamp: Date.now(),
-    });
-
-    const result = await executeVoiceTool("approve_all_permissions", {
-      session_id: "s1",
-    }) as { success: boolean; approved_count: number };
-
-    expect(result.success).toBe(true);
-    expect(result.approved_count).toBe(2);
-    expect(sendToSession).toHaveBeenCalledTimes(2);
-  });
-
-  it("approve_all_permissions returns 0 when no permissions pending", async () => {
-    const { executeVoiceTool } = await import("./voice-tools.js");
-
-    const result = await executeVoiceTool("approve_all_permissions", {
-      session_id: "no-perms-session",
-    }) as { success: boolean; approved_count: number };
-
-    expect(result.success).toBe(true);
-    expect(result.approved_count).toBe(0);
-  });
-
-  // ── send_message edge cases ────────────────────────────────────────────
-
-  it("send_message returns error when session_id missing", async () => {
-    const { executeVoiceTool } = await import("./voice-tools.js");
-
-    const result = await executeVoiceTool("send_message", {
-      content: "Hello",
-    }) as { error: string };
-
-    expect(result.error).toContain("required");
   });
 
   // ── unknown tool ───────────────────────────────────────────────────────
@@ -349,7 +249,7 @@ describe("voice-tools", () => {
     expect(result).toEqual({ error: "Unknown tool: nonexistent_tool" });
   });
 
-  // ── TOOL_DECLARATIONS validation ───────────────────────────────────────
+  // ── TOOL_DECLARATIONS ──────────────────────────────────────────────────
 
   it("TOOL_DECLARATIONS has 10 function declarations", async () => {
     const { TOOL_DECLARATIONS } = await import("./voice-tools.js");

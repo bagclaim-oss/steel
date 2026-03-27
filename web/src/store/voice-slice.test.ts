@@ -91,6 +91,36 @@ describe("voice-slice", () => {
     expect(useStore.getState().voiceError).toBeNull();
   });
 
+  // ── Voice Action Queue ──────────────────────────────────────────────────
+
+  it("dispatchVoiceAction sets pending action and resolver", () => {
+    const resolver = vi.fn();
+    useStore.getState().dispatchVoiceAction({ type: "navigate", page: "settings" }, resolver);
+
+    expect(useStore.getState().voicePendingAction).toEqual({ type: "navigate", page: "settings" });
+    expect(useStore.getState()._voiceActionResolve).toBe(resolver);
+  });
+
+  it("completeVoiceAction calls resolver and clears pending action", () => {
+    const resolver = vi.fn();
+    useStore.getState().dispatchVoiceAction({ type: "navigate", page: "home" }, resolver);
+
+    useStore.getState().completeVoiceAction({ success: true });
+
+    expect(resolver).toHaveBeenCalledWith({ success: true });
+    expect(useStore.getState().voicePendingAction).toBeNull();
+    expect(useStore.getState()._voiceActionResolve).toBeNull();
+  });
+
+  it("completeVoiceAction handles null resolver gracefully", () => {
+    // No action dispatched — resolver is null
+    expect(() => useStore.getState().completeVoiceAction({ success: true })).not.toThrow();
+  });
+
+  it("voicePendingAction is null initially", () => {
+    expect(useStore.getState().voicePendingAction).toBeNull();
+  });
+
   it("resetVoice clears all voice state back to initial", () => {
     // Set all fields to non-initial values
     const store = useStore.getState();
@@ -101,6 +131,7 @@ describe("voice-slice", () => {
     store.setVoiceTranscript("Some transcript");
     store.setVoiceLastToolCall({ name: "test", args: { foo: "bar" } });
     store.setVoiceError("Some error");
+    store.dispatchVoiceAction({ type: "navigate", page: "home" }, vi.fn());
 
     // Reset
     useStore.getState().resetVoice();
@@ -114,5 +145,7 @@ describe("voice-slice", () => {
     expect(reset.voiceTranscript).toBe("");
     expect(reset.voiceLastToolCall).toBeNull();
     expect(reset.voiceError).toBeNull();
+    expect(reset.voicePendingAction).toBeNull();
+    expect(reset._voiceActionResolve).toBeNull();
   });
 });

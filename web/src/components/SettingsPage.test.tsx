@@ -1268,9 +1268,13 @@ describe("SettingsPage", () => {
       });
     });
 
-    // Inputs should be cleared after save
+    // Inputs should be cleared after save – button is disabled again,
+    // and masked-dot placeholders are restored since both tokens are now configured.
     await waitFor(() => {
       expect(screen.getByText("Provider settings saved.")).toBeInTheDocument();
+      expect(saveBtn).toBeDisabled();
+      expect(claudeInput.value).toBe("••••••••••••••••");
+      expect(openaiInput.value).toBe("••••••••••••••••");
     });
   });
 

@@ -22,6 +22,7 @@ import type { BackendType } from "../types.js";
 import { EnvManager } from "./EnvManager.js";
 import { FolderPicker } from "./FolderPicker.js";
 import { readFileAsBase64, type ImageAttachment } from "../utils/image.js";
+import { typeText } from "../utils/voice-typing.js";
 import { LinearSection } from "./home/LinearSection.js";
 import { BranchPicker } from "./home/BranchPicker.js";
 import { MentionMenu } from "./MentionMenu.js";
@@ -171,6 +172,28 @@ export function HomePage() {
   const envDropdownRef = useRef<HTMLDivElement>(null);
 
   const currentSessionId = useStore((s) => s.currentSessionId);
+  const voicePendingAction = useStore((s) => s.voicePendingAction);
+
+  useEffect(() => {
+    const action = voicePendingAction;
+    if (!action) return;
+    if (action.type !== "type_and_send" || action.target !== "home") return;
+
+    let cancelled = false;
+
+    (async () => {
+      await typeText(setText, action.text);
+      if (cancelled) return;
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + "px";
+      }
+      handleSend();
+      useStore.getState().completeVoiceAction({ success: true });
+    })();
+
+    return () => { cancelled = true; };
+  }, [voicePendingAction]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // @ mention support for saved prompts
   const mention = useMentionMenu({

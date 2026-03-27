@@ -1,4 +1,4 @@
-import { useState, type ComponentProps } from "react";
+import { useState, useEffect, type ComponentProps } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useStore } from "../store.js";
@@ -31,7 +31,41 @@ export function PermissionBanner({
   sessionId: string;
 }) {
   const [loading, setLoading] = useState(false);
+  const [voiceHighlight, setVoiceHighlight] = useState<"allow" | "deny" | null>(null);
   const removePermission = useStore((s) => s.removePermission);
+  const voicePendingAction = useStore((s) => s.voicePendingAction);
+
+  useEffect(() => {
+    const action = voicePendingAction;
+    if (!action) return;
+
+    let cancelled = false;
+
+    if (
+      (action.type === "click_allow" && action.requestId === permission.request_id && action.sessionId === sessionId)
+      || (action.type === "click_allow_all" && action.sessionId === sessionId)
+    ) {
+      setVoiceHighlight("allow");
+      const timeout = setTimeout(() => {
+        if (cancelled) return;
+        handleAllow();
+        useStore.getState().completeVoiceAction({ success: true });
+        setVoiceHighlight(null);
+      }, 500);
+      return () => { cancelled = true; clearTimeout(timeout); };
+    }
+
+    if (action.type === "click_deny" && action.requestId === permission.request_id && action.sessionId === sessionId) {
+      setVoiceHighlight("deny");
+      const timeout = setTimeout(() => {
+        if (cancelled) return;
+        handleDeny();
+        useStore.getState().completeVoiceAction({ success: true });
+        setVoiceHighlight(null);
+      }, 500);
+      return () => { cancelled = true; clearTimeout(timeout); };
+    }
+  }, [voicePendingAction]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleAllow(updatedInput?: Record<string, unknown>, updatedPermissions?: PermissionUpdate[]) {
     setLoading(true);
@@ -118,7 +152,7 @@ export function PermissionBanner({
                 <button
                   onClick={() => handleAllow()}
                   disabled={loading}
-                  className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium rounded-lg bg-cc-success/90 hover:bg-cc-success text-white disabled:opacity-50 transition-colors cursor-pointer"
+                  className={`inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium rounded-lg bg-cc-success/90 hover:bg-cc-success text-white disabled:opacity-50 transition-colors cursor-pointer ${voiceHighlight === "allow" ? "ring-2 ring-cc-primary ring-offset-2 animate-pulse" : ""}`}
                 >
                   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-3 h-3">
                     <path d="M3 8.5l3.5 3.5 6.5-7" />
@@ -145,7 +179,7 @@ export function PermissionBanner({
                 <button
                   onClick={handleDeny}
                   disabled={loading}
-                  className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium rounded-lg bg-cc-hover hover:bg-cc-active text-cc-fg border border-cc-border disabled:opacity-50 transition-colors cursor-pointer"
+                  className={`inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium rounded-lg bg-cc-hover hover:bg-cc-active text-cc-fg border border-cc-border disabled:opacity-50 transition-colors cursor-pointer ${voiceHighlight === "deny" ? "ring-2 ring-cc-error ring-offset-2 animate-pulse" : ""}`}
                 >
                   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-3 h-3">
                     <path d="M4 4l8 8M12 4l-8 8" />

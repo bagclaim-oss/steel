@@ -66,6 +66,7 @@ export default function App() {
   const sessionCreatingBackend = useStore((s) => s.sessionCreatingBackend);
   const creationProgress = useStore((s) => s.creationProgress);
   const creationError = useStore((s) => s.creationError);
+  const voicePendingAction = useStore((s) => s.voicePendingAction);
   const updateOverlayActive = useStore((s) => s.updateOverlayActive);
   const hash = useHash();
   const route = useMemo(() => parseHash(hash), [hash]);
@@ -126,6 +127,24 @@ export default function App() {
     }
     // For other pages (settings, terminal, etc.), preserve currentSessionId
   }, [route]);
+
+  // Handle voice navigation actions
+  useEffect(() => {
+    const action = voicePendingAction;
+    if (!action) return;
+
+    if (action.type === "navigate") {
+      window.location.hash = action.page === "home" ? "#/" : "#/" + action.page;
+      useStore.getState().completeVoiceAction({ success: true, navigated_to: action.page });
+      return;
+    }
+
+    if (action.type === "switch_session") {
+      navigateToSession(action.sessionId);
+      useStore.getState().completeVoiceAction({ success: true, session_id: action.sessionId });
+      return;
+    }
+  }, [voicePendingAction]);
 
   // Keep git changed-files count in sync for the badge regardless of which tab is active.
   // DiffPanel does the same when mounted; this covers the case where the diff tab is closed.

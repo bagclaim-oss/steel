@@ -9,6 +9,7 @@ import { MentionMenu } from "./MentionMenu.js";
 import { useMentionMenu } from "../utils/use-mention-menu.js";
 
 import { readFileAsBase64, type ImageAttachment } from "../utils/image.js";
+import { typeText } from "../utils/voice-typing.js";
 
 /** Stable reference to avoid infinite re-renders in Zustand selectors. */
 const emptyStringArray: string[] = [];
@@ -337,6 +338,37 @@ export function Composer({ sessionId }: { sessionId: string }) {
   const promptSuggestionsRaw = useStore((s) => s.promptSuggestions.get(sessionId));
   const promptSuggestions = promptSuggestionsRaw ?? emptyStringArray;
   const clearPromptSuggestions = useStore((s) => s.clearPromptSuggestions);
+
+  const voicePendingAction = useStore((s) => s.voicePendingAction);
+
+  useEffect(() => {
+    const action = voicePendingAction;
+    if (!action) return;
+
+    if (action.type === "click_interrupt" && action.sessionId === sessionId) {
+      handleInterrupt();
+      useStore.getState().completeVoiceAction({ success: true });
+      return;
+    }
+
+    if (action.type !== "type_and_send" || action.target !== "composer") return;
+    if (action.sessionId && action.sessionId !== sessionId) return;
+
+    let cancelled = false;
+
+    (async () => {
+      await typeText(setText, action.text);
+      if (cancelled) return;
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + "px";
+      }
+      handleSend();
+      useStore.getState().completeVoiceAction({ success: true });
+    })();
+
+    return () => { cancelled = true; };
+  }, [voicePendingAction]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sessionStatus = useStore((s) => s.sessionStatus);
   const isRunning = sessionStatus.get(sessionId) === "running";

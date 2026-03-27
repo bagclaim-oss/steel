@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Tests for VoiceControl component.
  *
@@ -8,6 +9,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import "@testing-library/jest-dom";
 import { axe } from "vitest-axe";
 import { useStore } from "../store.js";
 import { VoiceControl } from "./VoiceControl.js";

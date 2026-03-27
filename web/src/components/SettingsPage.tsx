@@ -754,7 +754,7 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
                           : "border-cc-border text-cc-muted cursor-not-allowed"
                       }`}
                     >
-                      {geminiSaving ? "Saving…" : "Save"}
+                      {geminiSaving ? "Saving…" : "Save Key"}
                     </button>
                     {geminiConfigured && (
                       <button

@@ -62,7 +62,6 @@ interface MockStoreState {
   markRecentlyRenamed: ReturnType<typeof vi.fn>;
   clearRecentlyRenamed: ReturnType<typeof vi.fn>;
   setSdkSessions: ReturnType<typeof vi.fn>;
-  closeTerminal: ReturnType<typeof vi.fn>;
 }
 
 function makeSession(id: string, overrides: Partial<SessionState> = {}): SessionState {
@@ -129,7 +128,6 @@ function createMockState(overrides: Partial<MockStoreState> = {}): MockStoreStat
     markRecentlyRenamed: vi.fn(),
     clearRecentlyRenamed: vi.fn(),
     setSdkSessions: vi.fn(),
-    closeTerminal: vi.fn(),
     ...overrides,
   };
 }

@@ -176,6 +176,7 @@ function createMockBridge() {
     broadcastToSession: vi.fn(),
     injectSystemPrompt: vi.fn(),
     attachBackendAdapter: vi.fn(),
+    cancelDisconnectTimer: vi.fn(() => false),
   } as any;
 }
 
@@ -1655,8 +1656,11 @@ describe("SessionOrchestrator", () => {
       expect(deps.launcher.relaunch).toHaveBeenCalledWith("s1");
     });
 
-    it("does NOT relaunch after idle-kill (intentional kill)", async () => {
-      // Idle-kill is intentional — the keepalive should NOT trigger.
+    it("does NOT proactively relaunch after idle-kill (intentional kill)", async () => {
+      // Idle-kill is intentional — the proactive keepalive should NOT trigger.
+      // The debounce timer in ws-bridge is also cancelled by the idle-kill
+      // handler (via cancelDisconnectTimer), so session:relaunch-needed never
+      // fires from the debounce path. A browser reconnect CAN still relaunch.
       deps.launcher.getSession.mockReturnValue({
         archived: false,
         state: "exited",
@@ -1669,13 +1673,14 @@ describe("SessionOrchestrator", () => {
       companionBus.emit("session:idle-kill", { sessionId: "s1" });
       companionBus.emit("session:exited", { sessionId: "s1", exitCode: 0 });
 
-      // Advance well past any possible delay
+      // Advance well past any possible keepalive delay
       await vi.advanceTimersByTimeAsync(30_000);
       await vi.advanceTimersByTimeAsync(0);
 
-      // relaunch should NOT have been called by the keepalive
-      // (idle-kill handler calls kill() but not relaunch)
+      // Proactive keepalive should NOT have relaunched
       expect(deps.launcher.relaunch).not.toHaveBeenCalled();
+      // Disconnect debounce timer should have been cancelled
+      expect(deps.wsBridge.cancelDisconnectTimer).toHaveBeenCalledWith("s1");
     });
 
     it("does NOT relaunch archived sessions", async () => {
@@ -1695,8 +1700,8 @@ describe("SessionOrchestrator", () => {
       expect(deps.launcher.relaunch).not.toHaveBeenCalled();
     });
 
-    it("uses exponential backoff on repeated crashes", async () => {
-      // Each crash should increase the delay: 3s → 6s → 12s
+    it("uses exponential backoff on repeated crashes (3s → 6s → 12s)", async () => {
+      // Each crash should increase the delay before the keepalive timer fires.
       let relaunchCount = 0;
       deps.launcher.getSession.mockReturnValue({
         archived: false,
@@ -1704,25 +1709,51 @@ describe("SessionOrchestrator", () => {
         pid: undefined,
       } as any);
       deps.wsBridge.isCliConnected.mockReturnValue(false);
-      // Simulate repeated failures so the count increments
+      // Simulate repeated failures so the auto-relaunch count increments
       deps.launcher.relaunch.mockImplementation(async () => {
         relaunchCount++;
         return { ok: false, error: "crashed" };
       });
       orchestrator.initialize();
 
-      // First crash — should relaunch after 3s base delay
+      // ── 1st crash: 3s keepalive delay ──
       companionBus.emit("session:exited", { sessionId: "s1", exitCode: 1 });
 
-      // At 2s: nothing yet
+      // At 2s: nothing yet (3s delay not elapsed)
       await vi.advanceTimersByTimeAsync(2_000);
       expect(relaunchCount).toBe(0);
 
-      // At 3s: keepalive fires, then needs 10s grace + flush
+      // At 3s: keepalive fires → handleAutoRelaunch with 10s grace
       await vi.advanceTimersByTimeAsync(1_000);
       await vi.advanceTimersByTimeAsync(15_000);
       await vi.advanceTimersByTimeAsync(0);
       expect(relaunchCount).toBe(1);
+
+      // ── 2nd crash: 6s keepalive delay ──
+      companionBus.emit("session:exited", { sessionId: "s1", exitCode: 1 });
+
+      // At 5s: nothing yet (6s delay not elapsed)
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(relaunchCount).toBe(1);
+
+      // At 6s: keepalive fires → handleAutoRelaunch with 10s grace
+      await vi.advanceTimersByTimeAsync(1_000);
+      await vi.advanceTimersByTimeAsync(15_000);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(relaunchCount).toBe(2);
+
+      // ── 3rd crash: 12s keepalive delay ──
+      companionBus.emit("session:exited", { sessionId: "s1", exitCode: 1 });
+
+      // At 11s: nothing yet (12s delay not elapsed)
+      await vi.advanceTimersByTimeAsync(11_000);
+      expect(relaunchCount).toBe(2);
+
+      // At 12s: keepalive fires → handleAutoRelaunch with 10s grace
+      await vi.advanceTimersByTimeAsync(1_000);
+      await vi.advanceTimersByTimeAsync(15_000);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(relaunchCount).toBe(3);
     });
 
     it("cancels keepalive timer on session delete", async () => {

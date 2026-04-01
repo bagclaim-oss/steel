@@ -721,7 +721,7 @@ export class WsBridge {
   }
 
   /** Cancel a pending disconnect debounce timer for a session, if any. */
-  private cancelDisconnectTimer(sessionId: string): boolean {
+  cancelDisconnectTimer(sessionId: string): boolean {
     const timer = this.disconnectTimers.get(sessionId);
     if (!timer) return false;
     clearTimeout(timer);

@@ -214,6 +214,9 @@ export class SessionOrchestrator {
       if (!info || info.archived) return;
       log.info("orchestrator", "Idle-killing session (preserving container)", { sessionId, reason: "no browsers, no activity" });
       this.intentionalKills.add(sessionId);
+      // Cancel the CLI disconnect debounce timer so it doesn't fire
+      // session:relaunch-needed after we intentionally kill the process.
+      this.wsBridge.cancelDisconnectTimer(sessionId);
       await this.launcher.kill(sessionId);
       // Clear relaunch counters so the session gets a fresh budget when the user
       // returns. Idle-kill is intentional cleanup, not a crash — the session
@@ -686,6 +689,7 @@ export class SessionOrchestrator {
 
     this.intentionalKills.add(sessionId);
     this.cancelKeepaliveTimer(sessionId);
+    this.wsBridge.cancelDisconnectTimer(sessionId);
     await this.launcher.kill(sessionId);
     containerManager.removeContainer(sessionId);
     this.prPoller.unwatch(sessionId);
@@ -702,6 +706,7 @@ export class SessionOrchestrator {
   async deleteSession(sessionId: string): Promise<DeleteSessionResult> {
     this.intentionalKills.add(sessionId);
     this.cancelKeepaliveTimer(sessionId);
+    this.wsBridge.cancelDisconnectTimer(sessionId);
     await this.launcher.kill(sessionId);
     containerManager.removeContainer(sessionId);
     const worktreeResult = this.cleanupWorktree(sessionId, true);
@@ -712,6 +717,7 @@ export class SessionOrchestrator {
     this.autoRelaunchCounts.delete(sessionId);
     this.relaunchExhaustedNotified.delete(sessionId);
     this.relaunchingSet.delete(sessionId);
+    this.intentionalKills.delete(sessionId);
     return { ok: true, worktree: worktreeResult };
   }
 
@@ -844,8 +850,9 @@ export class SessionOrchestrator {
    * - Sessions that have exhausted their relaunch budget
    */
   private scheduleProactiveRelaunch(sessionId: string): void {
-    // Skip if this was an intentional kill
-    if (this.intentionalKills.delete(sessionId)) return;
+    // Skip if this was an intentional kill. Use has() instead of delete() so
+    // the guard is preserved for handleAutoRelaunch (debounce path fires later).
+    if (this.intentionalKills.has(sessionId)) return;
 
     const info = this.launcher.getSession(sessionId);
     if (!info || info.archived) return;
@@ -877,13 +884,9 @@ export class SessionOrchestrator {
       const freshInfo = this.launcher.getSession(sessionId);
       if (!freshInfo || freshInfo.archived) return;
       if (freshInfo.state === "connected" || freshInfo.state === "running") return;
-      if (this.intentionalKills.has(sessionId)) {
-        this.intentionalKills.delete(sessionId);
-        return;
-      }
 
       // Delegate to the existing auto-relaunch mechanism which handles
-      // budget, PID checks, state transitions, and cooldowns.
+      // budget, PID checks, state transitions, cooldowns, and intentionalKills.
       await this.handleAutoRelaunch(sessionId);
     }, delay);
 

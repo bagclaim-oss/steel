@@ -947,6 +947,127 @@ describe("CLI handlers", () => {
 
     vi.useRealTimers();
   });
+
+  it("Codex adapter disconnect: uses debounce and broadcasts cli_disconnected only after 5s", () => {
+    vi.useFakeTimers();
+    const session = bridge.getOrCreateSession("s1", "codex");
+    const browser = makeBrowserSocket("s1");
+    bridge.handleBrowserOpen(browser, "s1");
+
+    // Create a mock Codex adapter and capture the onDisconnect callback
+    let disconnectCb: (() => void) | undefined;
+    const adapter = {
+      isConnected: () => false,
+      send: () => true,
+      disconnect: async () => {},
+      onBrowserMessage: () => {},
+      onSessionMeta: () => {},
+      onDisconnect: (cb: () => void) => { disconnectCb = cb; },
+      onInitError: () => {},
+    };
+
+    bridge.attachBackendAdapter("s1", adapter as any, "codex");
+    browser.send.mockClear();
+
+    // Trigger disconnect
+    disconnectCb!();
+
+    // Immediately after disconnect: should transition to "reconnecting" but NOT broadcast cli_disconnected yet
+    expect(session.stateMachine.phase).toBe("reconnecting");
+    const immediateCalls = browser.send.mock.calls.map(([arg]: [string]) => JSON.parse(arg));
+    expect(immediateCalls.find((c: any) => c.type === "cli_disconnected")).toBeUndefined();
+    // session_phase: reconnecting should be broadcast (sets cliReconnecting=true on frontend)
+    expect(immediateCalls).toContainEqual(expect.objectContaining({ type: "session_phase", phase: "reconnecting" }));
+
+    // After 5s debounce: cli_disconnected should be broadcast
+    vi.advanceTimersByTime(5_000);
+    const laterCalls = browser.send.mock.calls.map(([arg]: [string]) => JSON.parse(arg));
+    expect(laterCalls).toContainEqual(expect.objectContaining({ type: "cli_disconnected" }));
+
+    vi.useRealTimers();
+  });
+
+  it("Codex adapter disconnect: debounce is cancelled when new adapter attaches", () => {
+    vi.useFakeTimers();
+    bridge.getOrCreateSession("s1", "codex");
+    const browser = makeBrowserSocket("s1");
+    bridge.handleBrowserOpen(browser, "s1");
+
+    let disconnectCb: (() => void) | undefined;
+    const adapter1 = {
+      isConnected: () => false,
+      send: () => true,
+      disconnect: async () => {},
+      onBrowserMessage: () => {},
+      onSessionMeta: () => {},
+      onDisconnect: (cb: () => void) => { disconnectCb = cb; },
+      onInitError: () => {},
+    };
+
+    bridge.attachBackendAdapter("s1", adapter1 as any, "codex");
+    browser.send.mockClear();
+
+    // Trigger disconnect
+    disconnectCb!();
+
+    // Advance 2s (before debounce fires)
+    vi.advanceTimersByTime(2_000);
+
+    // Attach a new adapter (simulating relaunch)
+    const adapter2 = {
+      isConnected: () => true,
+      send: () => true,
+      disconnect: async () => {},
+      onBrowserMessage: () => {},
+      onSessionMeta: () => {},
+      onDisconnect: () => {},
+      onInitError: () => {},
+    };
+    bridge.attachBackendAdapter("s1", adapter2 as any, "codex");
+    browser.send.mockClear();
+
+    // Advance past the original debounce time
+    vi.advanceTimersByTime(5_000);
+
+    // cli_disconnected should NOT have been broadcast (debounce was cancelled)
+    const calls = browser.send.mock.calls.map(([arg]: [string]) => JSON.parse(arg));
+    expect(calls.find((c: any) => c.type === "cli_disconnected")).toBeUndefined();
+
+    vi.useRealTimers();
+  });
+
+  it("Codex adapter disconnect: emits session:relaunch-needed regardless of browser count", () => {
+    vi.useFakeTimers();
+    // Create session with NO browsers connected
+    bridge.getOrCreateSession("s1", "codex");
+
+    let disconnectCb: (() => void) | undefined;
+    const adapter = {
+      isConnected: () => false,
+      send: () => true,
+      disconnect: async () => {},
+      onBrowserMessage: () => {},
+      onSessionMeta: () => {},
+      onDisconnect: (cb: () => void) => { disconnectCb = cb; },
+      onInitError: () => {},
+    };
+
+    const relaunchCb = vi.fn();
+    companionBus.on("session:relaunch-needed", ({ sessionId }) => relaunchCb(sessionId));
+
+    bridge.attachBackendAdapter("s1", adapter as any, "codex");
+
+    // Trigger disconnect (no browsers connected)
+    disconnectCb!();
+
+    // Advance past debounce
+    vi.advanceTimersByTime(5_000);
+
+    // Should still emit relaunch-needed even without browsers
+    expect(relaunchCb).toHaveBeenCalledWith("s1");
+
+    vi.useRealTimers();
+  });
 });
 
 // ─── Browser handlers ────────────────────────────────────────────────────────

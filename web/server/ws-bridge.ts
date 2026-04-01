@@ -69,6 +69,10 @@ export class WsBridge {
   private static readonly DISCONNECT_DEBOUNCE_MS = Number(
     process.env.COMPANION_DISCONNECT_DEBOUNCE_MS || "15000",
   );
+  /** Shorter debounce for Codex: no WS cycling, so 5s is plenty. */
+  private static readonly CODEX_DISCONNECT_DEBOUNCE_MS = Number(
+    process.env.COMPANION_CODEX_DISCONNECT_DEBOUNCE_MS || "5000",
+  );
   private disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private idleKillTimers = new Map<string, ReturnType<typeof setInterval>>();
   private sessions = new Map<string, Session>();
@@ -394,6 +398,8 @@ export class WsBridge {
     // Also handles relaunched sessions stuck in "terminated": step through
     // terminated → starting → initializing so system_init can land on "ready".
     if (!(adapter instanceof ClaudeAdapter)) {
+      // Cancel any pending disconnect debounce — new adapter is reconnecting
+      this.cancelDisconnectTimer(sessionId);
       const phase = session.stateMachine.phase;
       if (phase === "terminated") {
         session.stateMachine.transition("starting", "adapter_reattached");
@@ -617,21 +623,32 @@ export class WsBridge {
         return;
       }
 
-      // For Codex adapters: immediate cleanup + auto-relaunch
-      for (const [reqId] of session.pendingPermissions) {
-        this.broadcastToBrowsers(session, { type: "permission_cancelled", request_id: reqId });
-      }
-      session.pendingPermissions.clear();
+      // For Codex adapters: transition to "reconnecting" with a short debounce
+      // (5s vs 15s for Claude Code, since Codex doesn't cycle its WebSocket).
       session.backendAdapter = null;
+      session.stateMachine.transition("reconnecting", "codex_adapter_disconnected");
       this.persistSession(session);
-      console.log(`[ws-bridge] Backend adapter disconnected for session ${sessionId}`);
-      this.broadcastToBrowsers(session, { type: "cli_disconnected" });
+      log.info("ws-bridge", "Codex adapter disconnected, starting debounce", { sessionId });
 
-      // Auto-relaunch if browsers are still connected
-      if (session.browserSockets.size > 0) {
-        console.log(`[ws-bridge] Auto-relaunching backend for session ${sessionId} (${session.browserSockets.size} browser(s) connected)`);
+      const existing = this.disconnectTimers.get(sessionId);
+      if (existing) clearTimeout(existing);
+      this.disconnectTimers.set(sessionId, setTimeout(() => {
+        this.disconnectTimers.delete(sessionId);
+        // Check if a new adapter reconnected during the grace period
+        if (session.backendAdapter?.isConnected()) return;
+
+        log.warn("ws-bridge", "Codex disconnect confirmed", { sessionId });
+        for (const [reqId] of session.pendingPermissions) {
+          this.broadcastToBrowsers(session, { type: "permission_cancelled", request_id: reqId });
+        }
+        session.pendingPermissions.clear();
+        session.stateMachine.transition("terminated", "disconnect_confirmed");
+        this.broadcastToBrowsers(session, { type: "cli_disconnected" });
+
+        // Request auto-relaunch regardless of browser state — proactive
+        // keepalive in the orchestrator ensures headless sessions stay alive.
         companionBus.emit("session:relaunch-needed", { sessionId });
-      }
+      }, WsBridge.CODEX_DISCONNECT_DEBOUNCE_MS));
     });
 
     // ── onInitError (optional) ───────────────────────────────────────────

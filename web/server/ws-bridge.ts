@@ -643,6 +643,7 @@ export class WsBridge {
         }
         session.pendingPermissions.clear();
         session.stateMachine.transition("terminated", "disconnect_confirmed");
+        this.persistSession(session);
         this.broadcastToBrowsers(session, { type: "cli_disconnected" });
 
         // Request auto-relaunch regardless of browser state — proactive

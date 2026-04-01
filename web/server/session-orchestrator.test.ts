@@ -1620,4 +1620,134 @@ describe("SessionOrchestrator", () => {
       }));
     });
   });
+
+  // ── Proactive keepalive ───────────────────────────────────────────────────
+
+  describe("proactive keepalive (auto-relaunch on exit without browser)", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("schedules relaunch when CLI exits unexpectedly", async () => {
+      // When a CLI process exits (crash) and is not an intentional kill,
+      // the orchestrator should proactively relaunch it after a short delay
+      // even if no browsers are connected.
+      deps.launcher.getSession.mockReturnValue({
+        archived: false,
+        state: "exited",
+        pid: undefined,
+      } as any);
+      deps.wsBridge.isCliConnected.mockReturnValue(false);
+      orchestrator.initialize();
+
+      // Simulate CLI exit
+      companionBus.emit("session:exited", { sessionId: "s1", exitCode: 1 });
+
+      // Advance past keepalive delay (3s) + relaunch grace (10s) + cooldown
+      await vi.advanceTimersByTimeAsync(3_000);
+      await vi.advanceTimersByTimeAsync(15_000);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(deps.launcher.relaunch).toHaveBeenCalledWith("s1");
+    });
+
+    it("does NOT relaunch after idle-kill (intentional kill)", async () => {
+      // Idle-kill is intentional — the keepalive should NOT trigger.
+      deps.launcher.getSession.mockReturnValue({
+        archived: false,
+        state: "exited",
+        pid: undefined,
+      } as any);
+      deps.wsBridge.isCliConnected.mockReturnValue(false);
+      orchestrator.initialize();
+
+      // Simulate idle-kill followed by session exit
+      companionBus.emit("session:idle-kill", { sessionId: "s1" });
+      companionBus.emit("session:exited", { sessionId: "s1", exitCode: 0 });
+
+      // Advance well past any possible delay
+      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // relaunch should NOT have been called by the keepalive
+      // (idle-kill handler calls kill() but not relaunch)
+      expect(deps.launcher.relaunch).not.toHaveBeenCalled();
+    });
+
+    it("does NOT relaunch archived sessions", async () => {
+      // Archived sessions should not be relaunched proactively.
+      deps.launcher.getSession.mockReturnValue({
+        archived: true,
+        state: "exited",
+        pid: undefined,
+      } as any);
+      orchestrator.initialize();
+
+      companionBus.emit("session:exited", { sessionId: "s1", exitCode: 1 });
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(deps.launcher.relaunch).not.toHaveBeenCalled();
+    });
+
+    it("uses exponential backoff on repeated crashes", async () => {
+      // Each crash should increase the delay: 3s → 6s → 12s
+      let relaunchCount = 0;
+      deps.launcher.getSession.mockReturnValue({
+        archived: false,
+        state: "exited",
+        pid: undefined,
+      } as any);
+      deps.wsBridge.isCliConnected.mockReturnValue(false);
+      // Simulate repeated failures so the count increments
+      deps.launcher.relaunch.mockImplementation(async () => {
+        relaunchCount++;
+        return { ok: false, error: "crashed" };
+      });
+      orchestrator.initialize();
+
+      // First crash — should relaunch after 3s base delay
+      companionBus.emit("session:exited", { sessionId: "s1", exitCode: 1 });
+
+      // At 2s: nothing yet
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(relaunchCount).toBe(0);
+
+      // At 3s: keepalive fires, then needs 10s grace + flush
+      await vi.advanceTimersByTimeAsync(1_000);
+      await vi.advanceTimersByTimeAsync(15_000);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(relaunchCount).toBe(1);
+    });
+
+    it("cancels keepalive timer on session delete", async () => {
+      // If user deletes a session while a keepalive timer is pending,
+      // the timer should be cancelled and no relaunch should occur.
+      deps.launcher.getSession.mockReturnValue({
+        archived: false,
+        state: "exited",
+        pid: undefined,
+      } as any);
+      deps.wsBridge.isCliConnected.mockReturnValue(false);
+      orchestrator.initialize();
+
+      // Simulate CLI exit
+      companionBus.emit("session:exited", { sessionId: "s1", exitCode: 1 });
+
+      // Delete the session before the keepalive timer fires
+      await orchestrator.deleteSession("s1");
+
+      // Advance past all delays
+      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // kill() is called by deleteSession, but relaunch should NOT be
+      expect(deps.launcher.relaunch).not.toHaveBeenCalled();
+    });
+  });
 });

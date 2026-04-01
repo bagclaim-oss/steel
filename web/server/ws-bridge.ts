@@ -839,6 +839,10 @@ export class WsBridge {
         this.broadcastToBrowsers(session, { type: "permission_cancelled", request_id: reqId });
       }
       session.pendingPermissions.clear();
+
+      // Request auto-relaunch regardless of browser state — the proactive
+      // keepalive in the orchestrator ensures headless sessions stay alive.
+      companionBus.emit("session:relaunch-needed", { sessionId });
     }, WsBridge.DISCONNECT_DEBOUNCE_MS));
   }
 

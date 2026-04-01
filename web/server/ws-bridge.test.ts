@@ -751,6 +751,39 @@ describe("CLI handlers", () => {
 
     const calls = browser.send.mock.calls.map(([arg]: [string]) => JSON.parse(arg));
     expect(calls).toContainEqual(expect.objectContaining({ type: "status_change", status: "compacting" }));
+    // When the CLI changes permissionMode via system.status, the server should
+    // broadcast a session_update so browsers sync their UI (e.g. plan toggle).
+    expect(calls).toContainEqual(expect.objectContaining({
+      type: "session_update",
+      session: expect.objectContaining({ permissionMode: "plan" }),
+    }));
+  });
+
+  it("handleCLIMessage: system.status does NOT broadcast session_update when permissionMode unchanged", async () => {
+    // Pre-set the session to "default" mode, then send a status with the same mode.
+    const cli = makeCliSocket("s1");
+    const browser = makeBrowserSocket("s1");
+    bridge.handleCLIOpen(cli, "s1");
+    bridge.handleBrowserOpen(browser, "s1");
+    browser.send.mockClear();
+
+    const statusMsg = JSON.stringify({
+      type: "system",
+      subtype: "status",
+      status: "idle",
+      permissionMode: "default",
+      uuid: "uuid-3",
+      session_id: "s1",
+    });
+
+    await bridge.handleCLIMessage(cli, statusMsg);
+
+    const calls = browser.send.mock.calls.map(([arg]: [string]) => JSON.parse(arg));
+    // Should NOT have a session_update for permissionMode since it didn't change.
+    const permUpdates = calls.filter(
+      (c: Record<string, unknown>) => c.type === "session_update" && (c.session as Record<string, unknown>)?.permissionMode,
+    );
+    expect(permUpdates).toHaveLength(0);
   });
 
   it("handleCLIMessage: forwards compact_boundary as system_event and persists it", async () => {

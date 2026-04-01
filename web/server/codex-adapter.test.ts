@@ -3796,6 +3796,111 @@ describe("CodexAdapter with ICodexTransport", () => {
     expect(errors[0].message).toBe("something went wrong");
   });
 
+  it("handles bare 'error' notification with willRetry=true without emitting to browser", async () => {
+    // Codex sends bare "error" notifications for transient stream disconnections
+    // (e.g. "Reconnecting... 2/5"). When willRetry is true, the adapter should
+    // log but NOT emit an error to the browser since Codex will retry.
+    const { mock, messages } = await initAdapter();
+    const warnSpy = vi.spyOn(log, "warn").mockImplementation(() => {});
+
+    mock.pushNotification("error", {
+      error: {
+        message: "Reconnecting... 2/5",
+        codexErrorInfo: { responseStreamDisconnected: { httpStatusCode: null } },
+        additionalDetails: "stream disconnected before completion",
+      },
+      willRetry: true,
+      threadId: "thr_123",
+      turnId: "turn_456",
+    });
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Should NOT emit error to browser
+    const errors = messages.filter((m) => m.type === "error") as Array<{ message: string }>;
+    expect(errors.length).toBe(0);
+
+    // Should NOT trigger protocol drift warning
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      "protocol-monitor",
+      "Backend protocol drift detected",
+      expect.objectContaining({ messageName: "error" }),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("handles bare 'error' notification with willRetry=false by emitting to browser", async () => {
+    // When willRetry is false/absent, the error is final and should be shown.
+    const { mock, messages } = await initAdapter();
+
+    mock.pushNotification("error", {
+      error: {
+        message: "Fatal stream error",
+        additionalDetails: "connection terminated",
+      },
+      willRetry: false,
+      threadId: "thr_123",
+      turnId: "turn_456",
+    });
+    await new Promise((r) => setTimeout(r, 20));
+
+    const errors = messages.filter((m) => m.type === "error") as Array<{ message: string }>;
+    expect(errors.length).toBe(1);
+    expect(errors[0].message).toBe("Fatal stream error");
+  });
+
+  it("accepts mcpServer/startupStatus/updated without protocol drift", async () => {
+    // Codex v2 sends per-server MCP startup progress notifications.
+    const { mock } = await initAdapter();
+    const warnSpy = vi.spyOn(log, "warn").mockImplementation(() => {});
+
+    mock.pushNotification("mcpServer/startupStatus/updated", {
+      name: "linear",
+      status: "starting",
+      error: null,
+    });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      "protocol-monitor",
+      "Backend protocol drift detected",
+      expect.objectContaining({ messageName: "mcpServer/startupStatus/updated" }),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("accepts informational notifications without protocol drift", async () => {
+    // configWarning, deprecationNotice, thread/compacted, and legacy event
+    // variants should be silently accepted without triggering drift warnings.
+    const { mock } = await initAdapter();
+    const warnSpy = vi.spyOn(log, "warn").mockImplementation(() => {});
+
+    const infoNotifications = [
+      { method: "configWarning", params: { summary: "Project config disabled" } },
+      { method: "deprecationNotice", params: { summary: "collab is deprecated" } },
+      { method: "codex/event/deprecation_notice", params: { msg: { type: "deprecation_notice" } } },
+      { method: "thread/compacted", params: { threadId: "thr_1", turnId: "turn_1" } },
+      { method: "codex/event/mcp_startup_update", params: { msg: { type: "mcp_startup_update" } } },
+      { method: "codex/event/turn_aborted", params: { msg: { type: "turn_aborted" } } },
+      { method: "codex/event/view_image_tool_call", params: { msg: { type: "view_image_tool_call" } } },
+      { method: "codex/event/web_search_begin", params: { msg: { type: "web_search_begin" } } },
+      { method: "codex/event/web_search_end", params: { msg: { type: "web_search_end" } } },
+    ];
+
+    for (const n of infoNotifications) {
+      mock.pushNotification(n.method, n.params);
+    }
+    await new Promise((r) => setTimeout(r, 20));
+
+    for (const n of infoNotifications) {
+      expect(warnSpy).not.toHaveBeenCalledWith(
+        "protocol-monitor",
+        "Backend protocol drift detected",
+        expect.objectContaining({ messageName: n.method }),
+      );
+    }
+    warnSpy.mockRestore();
+  });
+
   it("handles codex/event/token_count without protocol drift and updates token usage", async () => {
     const { mock, messages } = await initAdapter();
     const warnSpy = vi.spyOn(log, "warn").mockImplementation(() => {});

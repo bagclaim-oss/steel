@@ -1659,6 +1659,41 @@ export class CodexAdapter implements IBackendAdapter {
         }
         break;
       }
+      // Bare "error" notification — Codex sends this for transient stream
+      // disconnections and retries (e.g. "Reconnecting... 2/5").
+      case "error": {
+        const errObj = params.error as { message?: string; additionalDetails?: string } | undefined;
+        const willRetry = params.willRetry as boolean | undefined;
+        const message = errObj?.message || errObj?.additionalDetails || "Unknown Codex error";
+        if (willRetry) {
+          console.log(`[codex-adapter] Codex transient error (will retry): ${message}`);
+        } else {
+          console.error(`[codex-adapter] Codex error: ${message}`);
+          this.emit({ type: "error", message });
+        }
+        break;
+      }
+      // MCP server startup progress — Codex v2 reports per-server status as
+      // they initialise. Trigger a full mcp_get_status refresh so the browser
+      // sees up-to-date server states.
+      case "mcpServer/startupStatus/updated":
+        this.handleOutgoingMcpGetStatus();
+        break;
+      // Context compaction — similar to codex/event/context_compacted.
+      case "thread/compacted":
+        break;
+      // Informational: config or deprecation warnings from Codex runtime.
+      case "configWarning":
+      case "deprecationNotice":
+      case "codex/event/deprecation_notice":
+        break;
+      // Legacy event variants already covered by canonical item/* handlers.
+      case "codex/event/mcp_startup_update":
+      case "codex/event/turn_aborted":
+      case "codex/event/view_image_tool_call":
+      case "codex/event/web_search_begin":
+      case "codex/event/web_search_end":
+        break;
       case "companion/wsReconnected":
         this.handleWsReconnected();
         break;

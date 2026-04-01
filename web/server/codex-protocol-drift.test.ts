@@ -74,6 +74,22 @@ describe("Codex adapter method drift vs upstream protocol snapshot", () => {
       "codex/event/agent_reasoning",
       "codex/event/agent_reasoning_delta",
       "codex/event/agent_reasoning_section_break",
+      // Bare "error" notification for transient stream disconnections.
+      "error",
+      // Per-server MCP startup progress updates.
+      "mcpServer/startupStatus/updated",
+      // Context compaction event (v2 form of codex/event/context_compacted).
+      "thread/compacted",
+      // Informational warnings from Codex runtime.
+      "configWarning",
+      "deprecationNotice",
+      "codex/event/deprecation_notice",
+      // Legacy event variants for MCP startup, turn abort, image viewing, web search.
+      "codex/event/mcp_startup_update",
+      "codex/event/turn_aborted",
+      "codex/event/view_image_tool_call",
+      "codex/event/web_search_begin",
+      "codex/event/web_search_end",
       // Companion-internal notification emitted by codex-ws-proxy.cjs on
       // WebSocket reconnection — not part of the upstream Codex protocol.
       "companion/wsReconnected",

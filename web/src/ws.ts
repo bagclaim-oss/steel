@@ -258,12 +258,15 @@ const pendingBackgroundAgents = new Map<string, Map<string, { name: string; desc
 
 function extractBackgroundAgentsFromBlocks(sessionId: string, blocks: ContentBlock[]) {
   const store = useStore.getState();
+  const processed = getProcessedSet(sessionId);
 
   for (const block of blocks) {
     // Phase 1: Detect Agent tool_use with run_in_background
     if (block.type === "tool_use" && block.name === "Agent") {
+      if (block.id && processed.has(block.id)) continue;
       const input = block.input as Record<string, unknown>;
       if (input.run_in_background === true) {
+        if (block.id) processed.add(block.id);
         let sessionPending = pendingBackgroundAgents.get(sessionId);
         if (!sessionPending) {
           sessionPending = new Map();

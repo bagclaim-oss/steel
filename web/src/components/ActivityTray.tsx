@@ -170,7 +170,6 @@ function TrayTaskRow({ task }: { task: TaskItem }) {
 
 export function ActivityTray({ sessionId }: { sessionId: string }) {
   const [expanded, setExpanded] = useState(false);
-  const [fading, setFading] = useState(false);
   const trayRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -225,31 +224,28 @@ export function ActivityTray({ sessionId }: { sessionId: string }) {
     }
   }, [expanded]);
 
-  // Fade-out animation before hiding (L1 fix)
-  useEffect(() => {
-    if (shouldHide && !fading) {
-      setFading(true);
-    }
-  }, [shouldHide, fading]);
+  // Fade-out: shouldHide triggers the CSS opacity transition;
+  // dismissed becomes true only after the transition ends, unmounting the component.
+  const [dismissed, setDismissed] = useState(false);
 
-  // Reset fade state when new items arrive
+  // Reset dismissed when new items arrive
   useEffect(() => {
-    if (hasActivity) setFading(false);
+    if (hasActivity) setDismissed(false);
   }, [hasActivity, tasks.length, bgAgents.length]);
 
-  // Don't render when empty, or after fade-out completes
+  // Don't render when empty or after fade-out transition completed
   if (!hasActivity) return null;
-  if (shouldHide && !fading) return null;
+  if (dismissed) return null;
 
   return (
     <div
       ref={trayRef}
       className={`absolute bottom-3 right-3 z-20 transition-opacity duration-500 ${
-        fading && shouldHide ? "opacity-0 pointer-events-none" : "opacity-100"
+        shouldHide ? "opacity-0 pointer-events-none" : "opacity-100"
       }`}
-      style={!fading ? { animation: "fadeSlideIn 0.3s ease-out" } : undefined}
+      style={!shouldHide ? { animation: "fadeSlideIn 0.3s ease-out" } : undefined}
       onTransitionEnd={() => {
-        if (fading && shouldHide) setFading(false);
+        if (shouldHide) setDismissed(true);
       }}
     >
       {/* Expanded panel */}

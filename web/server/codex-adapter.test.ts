@@ -3802,6 +3802,7 @@ describe("CodexAdapter with ICodexTransport", () => {
     // log but NOT emit an error to the browser since Codex will retry.
     const { mock, messages } = await initAdapter();
     const warnSpy = vi.spyOn(log, "warn").mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
     mock.pushNotification("error", {
       error: {
@@ -3819,6 +3820,11 @@ describe("CodexAdapter with ICodexTransport", () => {
     const errors = messages.filter((m) => m.type === "error") as Array<{ message: string }>;
     expect(errors.length).toBe(0);
 
+    // Should log the transient error
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Codex transient error (will retry): Reconnecting... 2/5"),
+    );
+
     // Should NOT trigger protocol drift warning
     expect(warnSpy).not.toHaveBeenCalledWith(
       "protocol-monitor",
@@ -3826,6 +3832,7 @@ describe("CodexAdapter with ICodexTransport", () => {
       expect.objectContaining({ messageName: "error" }),
     );
     warnSpy.mockRestore();
+    logSpy.mockRestore();
   });
 
   it("handles bare 'error' notification with willRetry=false by emitting to browser", async () => {
@@ -3848,10 +3855,12 @@ describe("CodexAdapter with ICodexTransport", () => {
     expect(errors[0].message).toBe("Fatal stream error");
   });
 
-  it("accepts mcpServer/startupStatus/updated without protocol drift", async () => {
+  it("accepts mcpServer/startupStatus/updated without protocol drift and triggers MCP status refresh", async () => {
     // Codex v2 sends per-server MCP startup progress notifications.
-    const { mock } = await initAdapter();
+    // The handler should trigger a full MCP status refresh via handleOutgoingMcpGetStatus().
+    const { mock, adapter } = await initAdapter();
     const warnSpy = vi.spyOn(log, "warn").mockImplementation(() => {});
+    const mcpSpy = vi.spyOn(adapter as never as { handleOutgoingMcpGetStatus: () => Promise<void> }, "handleOutgoingMcpGetStatus").mockResolvedValue(undefined);
 
     mock.pushNotification("mcpServer/startupStatus/updated", {
       name: "linear",
@@ -3860,12 +3869,16 @@ describe("CodexAdapter with ICodexTransport", () => {
     });
     await new Promise((r) => setTimeout(r, 20));
 
+    // Should trigger MCP status refresh
+    expect(mcpSpy).toHaveBeenCalledTimes(1);
+
     expect(warnSpy).not.toHaveBeenCalledWith(
       "protocol-monitor",
       "Backend protocol drift detected",
       expect.objectContaining({ messageName: "mcpServer/startupStatus/updated" }),
     );
     warnSpy.mockRestore();
+    mcpSpy.mockRestore();
   });
 
   it("accepts informational notifications without protocol drift", async () => {

@@ -827,6 +827,10 @@ export class SessionOrchestrator {
           metricsCollector.recordRelaunchSucceeded();
           this.autoRelaunchCounts.delete(sessionId);
           this.relaunchExhaustedNotified.delete(sessionId);
+          // Clear intentionalKills so future crashes can use proactive keepalive.
+          // After a successful relaunch, the session is alive again — any prior
+          // idle-kill intent no longer applies.
+          this.intentionalKills.delete(sessionId);
         }
         // ok=false without error: keep count to preserve the retry budget
       } finally {
@@ -886,7 +890,7 @@ export class SessionOrchestrator {
       if (freshInfo.state === "connected" || freshInfo.state === "running") return;
 
       // Delegate to the existing auto-relaunch mechanism which handles
-      // budget, PID checks, state transitions, cooldowns, and intentionalKills.
+      // budget, PID checks, state transitions, and cooldowns.
       await this.handleAutoRelaunch(sessionId);
     }, delay);
 

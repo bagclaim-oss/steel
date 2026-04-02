@@ -259,6 +259,7 @@ export function PromptsPage({ embedded = false }: PromptsPageProps) {
                       key={prompt.id}
                       prompt={prompt}
                       isEditing={editingId === prompt.id}
+                      error={error}
                       editName={editName}
                       editContent={editContent}
                       editScope={editScope}
@@ -306,6 +307,7 @@ export function PromptsPage({ embedded = false }: PromptsPageProps) {
                       key={prompt.id}
                       prompt={prompt}
                       isEditing={editingId === prompt.id}
+                      error={error}
                       editName={editName}
                       editContent={editContent}
                       editScope={editScope}
@@ -663,6 +665,7 @@ interface PromptRowProps {
   editContent: string;
   editScope: "global" | "project";
   editFolders: string[];
+  error?: string;
   cwd: string;
   onEditNameChange: (v: string) => void;
   onEditContentChange: (v: string) => void;
@@ -678,6 +681,7 @@ interface PromptRowProps {
 function PromptRow({
   prompt,
   isEditing,
+  error,
   editName,
   editContent,
   editScope,
@@ -704,6 +708,7 @@ function PromptRow({
           content={editContent}
           scope={editScope}
           folders={editFolders}
+          error={error}
           submitLabel="Save"
           onNameChange={onEditNameChange}
           onContentChange={onEditContentChange}

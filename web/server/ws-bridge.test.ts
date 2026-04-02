@@ -786,6 +786,37 @@ describe("CLI handlers", () => {
     expect(permUpdates).toHaveLength(0);
   });
 
+  it("handleCLIMessage: system.status broadcasts session_update on plan→default (ExitPlanMode scenario)", async () => {
+    // Regression test for the exact bug: after ExitPlanMode approval, the CLI
+    // sends system.status with permissionMode:"default" but the browser was
+    // never notified, leaving the plan toggle stuck.
+    const cli = makeCliSocket("s1");
+    const browser = makeBrowserSocket("s1");
+    bridge.handleCLIOpen(cli, "s1");
+    bridge.handleBrowserOpen(browser, "s1");
+
+    // First put the session into plan mode
+    await bridge.handleCLIMessage(cli, JSON.stringify({
+      type: "system", subtype: "status", status: "idle",
+      permissionMode: "plan", uuid: "uuid-plan", session_id: "s1",
+    }));
+    expect(bridge.getSession("s1")!.state.permissionMode).toBe("plan");
+    browser.send.mockClear();
+
+    // CLI exits plan mode (ExitPlanMode scenario)
+    await bridge.handleCLIMessage(cli, JSON.stringify({
+      type: "system", subtype: "status", status: "idle",
+      permissionMode: "default", uuid: "uuid-exit-plan", session_id: "s1",
+    }));
+
+    const calls = browser.send.mock.calls.map(([arg]: [string]) => JSON.parse(arg));
+    expect(calls).toContainEqual(expect.objectContaining({
+      type: "session_update",
+      session: expect.objectContaining({ permissionMode: "default" }),
+    }));
+    expect(bridge.getSession("s1")!.state.permissionMode).toBe("default");
+  });
+
   it("handleCLIMessage: forwards compact_boundary as system_event and persists it", async () => {
     const cli = makeCliSocket("s1");
     const browser = makeBrowserSocket("s1");

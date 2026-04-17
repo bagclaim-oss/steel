@@ -3157,7 +3157,7 @@ describe("GET /api/git/branches", () => {
 describe("POST /api/git/worktree", () => {
   it("creates a worktree", async () => {
     const result = {
-      worktreePath: "/home/.companion/worktrees/repo/feat",
+      worktreePath: "/home/.steel/worktrees/repo/feat",
       branch: "feat",
       actualBranch: "feat",
       isNew: true,

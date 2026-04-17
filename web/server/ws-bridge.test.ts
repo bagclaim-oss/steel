@@ -21,7 +21,7 @@ vi.mock("node:child_process", () => ({ execSync: mockExecSync }));
 vi.mock("node:crypto", () => ({ randomUUID: () => "test-uuid" }));
 
 // Mock settings-manager to prevent AI validation from interfering with tests.
-// Without this mock, the real settings file (~/.companion/settings.json) may have
+// Without this mock, the real settings file (~/.steel/settings.json) may have
 // aiValidationEnabled: true, causing handleControlRequest to call validatePermission
 // (an external API call) and auto-approve/deny permissions before they reach pendingPermissions.
 vi.mock("./settings-manager.js", () => ({

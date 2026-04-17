@@ -271,7 +271,7 @@ export class SessionOrchestrator {
           `[orchestrator] Injecting env "${companionEnv.name}" (${Object.keys(companionEnv.variables).length} vars):`,
           Object.keys(companionEnv.variables).join(", "),
         );
-        envVars = { ...companionEnv.variables, ...body.env };
+        envVars = { ...steelEnv.variables, ...body.env };
       } else if (body.envSlug) {
         console.warn(`[orchestrator] Environment "${body.envSlug}" not found, ignoring`);
       }

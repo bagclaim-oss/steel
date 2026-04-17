@@ -21,7 +21,7 @@ const STDERR_LOG = join(LOG_DIR, "companion.error.log");
 // ─── macOS (launchd) Constants ──────────────────────────────────────────────────
 
 const LABEL = "sh.thecompanion.app";
-const OLD_LABEL = "co.thevibecompany.companion";
+const OLD_LABEL = "co.thevibecompany.steel";
 const PLIST_DIR = join(homedir(), "Library", "LaunchAgents");
 const PLIST_PATH = join(PLIST_DIR, `${LABEL}.plist`);
 const OLD_PLIST_PATH = join(PLIST_DIR, `${OLD_LABEL}.plist`);

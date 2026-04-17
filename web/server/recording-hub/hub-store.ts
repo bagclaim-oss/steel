@@ -1,7 +1,7 @@
 /**
  * Storage and indexing for curated recording files.
  *
- * Recordings uploaded or imported into the hub live in ~/.companion/hub/recordings/
+ * Recordings uploaded or imported into the hub live in ~/.steel/hub/recordings/
  * (separate from the auto-recording directory to avoid rotation cleanup).
  * An index file (index.json) provides fast listing without re-parsing JSONL.
  */

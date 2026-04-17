@@ -129,7 +129,7 @@ describe("Provisioner (hetzner)", () => {
     const serverCall = fetchMock.mock.calls.find((c: any[]) => c[0] === `${HETZNER_BASE}/servers`);
     const body = JSON.parse(serverCall![1].body);
     expect(body.server_type).toBe("cpx11");
-    expect(body.user_data).toContain("COMPANION_AUTH_TOKEN=");
+    expect(body.user_data).toContain("STEEL_AUTH_TOKEN=");
     expect(body.user_data).toContain("COMPANION_AUTH_ENABLED=0");
 
     const volumeCall = fetchMock.mock.calls.find((c: any[]) => c[0] === `${HETZNER_BASE}/volumes`);

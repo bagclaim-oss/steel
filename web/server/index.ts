@@ -98,7 +98,7 @@ if (recorder.isGloballyEnabled()) {
   console.log(`[server] Recording enabled (dir: ${recorder.getRecordingsDir()}, max: ${recorder.getMaxLines()} lines)`);
 }
 
-// ── Log file persistence — writes all log output to ~/.companion/logs/ ───────
+// ── Log file persistence — writes all log output to ~/.steel/logs/ ───────
 const logFileWriter = initLogFile();
 if (logFileWriter) {
   console.log(`[server] Log file enabled (dir: ${logFileWriter.getLogsDir()}, max: ${logFileWriter.getMaxLines()} lines, file: ${logFileWriter.filePath})`);
@@ -319,8 +319,8 @@ const authToken = getToken();
 console.log(`Server running on http://${host}:${server.port}`);
 console.log();
 console.log(`  Auth token: ${authToken}`);
-if (process.env.COMPANION_AUTH_TOKEN) {
-  console.log("  (using COMPANION_AUTH_TOKEN env var)");
+if (process.env.STEEL_AUTH_TOKEN) {
+  console.log("  (using STEEL_AUTH_TOKEN env var)");
 }
 console.log();
 console.log(`  CLI WebSocket:     ws://localhost:${server.port}/ws/cli/:sessionId`);

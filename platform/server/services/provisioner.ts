@@ -78,7 +78,7 @@ export class Provisioner {
 
   constructor(config: ProvisionerConfig) {
     this.hetzner = new HetznerCloudClient(config.hetznerToken);
-    this.companionImage = config.companionImage;
+    this.steelImage = config.steelImage;
     this.hetznerSshKeyId = config.hetznerSshKeyId;
     this.hetznerServerTypes = {
       starter: config.hetznerServerTypes?.starter || DEFAULT_SERVER_TYPE_CANDIDATES.starter[0],
@@ -153,7 +153,7 @@ export class Provisioner {
       `COMPANION_HOME=/data/companion`,
       `COMPANION_SESSION_DIR=/data/sessions`,
       `COMPANION_AUTH_ENABLED=0`,
-      `COMPANION_AUTH_TOKEN=${authSecret}`,
+      `STEEL_AUTH_TOKEN=${authSecret}`,
       `COMPANION_LOGIN_URL=${loginUrl}`,
       tailscaleAuthKey ? `TAILSCALE_AUTH_KEY=${tailscaleAuthKey}` : "",
     ]
@@ -188,7 +188,7 @@ ${env}
       #!/usr/bin/env bash
       set -euo pipefail
       docker rm -f companion >/dev/null 2>&1 || true
-      docker run -d --name companion --restart unless-stopped -p 80:3456 -v /data:/data --env-file /etc/companion.env ${this.companionImage}
+      docker run -d --name companion --restart unless-stopped -p 80:3456 -v /data:/data --env-file /etc/companion.env ${this.steelImage}
   - path: /etc/systemd/system/companion.service
     permissions: "0644"
     content: |

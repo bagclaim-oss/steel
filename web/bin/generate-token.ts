@@ -10,7 +10,7 @@ import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
-const AUTH_FILE = join(homedir(), ".companion", "auth.json");
+const AUTH_FILE = join(homedir(), ".steel", "auth.json");
 const force = process.argv.includes("--force");
 
 if (force && existsSync(AUTH_FILE)) {

@@ -3,7 +3,7 @@
  *
  * Detects the `tailscale` binary, checks connection status, and manages
  * Tailscale Funnel to expose the Companion over HTTPS. Persists funnel
- * state to ~/.companion/tailscale-state.json for restoration across
+ * state to ~/.steel/tailscale-state.json for restoration across
  * server restarts.
  */
 
@@ -47,7 +47,7 @@ interface PersistedFunnelState {
 
 // ── Internal state ──────────────────────────────────────────────────────────
 
-const STATE_PATH = join(homedir(), ".companion", "tailscale-state.json");
+const STATE_PATH = join(homedir(), ".steel", "tailscale-state.json");
 const CMD_TIMEOUT = 15_000;
 const BINARY_CACHE_TTL = 60_000; // 1 minute — allows detecting install/uninstall without restart
 

@@ -103,7 +103,7 @@ function plistPath(): string {
 }
 
 function oldPlistPath(): string {
-  return join(tempDir, "Library", "LaunchAgents", "co.thevibecompany.companion.plist");
+  return join(tempDir, "Library", "LaunchAgents", "co.thevibecompany.steel.plist");
 }
 
 function unitPath(): string {
@@ -111,7 +111,7 @@ function unitPath(): string {
 }
 
 function logDir(): string {
-  return join(tempDir, ".companion", "logs");
+  return join(tempDir, ".steel", "logs");
 }
 
 // ===========================================================================
@@ -338,7 +338,7 @@ describe("install", () => {
 
     // Create a legacy plist to simulate pre-rename installs
     const plist = service.generatePlist({ binPath: "/usr/local/bin/the-companion" })
-      .replaceAll("sh.thecompanion.app", "co.thevibecompany.companion");
+      .replaceAll("sh.thecompanion.app", "co.thevibecompany.steel");
     mkdirSync(launchAgentsDir, { recursive: true });
     writeFileSync(oldPath, plist, "utf-8");
 
@@ -997,7 +997,7 @@ describe("status", () => {
     mockExecSync.mockReset();
     mockExecSync.mockImplementation((cmd: string) => {
       if (typeof cmd === "string" && cmd.includes("launchctl list")) {
-        return `{\n\t"PID" = 12345;\n\t"Label" = "co.thevibecompany.companion";\n}`;
+        return `{\n\t"PID" = 12345;\n\t"Label" = "co.thevibecompany.steel";\n}`;
       }
       return "";
     });

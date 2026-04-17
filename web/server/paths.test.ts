@@ -14,13 +14,13 @@ describe("paths", () => {
     }
   });
 
-  it("defaults to ~/.companion/ when COMPANION_HOME is not set", async () => {
+  it("defaults to ~/.steel/ when COMPANION_HOME is not set", async () => {
     delete process.env.COMPANION_HOME;
     // Dynamic import to pick up env change (module is already cached, so we
     // test the value computed at import time — which uses the env at startup)
     const { COMPANION_HOME } = await import("./paths.js");
-    // When env var is unset at module load time, it should be ~/.companion
-    expect(COMPANION_HOME).toBe(join(homedir(), ".companion"));
+    // When env var is unset at module load time, it should be ~/.steel
+    expect(COMPANION_HOME).toBe(join(homedir(), ".steel"));
   });
 
   it("exports a string path", async () => {

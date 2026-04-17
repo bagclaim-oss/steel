@@ -28,7 +28,7 @@ export interface SandboxUpdateFields {
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
 
-const COMPANION_DIR = join(homedir(), ".companion");
+const COMPANION_DIR = join(homedir(), ".steel");
 const SANDBOXES_DIR = join(COMPANION_DIR, "sandboxes");
 
 function ensureDir(): void {

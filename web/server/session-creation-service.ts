@@ -95,7 +95,7 @@ export async function executeSessionCreation(
       `[session-creation] Injecting env "${companionEnv.name}" (${Object.keys(companionEnv.variables).length} vars):`,
       Object.keys(companionEnv.variables).join(", "),
     );
-    envVars = { ...companionEnv.variables, ...(body.env as Record<string, string>) };
+    envVars = { ...steelEnv.variables, ...(body.env as Record<string, string>) };
   } else if (body.envSlug) {
     console.warn(`[session-creation] Environment "${body.envSlug}" not found, ignoring`);
   }

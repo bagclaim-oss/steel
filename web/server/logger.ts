@@ -3,7 +3,7 @@
 // keeping the familiar console.log interface for human-readable logs.
 //
 // Log file persistence:
-//   By default, all log output is also written to ~/.companion/logs/ with
+//   By default, all log output is also written to ~/.steel/logs/ with
 //   automatic rotation (oldest files deleted when total lines exceed 2M).
 //   Disable with COMPANION_LOG_FILE=0, override dir with COMPANION_LOG_DIR,
 //   and configure rotation with COMPANION_LOG_MAX_LINES.
@@ -68,7 +68,7 @@ const DEFAULT_LOG_MAX_LINES = 2_000_000;
 const LOG_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Writes log lines to a file under ~/.companion/logs/ with automatic rotation.
+ * Writes log lines to a file under ~/.steel/logs/ with automatic rotation.
  * A new log file is created each time the server starts. When total lines across
  * all log files exceed maxLines (default 2M), the oldest files are deleted.
  *

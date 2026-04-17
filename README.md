@@ -79,7 +79,7 @@ The bridge uses the CLI `--sdk-url` websocket path and NDJSON events.
 
 ## Authentication
 
-The server auto-generates an auth token on first start, stored at `~/.companion/auth.json`. You can also manage tokens manually:
+The server auto-generates an auth token on first start, stored at `~/.steel/auth.json`. You can also manage tokens manually:
 
 ```bash
 # Show the current token (or auto-generate one)
@@ -92,7 +92,7 @@ cd web && bun run generate-token --force
 Or set a token via environment variable (takes priority over the file):
 
 ```bash
-COMPANION_AUTH_TOKEN="my-secret-token" bunx the-companion
+STEEL_AUTH_TOKEN="my-secret-token" bunx the-companion
 ```
 
 ## Development

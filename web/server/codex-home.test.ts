@@ -9,9 +9,9 @@ import {
 } from "./codex-home.js";
 
 describe("codex-home", () => {
-  it("DEFAULT_COMPANION_CODEX_HOME points to ~/.companion/codex-home", () => {
+  it("DEFAULT_COMPANION_CODEX_HOME points to ~/.steel/codex-home", () => {
     expect(DEFAULT_COMPANION_CODEX_HOME).toBe(
-      join(homedir(), ".companion", "codex-home"),
+      join(homedir(), ".steel", "codex-home"),
     );
   });
 

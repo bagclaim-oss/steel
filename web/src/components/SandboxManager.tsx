@@ -326,7 +326,7 @@ export function SandboxManager({ embedded = false }: Props) {
 
               <div className="flex items-center justify-between pt-1">
                 <p className="text-[11px] text-cc-muted">
-                  Stored in <code className="text-[10px]">~/.companion/sandboxes/</code>
+                  Stored in <code className="text-[10px]">~/.steel/sandboxes/</code>
                 </p>
                 <button
                   onClick={handleCreate}

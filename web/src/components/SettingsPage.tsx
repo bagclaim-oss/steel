@@ -812,31 +812,29 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
                   When enabled, an AI model evaluates tool calls before they execute.
                   Safe operations are auto-approved, dangerous ones are blocked,
                   and uncertain cases are shown to you with a recommendation.
-                  Requires an Anthropic API key. These settings serve as defaults
-                  for new sessions. Each session can override AI validation
-                  independently via the shield icon in the session header.
+                  Uses AI to evaluate each tool call before the approval prompt. Works with your Claude account or an API key.
                 </p>
 
                 <button
                   type="button"
                   onClick={() => toggleAiValidation("aiValidationEnabled")}
-                  disabled={!configured}
+                  disabled={!configured && !claudeCliAvailable}
                   className={`w-full flex items-center justify-between px-3 py-3 min-h-[44px] rounded-lg transition-colors ${
-                    !configured
+                    !configured && !claudeCliAvailable
                       ? "bg-cc-hover text-cc-muted cursor-not-allowed opacity-60"
                       : "bg-cc-hover hover:bg-cc-active text-cc-fg cursor-pointer"
                   }`}
                 >
                   <span className="text-sm">AI Validation Mode</span>
-                  <span className={`text-xs font-medium ${aiValidationEnabled && configured ? "text-cc-success" : "text-cc-muted"}`}>
-                    {aiValidationEnabled && configured ? "On" : "Off"}
+                  <span className={`text-xs font-medium ${aiValidationEnabled && (configured || claudeCliAvailable) ? "text-cc-success" : "text-cc-muted"}`}>
+                    {aiValidationEnabled && (configured || claudeCliAvailable) ? "On" : "Off"}
                   </span>
                 </button>
-                {!configured && (
-                  <p className="text-[11px] text-cc-warning">AI validation requires an Anthropic API key (real-time decisions are too slow via CLI).</p>
+                {!configured && !claudeCliAvailable && (
+                  <p className="text-[11px] text-cc-warning">AI validation requires either an Anthropic API key or the Claude CLI to be installed.</p>
                 )}
 
-                {aiValidationEnabled && configured && (
+                {aiValidationEnabled && (configured || claudeCliAvailable) && (
                   <>
                     <button
                       type="button"

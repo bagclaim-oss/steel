@@ -686,9 +686,8 @@ describe("SettingsPage", () => {
     expect(toggleBtn).toHaveTextContent("Off");
   });
 
-  // When no Anthropic API key is configured, the AI Validation toggle should
-  // be disabled and a warning message should appear.
-  it("disables AI Validation toggle when Anthropic key is NOT configured", async () => {
+  // When no API key AND no Claude CLI, the AI Validation toggle should be disabled.
+  it("disables AI Validation toggle when neither API key nor Claude CLI is available", async () => {
     mockApi.getSettings.mockResolvedValueOnce({
       anthropicApiKeyConfigured: false,
       anthropicModel: "claude-sonnet-4-6",
@@ -696,6 +695,7 @@ describe("SettingsPage", () => {
       linearAutoTransition: false,
       linearAutoTransitionStateName: "",
       updateChannel: "stable",
+      claudeCliAvailable: false,
     });
 
     render(<SettingsPage />);
@@ -706,7 +706,7 @@ describe("SettingsPage", () => {
 
     // Warning message should be shown
     expect(
-      screen.getByText("AI validation requires an Anthropic API key (real-time decisions are too slow via CLI)."),
+      screen.getByText("AI validation requires either an Anthropic API key or the Claude CLI to be installed."),
     ).toBeInTheDocument();
   });
 

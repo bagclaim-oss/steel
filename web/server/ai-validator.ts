@@ -143,8 +143,41 @@ async function formatHttpErrorReason(res: Response): Promise<string> {
   return upstreamMessage ? `${baseReason}: ${upstreamMessage}` : baseReason;
 }
 
+function buildUserPrompt(toolName: string, input: Record<string, unknown>, description?: string): string {
+  const inputStr = JSON.stringify(input, null, 0);
+  const truncatedInput = inputStr.length > 1000 ? inputStr.slice(0, 1000) + "..." : inputStr;
+  let prompt = `Tool: ${toolName}\nInput: ${truncatedInput}`;
+  if (description) prompt += `\nDescription: ${description}`;
+  return prompt;
+}
+
+async function aiEvaluateViaCli(
+  userPrompt: string,
+  timeoutMs: number,
+): Promise<AiValidationResult> {
+  if (typeof Bun === "undefined") {
+    return { verdict: "uncertain", reason: "CLI evaluation unavailable", ruleBasedOnly: false };
+  }
+  const fullPrompt = `${SYSTEM_PROMPT}\n\n${userPrompt}`;
+  try {
+    const proc = Bun.spawn(["claude", "-p", fullPrompt, "--output-format", "text"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const timer = setTimeout(() => proc.kill(), timeoutMs);
+    const [text, exit] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    clearTimeout(timer);
+    if (exit !== 0) return { verdict: "uncertain", reason: "CLI evaluation failed", ruleBasedOnly: false };
+    return parseAiResponse(text.trim());
+  } catch {
+    return { verdict: "uncertain", reason: "CLI evaluation unavailable", ruleBasedOnly: false };
+  }
+}
+
 /**
  * Call the AI model via Anthropic to evaluate a tool call.
+ * Prefers the Anthropic API when an API key is configured.
+ * Falls back to spawning the claude CLI (uses the CLI's own auth — no API key needed).
  */
 export async function aiEvaluate(
   toolName: string,
@@ -153,20 +186,13 @@ export async function aiEvaluate(
 ): Promise<AiValidationResult> {
   const settings = getSettings();
   const apiKey = settings.anthropicApiKey.trim();
+  const userPrompt = buildUserPrompt(toolName, input, description);
 
   if (!apiKey) {
-    return { verdict: "uncertain", reason: "No Anthropic API key configured", ruleBasedOnly: false };
+    return aiEvaluateViaCli(userPrompt, AI_TIMEOUT_MS);
   }
 
   const model = settings.anthropicModel?.trim() || DEFAULT_ANTHROPIC_MODEL;
-
-  // Build a concise representation of the tool call for the AI
-  const inputStr = JSON.stringify(input, null, 0);
-  const truncatedInput = inputStr.length > 1000 ? inputStr.slice(0, 1000) + "..." : inputStr;
-  let userPrompt = `Tool: ${toolName}\nInput: ${truncatedInput}`;
-  if (description) {
-    userPrompt += `\nDescription: ${description}`;
-  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);

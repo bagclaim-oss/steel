@@ -164,11 +164,11 @@ describe("parseAiResponse", () => {
 });
 
 describe("aiEvaluate", () => {
-  it("returns uncertain when no API key is configured", async () => {
-    // No API key set
+  it("falls back to CLI (or returns uncertain) when no API key is configured", async () => {
+    // No API key set — in test env (Node, no Bun global) returns uncertain gracefully
     const result = await aiEvaluate("Bash", { command: "ls" });
     expect(result.verdict).toBe("uncertain");
-    expect(result.reason).toContain("API key");
+    expect(result.ruleBasedOnly).toBe(false);
   });
 
   it("calls Anthropic and returns parsed result", async () => {

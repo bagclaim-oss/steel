@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { api, type CompanionEnv } from "../api.js";
+import { api, type SteelEnv } from "../api.js";
 
 interface Props {
   onClose?: () => void;
@@ -13,7 +13,7 @@ interface VarRow {
 }
 
 export function EnvManager({ onClose, embedded = false }: Props) {
-  const [envs, setEnvs] = useState<CompanionEnv[]>([]);
+  const [envs, setEnvs] = useState<SteelEnv[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingSlug, setEditingSlug] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -34,7 +34,7 @@ export function EnvManager({ onClose, embedded = false }: Props) {
     refresh();
   }, [refresh]);
 
-  function startEdit(env: CompanionEnv) {
+  function startEdit(env: SteelEnv) {
     setEditingSlug(env.slug);
     setEditName(env.name);
     const rows = Object.entries(env.variables).map(([key, value]) => ({ key, value }));
@@ -372,7 +372,7 @@ export function EnvManager({ onClose, embedded = false }: Props) {
 /* ─── Env Row (for embedded page — display only) ─────────────────── */
 
 interface EnvRowProps {
-  env: CompanionEnv;
+  env: SteelEnv;
   varCount: number;
   onStartEdit: () => void;
   onDelete: () => void;

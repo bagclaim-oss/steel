@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { api, type CompanionSandbox, type ImagePullState } from "../api.js";
+import { api, type SteelSandbox, type ImagePullState } from "../api.js";
 
 interface Props {
   embedded?: boolean;
 }
 
 export function SandboxManager({ embedded = false }: Props) {
-  const [sandboxes, setSandboxes] = useState<CompanionSandbox[]>([]);
+  const [sandboxes, setSandboxes] = useState<SteelSandbox[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -109,7 +109,7 @@ export function SandboxManager({ embedded = false }: Props) {
     }
   }
 
-  function startEdit(sandbox: CompanionSandbox) {
+  function startEdit(sandbox: SteelSandbox) {
     testTokenRef.current = {};
     setEditingSlug(sandbox.slug);
     setEditName(sandbox.name);
@@ -480,7 +480,7 @@ export function SandboxManager({ embedded = false }: Props) {
 /* ─── Sandbox Row (display only) ──────────────────────────────────── */
 
 interface SandboxRowProps {
-  sandbox: CompanionSandbox;
+  sandbox: SteelSandbox;
   onStartEdit: () => void;
   onDelete: () => void;
 }

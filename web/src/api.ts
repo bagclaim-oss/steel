@@ -3,7 +3,7 @@ import type { ContentBlock } from "./types.js";
 import { captureEvent, captureException } from "./analytics.js";
 
 const BASE = "/api";
-const AUTH_STORAGE_KEY = "companion_auth_token";
+const AUTH_STORAGE_KEY = "steel_auth_token";
 
 function getAuthHeaders(): Record<string, string> {
   if (typeof window === "undefined") return {};
@@ -307,7 +307,7 @@ export interface WorktreeCreateResult {
   isNew: boolean;
 }
 
-export interface CompanionEnv {
+export interface SteelEnv {
   name: string;
   slug: string;
   variables: Record<string, string>;
@@ -315,7 +315,7 @@ export interface CompanionEnv {
   updatedAt: number;
 }
 
-export interface CompanionSandbox {
+export interface SteelSandbox {
   name: string;
   slug: string;
   initScript?: string;
@@ -902,33 +902,33 @@ export const api = {
   getHome: () => get<{ home: string; cwd: string }>("/fs/home"),
 
   // Environments
-  listEnvs: () => get<CompanionEnv[]>("/envs"),
+  listEnvs: () => get<SteelEnv[]>("/envs"),
   getEnv: (slug: string) =>
-    get<CompanionEnv>(`/envs/${encodeURIComponent(slug)}`),
+    get<SteelEnv>(`/envs/${encodeURIComponent(slug)}`),
   createEnv: (name: string, variables: Record<string, string>) =>
-    post<CompanionEnv>("/envs", { name, variables }),
+    post<SteelEnv>("/envs", { name, variables }),
   updateEnv: (
     slug: string,
     data: {
       name?: string;
       variables?: Record<string, string>;
     },
-  ) => put<CompanionEnv>(`/envs/${encodeURIComponent(slug)}`, data),
+  ) => put<SteelEnv>(`/envs/${encodeURIComponent(slug)}`, data),
   deleteEnv: (slug: string) => del(`/envs/${encodeURIComponent(slug)}`),
 
   // Sandboxes
-  listSandboxes: () => get<CompanionSandbox[]>("/sandboxes"),
+  listSandboxes: () => get<SteelSandbox[]>("/sandboxes"),
   getSandbox: (slug: string) =>
-    get<CompanionSandbox>(`/sandboxes/${encodeURIComponent(slug)}`),
+    get<SteelSandbox>(`/sandboxes/${encodeURIComponent(slug)}`),
   createSandbox: (name: string, opts?: { initScript?: string }) =>
-    post<CompanionSandbox>("/sandboxes", { name, ...opts }),
+    post<SteelSandbox>("/sandboxes", { name, ...opts }),
   updateSandbox: (
     slug: string,
     data: {
       name?: string;
       initScript?: string;
     },
-  ) => put<CompanionSandbox>(`/sandboxes/${encodeURIComponent(slug)}`, data),
+  ) => put<SteelSandbox>(`/sandboxes/${encodeURIComponent(slug)}`, data),
   deleteSandbox: (slug: string) => del(`/sandboxes/${encodeURIComponent(slug)}`),
   testInitScript: (slug: string, cwd: string, initScript?: string) =>
     post<{ success: boolean; exitCode: number; output: string }>(

@@ -4,8 +4,8 @@ import {
   api,
   createSessionStream,
   type ClaudeDiscoveredSession,
-  type CompanionEnv,
-  type CompanionSandbox,
+  type SteelEnv,
+  type SteelSandbox,
   type GitRepoInfo,
   type GitBranchInfo,
   type BackendInfo,
@@ -118,14 +118,14 @@ export function HomePage() {
   const MODES = getModesForBackend(backend);
 
   // Environment state
-  const [envs, setEnvs] = useState<CompanionEnv[]>([]);
+  const [envs, setEnvs] = useState<SteelEnv[]>([]);
   const [selectedEnv, setSelectedEnv] = useState(() => localStorage.getItem("cc-selected-env") || "");
   const [showEnvDropdown, setShowEnvDropdown] = useState(false);
   const [showEnvManager, setShowEnvManager] = useState(false);
 
   // Sandbox state
   const [sandboxEnabled, setSandboxEnabled] = useState(() => localStorage.getItem("cc-sandbox-enabled") === "true");
-  const [sandboxes, setSandboxes] = useState<CompanionSandbox[]>([]);
+  const [sandboxes, setSandboxes] = useState<SteelSandbox[]>([]);
   const [selectedSandbox, setSelectedSandbox] = useState(() => localStorage.getItem("cc-selected-sandbox") || "");
   const [showSandboxDropdown, setShowSandboxDropdown] = useState(false);
   const sandboxDropdownRef = useRef<HTMLDivElement>(null);
@@ -831,9 +831,9 @@ export function HomePage() {
       <div className="w-full max-w-[720px]">
         {/* Logo + Title — minimal, centered */}
         <div className="flex flex-col items-center mb-6 sm:mb-10">
-          <img src={logoSrc} alt="The Companion" className="w-10 h-10 sm:w-12 sm:h-12 mb-3" />
+          <img src={logoSrc} alt="Steel" className="w-10 h-10 sm:w-12 sm:h-12 mb-3" />
           <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-cc-fg">
-            The Companion
+            Steel
           </h1>
         </div>
 

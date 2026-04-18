@@ -1790,7 +1790,7 @@ describe("Sidebar", () => {
     expect(websiteLink).toBeInTheDocument();
 
     expect(docsLink).toHaveAttribute("href", "https://docs.thecompanion.sh");
-    expect(githubLink).toHaveAttribute("href", "https://github.com/The-Vibe-Company/companion");
+    expect(githubLink).toHaveAttribute("href", "https://github.com/bagclaim-oss/steel");
     expect(websiteLink).toHaveAttribute("href", "https://thecompanion.sh");
   });
 

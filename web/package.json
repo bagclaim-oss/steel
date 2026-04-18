@@ -1,13 +1,12 @@
 {
-  "name": "the-companion",
+  "name": "steel",
   "version": "0.95.0",
   "type": "module",
-  "description": "Web UI for launching and interacting with Claude Code agents",
+  "description": "Self-hosted agentic coding environment built on Claude Code",
   "license": "MIT",
   "author": "The Vibe Company",
   "bin": {
-    "the-companion": "./bin/cli.ts",
-    "companion": "./bin/cli.ts"
+    "steel": "./bin/cli.ts"
   },
   "files": [
     "bin/",

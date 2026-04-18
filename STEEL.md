@@ -510,12 +510,12 @@ Same prompt: _"Add an inline edit feature — select code, hit cmd+K, describe a
 _Last updated: 2026-04-17_
 
 ### Phase 0 — Bootstrap (fork from companion)
-- [ ] Fork `The-Vibe-Company/companion` as the base
-- [ ] Rename package to `steel`, update all identifiers
-- [ ] Rename config dir from `~/.steel/` to `~/.steel/`
-- [ ] Strip companion branding from UI
-- [ ] Set up `CLAUDE.md → STEEL.md` symlink
-- [ ] Verify existing functionality still works post-rename
+- [x] Fork `The-Vibe-Company/companion` as the base
+- [x] Rename package to `steel`, update all identifiers
+- [x] Rename config dir from `~/.companion/` to `~/.steel/`
+- [x] Strip companion branding from UI
+- [x] Set up `CLAUDE.md → STEEL.md` symlink
+- [ ] Verify existing functionality still works post-rename (smoke test pending)
 
 ### Phase 1 — Core IDE (foundation to feel like a real editor)
 - [ ] Monaco editor in center panel
@@ -745,7 +745,7 @@ _Remove from this list when: the issue is resolved (and note the resolution in S
 
 - **Upstream CLI protocol drift (ongoing concern, not a bug yet)** — The `--sdk-url` flag and NDJSON schema are undocumented by Anthropic. Any `claude` CLI update could break Steel silently. Mitigations: pin supported CLI versions in README, run smoke test against new CLI versions before updating the minimum supported version, monitor companion repo for upstream protocol patches.
 - **No automated test coverage yet** — Tests come in Phase 2+. Until then, smoke test is the only safety net. Track this as tech debt.
-- **Bootstrap not yet done** — Phase 0 tasks are all unchecked. Until fork is complete, everything in this file describes a target state.
+- **Smoke test pending** — Phase 0 bootstrap complete; full end-to-end smoke test (spawn session, send prompt, approve tool) has not been formally run yet. Run before beginning Phase 1.
 
 ---
 
@@ -762,6 +762,22 @@ _Newest entries at the top. Prepend a new entry at the end of every session — 
 - CLI version: output of `claude --version` if protocol-adjacent
 - Notes: caveats, known issues, follow-up needed
 ```
+
+---
+
+### 2026-04-17 — Phase 0 bootstrap complete
+
+- Phase 0 rename and branding fully applied
+- Cloned `bagclaim-oss/steel` (pre-forked from `The-Vibe-Company/companion`), installed bun 1.3.12
+- Ran bootstrap.sh: upstream remote added, `~/.companion/` → `~/.steel/` references replaced, `COMPANION_AUTH_TOKEN` → `STEEL_AUTH_TOKEN`, `CLAUDE.md → STEEL.md` symlink created
+- Fixed two TypeScript regressions from bulk rename (`steelEnv` → `companionEnv` in session-creation-service.ts and session-orchestrator.ts)
+- Full UI rebrand: page title, sidebar name, login/onboarding copy, localStorage keys (`companion_*` → `steel_*`), WebSocket sequence key (`companion:last-seq` → `steel:last-seq`), TypeScript types (`CompanionEnv` → `SteelEnv`, `CompanionSandbox` → `SteelSandbox`), GitHub link updated to `bagclaim-oss/steel`
+- `web/package.json` name and bin renamed to `steel`; `update-checker.ts` npm registry URL updated; `service.ts` launchd label changed to `ai.steel.app`, systemd unit renamed to `steel.service`, all CLI binary references updated from `the-companion` to `steel`
+- All 4939 tests passing; typecheck clean
+- Files touched: `STEEL.md`, `bootstrap.sh`, `web/package.json`, `web/index.html`, `web/src/api.ts`, `web/src/ws.ts`, `web/src/App.tsx`, `web/src/terminal-ws.ts`, `web/src/store/auth-slice.ts`, `web/server/service.ts`, `web/server/update-checker.ts`, `web/server/session-creation-service.ts`, `web/server/session-orchestrator.ts`, and all corresponding `.test.ts(x)` files and UI components
+- New deps: none
+- CLI version: n/a
+- Notes: Smoke test not yet run. Begin Phase 1 on a feature branch. `the-companion:latest` Docker image name left as-is (real Docker Hub image we don't control yet).
 
 ---
 

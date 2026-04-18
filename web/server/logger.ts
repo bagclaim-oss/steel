@@ -109,7 +109,7 @@ export class LogFileWriter {
   }
 
   private static resolveDir(): string {
-    return process.env.COMPANION_LOG_DIR ?? join(COMPANION_HOME, "logs");
+    return process.env.STEEL_LOG_DIR ?? process.env.COMPANION_LOG_DIR ?? join(COMPANION_HOME, "logs");
   }
 
   /** Whether log file writing is enabled. Disable with COMPANION_LOG_FILE=0|false. */

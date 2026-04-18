@@ -2,10 +2,11 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 
 /**
- * Base directory for all Companion configuration and state.
+ * Base directory for all Steel configuration and state.
  * Defaults to ~/.steel/ for self-hosted installs.
- * Override with COMPANION_HOME env var for managed deployments
- * (e.g. COMPANION_HOME=/data/companion on Fly.io volumes).
+ * Override with STEEL_HOME env var for managed deployments
+ * (e.g. STEEL_HOME=/data/steel on Fly.io volumes).
+ * COMPANION_HOME accepted as a legacy alias for migration.
  */
 export const COMPANION_HOME =
-  process.env.COMPANION_HOME || join(homedir(), ".steel");
+  process.env.STEEL_HOME || process.env.COMPANION_HOME || join(homedir(), ".steel");

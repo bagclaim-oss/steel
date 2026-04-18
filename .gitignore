@@ -17,3 +17,4 @@ scripts/test-codex-*.ts
 web/dev-dist/
 .env.local
 *.log
+.steel-local/

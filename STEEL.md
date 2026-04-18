@@ -104,10 +104,12 @@ This ensures Claude Code picks it up automatically while keeping the Steel-brand
 
 ### Bootstrap (one-time, if repo is a fresh fork)
 
-1. Confirm base: `git remote -v` should show the companion fork as `origin`
+> **Phase 0 is already complete for `bagclaim-oss/steel`.** These steps are preserved for anyone forking again from scratch.
+
+1. Confirm base: `git remote -v` should show the steel fork as `origin`
 2. Add upstream: `git remote add upstream https://github.com/The-Vibe-Company/companion.git`
-3. Install: `bun install`
-4. Verify companion baseline works: `bun run dev`, open `localhost:5174`, spawn a session, send a prompt
+3. Install: `cd web && bun install`
+4. Verify baseline works: `bun run dev`, open `localhost:5174`, spawn a session, send a prompt
 5. Only after baseline is confirmed working, begin Phase 0 tasks
 
 The Phase 0 rename is the exception to the "always use a feature branch" rule — do it on `main` as a single bootstrap commit, then enforce feature-branch discipline for everything after.
@@ -366,7 +368,7 @@ Editors without tests ship regressions. Here's what Steel tests and how.
 
 - Pure styling / layout
 - Trivial glue code
-- Experimental prototypes in `ui/components/playground/`
+- Experimental prototypes in `web/src/components/Playground.tsx` (or a `playground/` subfolder if created)
 
 ### Rule
 
@@ -587,60 +589,61 @@ _This is the **target** structure. Not everything exists yet — see Current Sta
 _Agent: update this whenever you add, rename, or delete a significant file._
 
 ```
-steel/
-├── server/
-│   ├── index.ts              - Hono app entry, port 3456
-│   ├── ws-bridge.ts          - CLI ↔ browser WebSocket relay
-│   ├── session-manager.ts    - Spawn, kill, resume CLI processes
-│   ├── protocol.ts           - NDJSON parsing; see WEBSOCKET_PROTOCOL_REVERSED.md
-│   ├── auth.ts               - Bearer token validation
-│   ├── safe-path.ts          - Path traversal / symlink escape prevention
-│   ├── diagnostics.ts        - Local-only logging (~/.steel/logs/)
-│   ├── mcp-config.ts         - Read ~/.steel/mcp.json, forward to CLI
-│   ├── checkpoint.ts         - Repo state snapshots for task rollback
-│   └── cli/
-│       ├── start.ts          - `bunx steel` entry
-│       └── diagnose.ts       - `bunx steel diagnose` bug-report bundle
-│
-├── ui/
-│   ├── App.tsx               - Root component, layout shell
-│   ├── components/
-│   │   ├── Editor.tsx              - Monaco wrapper
-│   │   ├── FileTree.tsx            - Left panel, project explorer
-│   │   ├── ChatPanel.tsx           - Right panel, agent stream
-│   │   ├── DiffViewer.tsx          - Inline file diff approval
-│   │   ├── ComposerView.tsx        - Multi-file change review
-│   │   ├── InlineEdit.tsx          - cmd+K ghost-text editing in Monaco
-│   │   ├── PlanMode.tsx            - Agent plan review / approve
-│   │   ├── CommandPalette.tsx      - cmd+K / cmd+shift+P
-│   │   ├── FilePalette.tsx         - cmd+P fuzzy file search
-│   │   ├── SessionTabs.tsx         - Multi-agent tab bar
-│   │   ├── PermissionPrompt.tsx    - Tool approval UI
-│   │   ├── ContextMeter.tsx        - Token usage / context window bar
-│   │   ├── Welcome.tsx             - First-run onboarding
-│   │   └── Settings.tsx            - Config, keybindings, MCP, updates
-│   ├── hooks/
-│   │   ├── useWebSocket.ts         - Browser WS client
-│   │   ├── useKeybindings.ts       - Central keybinding registry
-│   │   └── useCheckpoint.ts        - Task-scoped undo
-│   └── store/
-│       ├── sessionStore.ts         - Zustand: session state
-│       ├── editorStore.ts          - Zustand: open files, selection
-│       └── uiStore.ts              - Zustand: layout, theme, focus mode
-│
-├── test/
-│   ├── unit/                 - Vitest unit tests
-│   ├── integration/          - Server tests with mock CLI
-│   ├── e2e/                  - Playwright smoke tests (Phase 5)
-│   └── manual/               - Human regression checklist
+steel/                        - repo root
+├── web/                      - main package (bun workspace root for server + UI)
+│   ├── server/               - Hono + Bun server
+│   │   ├── index.ts              - Hono app entry, port 3456
+│   │   ├── ws-bridge.ts          - CLI ↔ browser WebSocket relay
+│   │   ├── session-manager.ts    - Spawn, kill, resume CLI processes
+│   │   ├── protocol.ts           - NDJSON parsing; see WEBSOCKET_PROTOCOL_REVERSED.md
+│   │   ├── auth.ts               - Bearer token validation
+│   │   ├── safe-path.ts          - Path traversal / symlink escape prevention
+│   │   ├── logger.ts             - Structured logger → ~/.steel/logs/
+│   │   ├── paths.ts              - COMPANION_HOME constant (resolves ~/.steel/)
+│   │   ├── mcp-config.ts         - Read ~/.steel/mcp.json, forward to CLI
+│   │   ├── checkpoint.ts         - Repo state snapshots for task rollback (planned)
+│   │   └── cli/
+│   │       ├── start.ts          - `bunx steel` entry
+│   │       └── diagnose.ts       - `bunx steel diagnose` bug-report bundle (planned)
+│   │
+│   ├── src/                  - React frontend (Vite)
+│   │   ├── App.tsx               - Root component, layout shell
+│   │   ├── components/           - UI components (PascalCase.tsx)
+│   │   │   ├── Editor.tsx              - Monaco wrapper (planned)
+│   │   │   ├── FileTree.tsx            - Left panel, project explorer (planned)
+│   │   │   ├── ChatPanel.tsx           - Right panel, agent stream
+│   │   │   ├── DiffViewer.tsx          - Inline file diff approval
+│   │   │   ├── ComposerView.tsx        - Multi-file change review (planned)
+│   │   │   ├── InlineEdit.tsx          - cmd+K ghost-text editing (planned)
+│   │   │   ├── PlanMode.tsx            - Agent plan review / approve (planned)
+│   │   │   ├── CommandPalette.tsx      - cmd+K / cmd+shift+P (planned)
+│   │   │   ├── FilePalette.tsx         - cmd+P fuzzy file search (planned)
+│   │   │   ├── SessionTabs.tsx         - Multi-agent tab bar
+│   │   │   ├── PermissionPrompt.tsx    - Tool approval UI
+│   │   │   ├── ContextMeter.tsx        - Token usage / context window bar (planned)
+│   │   │   ├── Welcome.tsx             - First-run onboarding
+│   │   │   └── Settings.tsx            - Config, keybindings, MCP, updates
+│   │   ├── hooks/                - React hooks (useCamelCase.ts)
+│   │   │   ├── useWebSocket.ts         - Browser WS client
+│   │   │   ├── useKeybindings.ts       - Central keybinding registry (planned)
+│   │   │   └── useCheckpoint.ts        - Task-scoped undo (planned)
+│   │   └── store/                - Zustand stores
+│   │       ├── session-store.ts        - Zustand: session state
+│   │       ├── editor-store.ts         - Zustand: open files, selection (planned)
+│   │       └── ui-store.ts             - Zustand: layout, theme, focus mode (planned)
+│   │
+│   ├── test/                 - Vitest test suite (4939 tests as of Phase 0)
+│   │   └── manual/               - Human regression checklist
+│   │
+│   ├── package.json          - `name: "steel"`, `bin: { steel: "./bin/cli.ts" }`
+│   └── vite.config.ts
 │
 ├── docs/                     - Mintlify docs site (Phase 5)
 ├── STEEL.md                  - This file (canonical)
 ├── CLAUDE.md                 - Symlink to STEEL.md
 ├── WEBSOCKET_PROTOCOL_REVERSED.md  - Inherited from companion
 ├── CHANGELOG.md              - Generated from conventional commits
-├── package.json
-└── vite.config.ts
+└── package.json              - Repo root (workspace pointer)
 ```
 
 ---
@@ -730,8 +733,8 @@ After any change that touches the server, protocol, or session flow:
 
 If any step fails, the task is not done. Log the failure in Session Log and either fix it or revert.
 
-### When tests exist
-Once a test suite is added (Phase 2+), `bun run test` must pass before any merge.
+### Tests (already present)
+`bun run test` must pass before any merge. 4939 tests across 192 files exist as of Phase 0.
 
 ---
 
@@ -744,7 +747,7 @@ _Remove from this list when: the issue is resolved (and note the resolution in S
 ### Structural / ongoing
 
 - **Upstream CLI protocol drift (ongoing concern, not a bug yet)** — The `--sdk-url` flag and NDJSON schema are undocumented by Anthropic. Any `claude` CLI update could break Steel silently. Mitigations: pin supported CLI versions in README, run smoke test against new CLI versions before updating the minimum supported version, monitor companion repo for upstream protocol patches.
-- **No automated test coverage yet** — Tests come in Phase 2+. Until then, smoke test is the only safety net. Track this as tech debt.
+- **Host binding security gap** — `web/server/index.ts` binds to `0.0.0.0` by default; Security Model says `127.0.0.1`. Renaming `HOST` env var to `STEEL_HOST` and changing the default requires Tier 3 approval (security-sensitive). Flag to user before changing.
 - **Smoke test pending** — Phase 0 bootstrap complete; full end-to-end smoke test (spawn session, send prompt, approve tool) has not been formally run yet. Run before beginning Phase 1.
 
 ---

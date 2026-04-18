@@ -3,6 +3,15 @@ import { DEFAULT_ANTHROPIC_MODEL, getSettings, updateSettings, type UpdateChanne
 import { linearCache } from "../linear-cache.js";
 import { listConnections } from "../linear-connections.js";
 import { hasContainerCodexAuth } from "../codex-container-auth.js";
+import { spawnSync } from "node:child_process";
+
+function isClaudeCliAvailable(): boolean {
+  try {
+    return spawnSync("which", ["claude"], { stdio: "ignore" }).status === 0;
+  } catch {
+    return false;
+  }
+}
 
 export function registerSettingsRoutes(api: Hono): void {
   api.get("/settings", (c) => {
@@ -29,6 +38,7 @@ export function registerSettingsRoutes(api: Hono): void {
       publicUrl: settings.publicUrl,
       updateChannel: settings.updateChannel,
       dockerAutoUpdate: settings.dockerAutoUpdate,
+      claudeCliAvailable: isClaudeCliAvailable(),
     });
   });
 
@@ -234,6 +244,7 @@ export function registerSettingsRoutes(api: Hono): void {
       publicUrl: settings.publicUrl,
       updateChannel: settings.updateChannel,
       dockerAutoUpdate: settings.dockerAutoUpdate,
+      claudeCliAvailable: isClaudeCliAvailable(),
     });
   });
 

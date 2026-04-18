@@ -421,6 +421,7 @@ export interface AppSettings {
   publicUrl: string;
   updateChannel: "stable" | "prerelease";
   dockerAutoUpdate: boolean;
+  claudeCliAvailable: boolean;
 }
 
 export interface LinearOAuthConnectionSummary {

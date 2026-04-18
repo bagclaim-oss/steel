@@ -909,10 +909,9 @@ export class SessionOrchestrator {
 
   private async handleAutoNaming(sessionId: string, firstUserMessage: string): Promise<void> {
     if (sessionNames.getName(sessionId)) return;
-    if (!getSettings().anthropicApiKey.trim()) return;
     const info = this.launcher.getSession(sessionId);
     const model = info?.model || "claude-sonnet-4-6";
-    console.log(`[orchestrator] Auto-naming session ${sessionId} via Anthropic with model ${model}...`);
+    console.log(`[orchestrator] Auto-naming session ${sessionId} (model: ${model})...`);
     const title = await generateSessionTitle(firstUserMessage, model);
     if (title && !sessionNames.getName(sessionId)) {
       console.log(`[orchestrator] Auto-named session ${sessionId}: "${title}"`);

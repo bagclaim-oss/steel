@@ -27,6 +27,7 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [anthropicModel, setAnthropicModel] = useState("claude-sonnet-4-6");
   const [configured, setConfigured] = useState(false);
+  const [claudeCliAvailable, setClaudeCliAvailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -130,6 +131,7 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
       .getSettings()
       .then((s) => {
         setConfigured(s.anthropicApiKeyConfigured);
+        setClaudeCliAvailable(s.claudeCliAvailable ?? false);
         setClaudeCodeTokenConfigured(s.claudeCodeOAuthTokenConfigured);
         setOpenaiApiKeyConfigured(s.openaiApiKeyConfigured);
         setAnthropicModel(s.anthropicModel || "claude-sonnet-4-6");
@@ -166,6 +168,7 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
 
       const res = await api.updateSettings(payload);
       setConfigured(res.anthropicApiKeyConfigured);
+      setClaudeCliAvailable(res.claudeCliAvailable ?? false);
       setAnthropicApiKey("");
       setSaved(true);
       setTimeout(() => setSaved(false), 1800);
@@ -693,6 +696,11 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
             <section id="anthropic" ref={setSectionRef("anthropic")}>
               <h2 className="text-sm font-semibold text-cc-fg mb-4">Anthropic</h2>
               <form onSubmit={onSave} className="space-y-4">
+                {claudeCliAvailable && !configured && (
+                  <div className="px-3 py-2.5 rounded-lg bg-cc-success/10 border border-cc-success/20 text-xs text-cc-success">
+                    Claude account detected — sessions use your Claude subscription. Auto-naming also works without an API key. Optionally add an API key below to use a different billing account for AI features.
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium mb-1.5" htmlFor="anthropic-key">
                     Anthropic API Key
@@ -708,7 +716,9 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
                     className="w-full px-3 py-2.5 min-h-[44px] text-sm bg-cc-bg rounded-lg text-cc-fg placeholder:text-cc-muted focus:outline-none focus:ring-1 focus:ring-cc-primary/40 transition-shadow"
                   />
                   <p className="mt-1.5 text-xs text-cc-muted">
-                    Auto-renaming is disabled until this key is configured.
+                    {claudeCliAvailable && !configured
+                      ? "Leave blank to use your Claude account. Set this only to bill AI features to a separate API account."
+                      : "Used for session auto-naming and AI validation."}
                   </p>
                 </div>
 
@@ -740,7 +750,7 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
 
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-cc-muted">
-                    {loading ? "Loading..." : configured ? "Anthropic key configured" : "Anthropic key not configured"}
+                    {loading ? "Loading..." : configured ? "API key configured" : claudeCliAvailable ? "Using Claude account" : "No API key configured"}
                   </span>
                   <div className="flex items-center gap-2">
                     <button
@@ -823,7 +833,7 @@ export function SettingsPage({ embedded = false }: SettingsPageProps) {
                   </span>
                 </button>
                 {!configured && (
-                  <p className="text-[11px] text-cc-warning">Configure an Anthropic API key above to enable AI validation.</p>
+                  <p className="text-[11px] text-cc-warning">AI validation requires an Anthropic API key (real-time decisions are too slow via CLI).</p>
                 )}
 
                 {aiValidationEnabled && configured && (

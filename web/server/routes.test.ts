@@ -1542,6 +1542,7 @@ describe("GET /api/settings", () => {
       publicUrl: "",
       updateChannel: "stable",
       dockerAutoUpdate: false,
+      claudeCliAvailable: expect.any(Boolean),
     });
   });
 
@@ -1598,6 +1599,7 @@ describe("GET /api/settings", () => {
       publicUrl: "",
       updateChannel: "stable",
       dockerAutoUpdate: false,
+      claudeCliAvailable: expect.any(Boolean),
     });
   });
 
@@ -1714,6 +1716,7 @@ describe("PUT /api/settings", () => {
       publicUrl: "",
       updateChannel: "stable",
       dockerAutoUpdate: false,
+      claudeCliAvailable: expect.any(Boolean),
     });
   });
 
